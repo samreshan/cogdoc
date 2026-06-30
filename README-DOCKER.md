@@ -145,7 +145,7 @@ All configurable env vars (any of these can be set via `-e` or in your `.env`):
 | Variable | Default | Description |
 |---|---|---|
 | `DAILY_TOKEN_BUDGET` | `100000` | Per-user daily LLM token budget |
-| `IDLE_THRESHOLD` | `45` | Seconds of inactivity before Socratic Spacer fires |
+| `IDLE_THRESHOLD` | `5` | Seconds of inactivity before Socratic Spacer fires |
 | `PORT` | `3000` | HTTP port |
 | `HOSTNAME` | `0.0.0.0` | Bind address |
 

@@ -20,7 +20,10 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
-const IDLE_THRESHOLD_MS = 45_000 // 45 seconds — matches the architecture doc
+// Default idle threshold (ms). The actual value is fetched from /api/settings
+// on mount so the Docker wizard's IDLE_THRESHOLD env var flows through at
+// runtime (NEXT_PUBLIC_* would be inlined at build time, which is too early).
+const DEFAULT_IDLE_THRESHOLD_MS = 5_000 // 5 seconds — snappy demoing default
 
 /**
  * Extract plain text from HTML for AI context.
@@ -68,6 +71,21 @@ export default function Editor() {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(
     project?.document?.lastSaved ?? null,
   )
+  // Runtime idle threshold (ms), fetched from /api/settings so the Docker
+  // wizard's IDLE_THRESHOLD env var takes effect without a rebuild.
+  const [idleThresholdMs, setIdleThresholdMs] = useState<number>(DEFAULT_IDLE_THRESHOLD_MS)
+
+  // Fetch runtime settings on mount
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((d) => {
+        if (typeof d.idleThresholdSeconds === 'number' && d.idleThresholdSeconds > 0) {
+          setIdleThresholdMs(d.idleThresholdSeconds * 1000)
+        }
+      })
+      .catch(() => {/* fall back to default */})
+  }, [])
 
   // Load initial content
   useEffect(() => {
@@ -99,14 +117,15 @@ export default function Editor() {
     [project, updateActiveProjectContent],
   )
 
-  // Idle detector — fires Socratic Spacer after IDLE_THRESHOLD_MS of no input
+  // Idle detector — fires Socratic Spacer after `idleThresholdMs` of no input
   const resetIdleTimer = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
     idleTimerRef.current = setTimeout(async () => {
       if (!project || !editorRef.current) return
-      // Don't fire if we fired less than 60s ago (debounce)
       const now = Date.now()
-      if (now - lastIdleFireRef.current < 60_000) return
+      // Debounce: don't fire again within 15s of the last fire (so a short
+      // idle threshold doesn't spam the margin while the writer is paused reading).
+      if (now - lastIdleFireRef.current < 15_000) return
       lastIdleFireRef.current = now
 
       const html = editorRef.current.innerHTML
@@ -127,8 +146,8 @@ export default function Editor() {
       } finally {
         setSocraticLoading(false)
       }
-    }, IDLE_THRESHOLD_MS)
-  }, [project, pushIntervention, setSocraticLoading, bumpAnalytics])
+    }, idleThresholdMs)
+  }, [project, pushIntervention, setSocraticLoading, bumpAnalytics, idleThresholdMs])
 
   // Track text selection (for Citation Sentinel verify button)
   useEffect(() => {

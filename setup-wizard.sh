@@ -193,8 +193,8 @@ hdr "4/4  App Settings"
 ask "${BOLD}Daily token budget per user [100000]: ${RESET}" DAILY_TOKEN_BUDGET
 DAILY_TOKEN_BUDGET="${DAILY_TOKEN_BUDGET:-100000}"
 
-ask "${BOLD}Socratic Spacer idle threshold (seconds) [45]: ${RESET}" IDLE_THRESHOLD
-IDLE_THRESHOLD="${IDLE_THRESHOLD:-45}"
+ask "${BOLD}Socratic Spacer idle threshold (seconds) [5]: ${RESET}" IDLE_THRESHOLD
+IDLE_THRESHOLD="${IDLE_THRESHOLD:-5}"
 
 # ── Write /data/.env ─────────────────────────────────────────────────────────
 hdr "Writing configuration"

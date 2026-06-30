@@ -58,7 +58,7 @@ elif [ -n "${COGDOC_SKIP_WIZARD:-}" ] || [ -n "${GEMINI_API_KEY:-}" ] || [ -n "$
     [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ] && echo "SUPABASE_SERVICE_ROLE_KEY=\"${SUPABASE_SERVICE_ROLE_KEY}\""
     [ -n "${SUPABASE_JWT_SECRET:-}" ]     && echo "SUPABASE_JWT_SECRET=\"${SUPABASE_JWT_SECRET}\""
     echo "DAILY_TOKEN_BUDGET=\"${DAILY_TOKEN_BUDGET:-100000}\""
-    echo "IDLE_THRESHOLD=\"${IDLE_THRESHOLD:-45}\""
+    echo "IDLE_THRESHOLD=\"${IDLE_THRESHOLD:-5}\""
     echo "NODE_ENV=\"production\""
     echo "PORT=\"3000\""
     echo "HOSTNAME=\"0.0.0.0\""
