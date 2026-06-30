@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server'
 
 export async function GET() {
   return NextResponse.json({
-    idleThresholdSeconds: Number(process.env.IDLE_THRESHOLD ?? 5),
+    idleThresholdSeconds: Number(process.env.IDLE_THRESHOLD ?? 2),
     dailyTokenBudget: Number(process.env.DAILY_TOKEN_BUDGET ?? 100000),
   })
 }

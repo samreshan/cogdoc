@@ -23,7 +23,12 @@ import { toast } from 'sonner'
 // Default idle threshold (ms). The actual value is fetched from /api/settings
 // on mount so the Docker wizard's IDLE_THRESHOLD env var flows through at
 // runtime (NEXT_PUBLIC_* would be inlined at build time, which is too early).
-const DEFAULT_IDLE_THRESHOLD_MS = 5_000 // 5 seconds — snappy demoing default
+const DEFAULT_IDLE_THRESHOLD_MS = 2_000 // 2 seconds — instant feedback
+
+// Debounce: minimum gap between two Socratic Spacer fires. Prevents the
+// engine from spamming when the writer is typing rapidly or finishing
+// several sentences in quick succession.
+const SOCRATIC_DEBOUNCE_MS = 3_000 // 3 seconds between fires
 
 /**
  * Extract plain text from HTML for AI context.
@@ -117,20 +122,19 @@ export default function Editor() {
     [project, updateActiveProjectContent],
   )
 
-  // Idle detector — fires Socratic Spacer after `idleThresholdMs` of no input
-  const resetIdleTimer = useCallback(() => {
-    if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
-    idleTimerRef.current = setTimeout(async () => {
-      if (!project || !editorRef.current) return
+  // Fire the Socratic Spacer. Shared between the idle timer and the
+  // sentence-completion trigger. Returns true if it actually fired.
+  const fireSocraticSpacer = useCallback(
+    async (reason: 'idle' | 'sentence') => {
+      if (!project || !editorRef.current) return false
       const now = Date.now()
-      // Debounce: don't fire again within 15s of the last fire (so a short
-      // idle threshold doesn't spam the margin while the writer is paused reading).
-      if (now - lastIdleFireRef.current < 15_000) return
+      // Debounce: don't fire again within SOCRATIC_DEBOUNCE_MS of the last fire
+      if (now - lastIdleFireRef.current < SOCRATIC_DEBOUNCE_MS) return false
       lastIdleFireRef.current = now
 
       const html = editorRef.current.innerHTML
       const { context, stub } = extractContext(html)
-      if (!context.trim() || context.length < 30) return // need real content
+      if (!context.trim() || context.length < 30) return false // need real content
 
       setSocraticLoading(true)
       try {
@@ -138,16 +142,28 @@ export default function Editor() {
         pushIntervention(res.intervention)
         bumpAnalytics()
         toast('A ghost question appeared in the margin', {
-          description: 'Click to engage, dismiss, or ignore.',
+          description:
+            reason === 'sentence'
+              ? 'Triggered by sentence completion.'
+              : 'Triggered by idle pause.',
         })
+        return true
       } catch (e) {
         // Silent fail — Socratic Spacer must never block the writer
         console.error('Socratic Spacer failed:', e)
+        return false
       } finally {
         setSocraticLoading(false)
       }
-    }, idleThresholdMs)
-  }, [project, pushIntervention, setSocraticLoading, bumpAnalytics, idleThresholdMs])
+    },
+    [project, pushIntervention, setSocraticLoading, bumpAnalytics],
+  )
+
+  // Idle detector — fires Socratic Spacer after `idleThresholdMs` of no input
+  const resetIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+    idleTimerRef.current = setTimeout(() => fireSocraticSpacer('idle'), idleThresholdMs)
+  }, [fireSocraticSpacer, idleThresholdMs])
 
   // Track text selection (for Citation Sentinel verify button)
   useEffect(() => {
@@ -171,12 +187,26 @@ export default function Editor() {
     }
   }, [])
 
-  // Handle editor input
+  // Handle editor input. Fires on every keystroke.
+  // 1. Schedules auto-save (debounced 1.5s)
+  // 2. Resets the 2-second idle timer (fires Socratic Spacer if writer pauses mid-sentence)
+  // 3. Detects sentence completion (`.`, `?`, `!` as the last typed character)
+  //    and fires Socratic Spacer immediately — no idle wait required.
   function handleInput() {
     if (!editorRef.current) return
     const html = editorRef.current.innerHTML
     scheduleSave(html)
     resetIdleTimer()
+
+    // Sentence-completion trigger: if the last non-whitespace character of the
+    // editor text is a sentence-ending punctuation mark, fire the Socratic
+    // Spacer immediately. The debounce inside fireSocraticSpacer prevents
+    // rapid-fire when several sentences are typed in quick succession.
+    const text = htmlToText(html)
+    const lastChar = text.trim().slice(-1)
+    if (lastChar === '.' || lastChar === '?' || lastChar === '!') {
+      fireSocraticSpacer('sentence')
+    }
   }
 
   // Submit a prompt to the Interceptor

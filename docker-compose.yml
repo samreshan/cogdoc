@@ -36,7 +36,7 @@ services:
       # SUPABASE_SERVICE_ROLE_KEY: ""
       # SUPABASE_JWT_SECRET: ""
       # DAILY_TOKEN_BUDGET: "100000"
-      # IDLE_THRESHOLD: "5"
+      # IDLE_THRESHOLD: "2"
       - COGDOC_SKIP_WIZARD=${COGDOC_SKIP_WIZARD:-}
     stdin_open: true   # so the wizard can prompt
     tty: true          # allocate a TTY
