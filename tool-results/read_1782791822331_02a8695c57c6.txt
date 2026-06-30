@@ -1,0 +1,402 @@
+     1→     1→====================================================================================================
+     2→     2→FILE: Samreshan_Sahani_NP069749_Cogdoc_IR_Report (1) (1).docx
+     3→     3→====================================================================================================
+     4→     4→[Normal] INVESTIGATION REPORT (IR)
+     5→     5→[Normal] By
+     6→     6→[Normal] SAMRESHAN SAHANI
+     7→     7→[Normal] NP069749
+     8→     8→[Normal] NPT3F2509IT
+     9→     9→[Normal] Prepared in partial fulfilment of the requirements for the Final Year Project of BSc. (Hons.) in IT at Asia Pacific University of Technology & Innnovation.
+    10→    10→[Normal] Supervised By Mr. Ishwor Thapa
+    11→    11→[Normal] 2nd Marker: Mr.
+    12→    12→[Normal] 2026
+    13→    13→[Heading 1] ACKNOWLEDGEMENT
+    14→    14→[Normal] I am immensely grateful to my project supervisors, Ishwor Thapa and Rajeev Poudel, for their critical guidance and support throughout the early stages of this Final Year Project by providing me with direction to develop this project’s rationale and scope and ensuring I remain within the available timeframes for development.
+    15→    15→[Normal] I am also grateful to Asia Pacific University of Technology and Innovation for their provision of the academic framework, ethics review process, and project guidelines that have enabled me to investigate this issue responsibly. The proposal and ethics phases clarified the direction of my project and established the parameters within which I could collect acceptable data.
+    16→    16→[Normal] Finally, I would like to extend my gratefulness to all the other students and academic researchers/writers who will complete our survey, provide data through interviews, etc., and will therefore help provide vital insight into the effects of generative AI upon academic writing practices, cognitive effort, and evidence-based practice in writing. I also sincerely appreciate the encouragement I have received from my family and peers; this has helped sustain me through this project.
+    17→    17→[Heading 1] ABSTRACT
+    18→    18→[Normal] Cogdoc handles the academic documents and the PDFs of the uploaded research paper which means that unnecessary collection of personal data on individual users is prohibited, separated document libraries for individual users must exist, protection of the uploaded document must exist, and so forth. The prototype will have basic authentication, secure file handling, user-level data isolation, and document deletion controls; since the project is academic in nature, no sensitive or confidential Institutional or research data would have to be used in order to test the prototype.
+    19→    19→[Normal] Keywords: Cogdoc; cognitive offloading; productive friction; academic writing; retrieval-augmented generation; quality education.
+    20→    20→[Normal] SDG 4: Quality Education by supporting critical thinking, evidence-based writing, and responsible AI literacy
+    21→    21→[Normal] TABLE OF CONTENTS
+    22→    22→[toc 1] ACKNOWLEDGEMENT 2
+    23→    23→[toc 1] ABSTRACT        3
+    24→    24→[toc 1] LIST OF TABLES  8
+    25→    25→[toc 1] CHAPTER 1: INTRODUCTION 9
+    26→    26→[toc 2] 1.1 Introduction        9
+    27→    27→[toc 2] 1.2 Problem Background  10
+    28→    28→[toc 2] 1.3 Project Aim 12
+    29→    29→[toc 2] 1.4 Objectives  12
+    30→    30→[toc 2] 1.5 Scope       13
+    31→    31→[toc 3] 1.5.1 In Scope  13
+    32→    32→[toc 3] 1.5.2 Out of Scope      13
+    33→    33→[toc 3] 1.5.3 Constraints       14
+    34→    34→[toc 2] 1.6 Potential Benefits  15
+    35→    35→[toc 3] 1.6.1 Tangible Benefits 15
+    36→    36→[toc 3] 1.6.2 Intangible Benefits       15
+    37→    37→[toc 3] 1.6.3 Target Users      15
+    38→    38→[toc 2] 1.7 Overview of the IR  16
+    39→    39→[toc 2] 1.8 Project Plan        17
+    40→    40→[toc 1] CHAPTER 2: LITERATURE REVIEW    19
+    41→    41→[toc 2] 2.1 Domain Research     19
+    42→    42→[toc 3] 2.1.1 Intelligence Amplification and Tools for Thought  19
+    43→    43→[toc 3] 2.1.2 Cognitive Offloading and Cognitive Atrophy        19
+    44→    44→[toc 3] 2.1.3 Automation Bias and the Stochastic Parrot Problem 20
+    45→    45→[toc 3] 2.1.4 Desirable Difficulties and Productive Friction    20
+    46→    46→[toc 3] 2.1.5 Retrieval-Augmented Generation and Evidence-Grounded Writing      21
+    47→    47→[toc 3] 2.1.6 Design Principle Derived from the Literature      23
+    48→    48→[toc 2] 2.2 Similar Systems / Works     23
+    49→    49→[toc 3] 2.2.1 Google Docs with Gemini   23
+    50→    50→[toc 3] 2.2.2 Grammarly 24
+    51→    51→[toc 3] 2.2.3 Elicit    25
+    52→    52→[toc 2] 2.3 Technical Research  28
+    53→    53→[toc 3] 2.3.1 System Requirement Analysis       28
+    54→    54→[toc 3] 2.3.2 Selected Frontend: React with Tiptap      29
+    55→    55→[toc 3] 2.3.3 Selected Backend: FastAPI 29
+    56→    56→[toc 3] 2.3.4 Database and Local RAG: Supabase with pgvector    29
+    57→    57→[toc 3] 2.3.5 AI Services: Gemini API   30
+    58→    58→[toc 3] 2.3.6 Streaming Layer: Server-Sent Events       30
+    59→    59→[toc 3] 2.3.7 Security and Privacy Considerations       30
+    60→    60→[toc 1] CHAPTER 3: METHODOLOGY  33
+    61→    61→[toc 2] 3.1 System Development Methodology      33
+    62→    62→[toc 3] 3.1.1 Comparison of Development Methodologies   33
+    63→    63→[toc 3] 3.1.2 Chosen Methodology: RAD with Scrum-lite   34
+    64→    64→[toc 3] 3.1.3 RAD Phases Applied to Cogdoc      34
+    65→    65→[toc 2] 3.2 Data Gathering Design       35
+    66→    66→[toc 3] 3.2.1 Chosen Data Gathering Methods     35
+    67→    67→[toc 3] 3.2.2 Target Population and Sampling    35
+    68→    68→[toc 3] 3.2.3 Questionnaire Structure and Design        36
+    69→    69→[toc 3] 3.2.4 Survey Question Mapping to Research Objectives    36
+    70→    70→[toc 3] 3.2.5 Interview Design  37
+    71→    71→[toc 3] 3.2.6 Ethical Considerations    38
+    72→    72→[toc 1] CHAPTER 4: CONCLUSION   54
+    73→    73→[toc 2] 4.1 Achievement of the First Part of the Project        54
+    74→    74→[toc 2] 4.2 Research and Design Gaps    55
+    75→    75→[toc 2] 4.3 Future Work and Recommendations     55
+    76→    76→[toc 2] 4.4 Concluding Remarks  57
+    77→    77→[toc 1] REFERENCES      58
+    78→    78→[toc 1] APPENDICES      61
+    79→    79→[toc 2] Appendix A: PPF - Title Registration Proposal   61
+    80→    80→[toc 2] Appendix B: Ethics Form 74
+    81→    81→[toc 2] Appendix C: Log Sheets  82
+    82→    82→[toc 2] Appendix D: Gantt Chart 91
+    83→    83→[toc 2] Appendix E: Respondent Demographic Profile      92
+    84→    84→[toc 2] Appendix F: Survey Questionnaire        93
+    85→    85→[toc 2] Appendix G: AI Behaviour Tag Library    98
+    86→    86→[Normal] LIST OF FIGURES
+    87→    87→[table of figures] Figure 1     10
+    88→    88→[table of figures] Figure 2     22
+    89→    89→[table of figures] Figure 3     24
+    90→    90→[table of figures] Figure 4     25
+    91→    91→[table of figures] Figure 5     26
+    92→    92→[table of figures] Figure 6     32
+    93→    93→[table of figures] Figure 7     44
+    94→    94→[table of figures] Figure 8     47
+    95→    95→[table of figures] Figure 9     50
+    96→    96→[table of figures] Figure 10    62
+    97→    97→[table of figures] Figure 11    63
+    98→    98→[table of figures] Figure 12    64
+    99→    99→[table of figures] Figure 13    66
+   100→   100→[table of figures] Figure 14    67
+   101→   101→[table of figures] Figure 15    68
+   102→   102→[table of figures] Figure 16    70
+   103→   103→[table of figures] Figure 17    71
+   104→   104→[table of figures] Figure 18    73
+   105→   105→[table of figures] Figure 19    75
+   106→   106→[table of figures] Figure 20    76
+   107→   107→[table of figures] Figure 21    78
+   108→   108→[table of figures] Figure 22    80
+   109→   109→[table of figures] Figure 23    82
+   110→   110→[table of figures] Figure 24    84
+   111→   111→[table of figures] Figure 25    86
+   112→   112→[table of figures] Figure 26    87
+   113→   113→[table of figures] Figure 27    88
+   114→   114→[table of figures] Figure 28    89
+   115→   115→[table of figures] Figure 29    91
+   116→   116→[table of figures] Figure 30    93
+   117→   117→[table of figures] Figure 31    94
+   118→   118→[table of figures] Figure 32    96
+   119→   119→[table of figures] Figure 33    97
+   120→   120→[Heading 1] LIST OF TABLES
+   121→   121→[table of figures] Table 1      17
+   122→   122→[table of figures] Table 2      26
+   123→   123→[table of figures] Table 3      28
+   124→   124→[table of figures] Table 4      31
+   125→   125→[table of figures] Table 5      33
+   126→   126→[table of figures] Table 6      34
+   127→   127→[table of figures] Table 7      36
+   128→   128→[table of figures] Table 8      36
+   129→   129→[table of figures] Table 9      37
+   130→   130→[table of figures] Table 10     40
+   131→   131→[table of figures] Table 11     41
+   132→   132→[table of figures] Table 12     43
+   133→   133→[table of figures] Table 13     46
+   134→   134→[table of figures] Table 14     49
+   135→   135→[table of figures] Table 15     92
+   136→   136→[table of figures] Table 16     98
+   137→   137→[Heading 1] CHAPTER 1: INTRODUCTION
+   138→   138→[Heading 2] 1.1 Introduction
+   139→   139→[Normal] Technological advancements have long been impacting the manner in which humans think and organise information, as well as creating the products of that thinking. The early tools of thought such as Bush's Memex and Engelbart's Augmentation Framework were examples of tools designed to augment reasoning rather than substitute for it. Cog-docs continue to be examples of tools used for the same purpose — to provide a writing platform that is not simply a collection of characters and words but rather a cognitive space in which to challenge, slow down and augment academic reasoning.
+   140→   140→[Normal] With the emergence and increasing acceptance of artificial intelligence (AI) tools, there has also been a significant shift in what people now expect from the writing process. Whereas writing-related technologies previously only assisted users in finding information or checking their grammar/spelling/formatting, today's writing software is able to produce fully developed paragraphs, outlines, explanations and references based on only a few words from its user. Although these types of writing tools have the potential to greatly enhance productivity, they also create challenges to the development of the requisite skills necessary for academic writing. In situations where writing tools do too much of the user's thinking in a very short period of time, there is a strong possibility that users will not practice the skills/concepts required for a quality academic writing product, such as synthesising information, developing arguments, verifying information and revising their work, which are essential components of developing quality academic writing.
+   141→   141→[Normal] Cogdoc proposes a model. It is a custom text editor and research-assisted IDE for thought where AI does not write content for the user. Instead it works as a questioning and challenging margin agent. Its role is to interrupt prompts ask questions during moments of writer inactivity and verify written claims against uploaded research material. The project aims to build friction into the academic writing process so that AI support becomes a way of increasing user cognition not bypassing it.
+   142→   142→[Caption] Figure 1
+   143→   143→[Caption] Proposed Cogdoc System Architecture
+   144→   144→[Heading 2] 1.2 Problem Background
+   145→   145→[Normal] Generative AI tools like ChatGPT, Gemini, Grammarly and AI features in document editors are increasingly used by students and researchers for brainstorming, summarizing, rewriting and drafting. Their interface model is usually smooth: the user enters a prompt. Receives fluent output. This interaction appears efficient. The educational cost can be hidden because fluent text can create the impression that understanding has occurred even when the user has not done the intellectual work required to build that understanding.
+   146→   146→[Normal] The problem can be explained through offloading. Cognitive offloading is the use of tools or actions to reduce internal cognitive demand. Offloading is not automatically bad. Notes, diagrams, calculators and reference managers are academic tools. However, when offloading replace value cognitive processes like evaluation argument construction and conceptual synthesis the user may become less engaged in the mental activity that academic work is intended to cultivate.
+   147→   147→[Normal] Recent research has increased concern about this pattern. A study found that higher confidence in AI is associated with reduced critical thinking effort among knowledge workers. Another study reported that students using language models experienced lower cognitive load but showed weaker reasoning depth compared with students using traditional search. Heavy AI use has also been linked with offloading and reduced critical thinking. These studies do not imply that AI should be banned. They imply that AI writing interfaces must be designed carefully.
+   148→   148→[Normal] A second problem is automation bias. When AI-generated text is fluent users may accept its structure, facts and citations without verification. Large language models generate plausible language rather than grounded understanding. In writing this creates a risk of unsupported claims, inaccurate summaries and hallucinated citations. Cogdoc addresses this risk through a Citation Sentinel that compares user-written claims, against research documents.
+   149→   149→[Normal] The gap identified in this project is not the absence of AI writing tools. Many already exist. The gap is the absence of a writing interface that deliberately refuses to generate final text and instead uses AI to preserve the user’s cognitive responsibility.
+   150→   150→[Heading 2] 1.3 Project Aim
+   151→   151→[Normal] To design, develop, and evaluate Cogdoc, a web-based research-assisted writing IDE that uses productive AI friction and local contextual validation to support academic writing without directly generating final text.
+   152→   152→[Heading 2] 1.4 Objectives
+   153→   153→[Normal] To develop a web-based app that will provide with a academic writing tool that will help researchers and students develop critical thinking skills within their writing.
+   154→   154→[Normal] To limit the dependence of users on AI-generated text by using questions to guide the user rather than creating written content for the user.
+   155→   155→[Normal] To provide users with the ability to verify claims made in the document against the research paper uploaded to support or refute the users' statements.
+   156→   156→[Normal] To  evaluate the tool using student, researcher, and writer surveys and interviews.
+   157→   157→[Heading 2] 1.5 Scope
+   158→   158→[Heading 3] 1.5.1 In Scope
+   159→   159→[List Bullet] An online writing editor designed for use in a custom rich-text editor interface.
+   160→   160→[List Bullet] A prompt Interceptor that identifies lazy, vague, or delegative prompts and retains the Original Author Prose using Socratic Constraints.
+   161→   161→[List Bullet] A Socratic Spacer that identifies prolonged inactivity while writing, and creates a contextually relevant ghost question displayed in the margin.
+   162→   162→[List Bullet] A Citation Sentinel that validates a User's Claims made within their paragraphs against supplied Research PDFs.
+   163→   163→[List Bullet] A Local Research Storage Library that stores User-uploaded PDFs; parsing, Chunking, Embedding, and Storing the PDFs for future retrieval.
+   164→   164→[List Bullet] A Fundamental Prompt Library utilizing Behavioural Tags of (e.g, [Provocation], [Lens], [Structural Scaffold], [The Spark Gap]).
+   165→   165→[List Bullet] A Technical Architecture of React/Tiptap, FastAPI, Supabase Postgres with pgvector, and Gemini API Service integrations.
+   166→   166→[Heading 3] 1.5.2 Out of Scope
+   167→   167→[List Bullet] Automatic creation of final academic paragraphs, essays, and dissertation sections
+   168→   168→[List Bullet] Real-time checking for plagiarism, including integration with institutional learning management systems
+   169→   169→[List Bullet] Advanced features, including real-time collaborative editing and version control, and a multi-author comment system
+   170→   170→[List Bullet] Completed in depth and at scale for large academic use
+   171→   171→[List Bullet] Complex experimental features (Devil's Autocomplete, Blindspot Monitor) as potential future work
+   172→   172→[List Bullet] Create a mobile app as an academic writing workflow that begins as a desktop-first project.
+   173→   173→[Heading 3] 1.5.3 Constraints
+   174→   174→[List Bullet] Must be created within a strict 60-day development schedule
+   175→   175→[List Bullet] The quality of all Citation Sentinel results is dependent on the quality, readability, and relevancy of the PDF files used
+   176→   176→[List Bullet] External Artificial Intelligence (AI) API limitations will determine the final implementation based on limits, pricing, on latency, how recently a model was produced and the availability of a model will limit the implementation of the final product
+   177→   177→[List Bullet] Survey data collection is ongoing. Therefore, final statistical analysis will be published until the required number of responses have been received
+   178→   178→[List Bullet] The Citation Sentinel will be built as an academic prototype, not as a commercial-grade Software as a Service (SaaS) product.
+   179→   179→[Heading 2] 1.6 Potential Benefits
+   180→   180→[Heading 3] 1.6.1 Tangible Benefits
+   181→   181→[List Bullet] Provides a working academic writing prototype which demonstrates responsible AI integration.
+   182→   182→[List Bullet] Reduces unsupported academic claims by checking written paragraphs against uploaded research sources.
+   183→   183→[List Bullet] Helps users identify weak prompts before they turn into passive AI-generated drafts.
+   184→   184→[List Bullet] Creates reusable prompt templates, architecture diagrams, and evaluation instruments for future development.
+   185→   185→[Heading 3] 1.6.2 Intangible Benefits
+   186→   186→[List Bullet] Promotes critical thinking and deeper engagement with academic sources.
+   187→   187→[List Bullet] Encourages responsible AI literacy among students and researchers.
+   188→   188→[List Bullet] Supports epistemic self-reliance by requiring users to answer questions before receiving assistance.
+   189→   189→[List Bullet] Aligns with SDG 4: Quality Education by supporting evidence-based learning and higher-order thinking. It also contributes to SDG 9: Industry, Innovation and Infrastructure through the development of an innovative educational software system.
+   190→   190→[Heading 3] 1.6.3 Target Users
+   191→   191→[List Bullet] Undergraduate students working on assignments, research papers, and final year projects.
+   192→   192→[List Bullet] Postgraduate and PhD students engaged in literature-heavy academic writing.
+   193→   193→[List Bullet] Academic staff and researchers who need claim verification against source documents.
+   194→   194→[List Bullet] Professional academic writers and editors who require disciplined evidence-based drafting workflows.
+   195→   195→[Heading 2] 1.7 Overview of the IR
+   196→   196→[Normal] This Investigation Report has been broken down into four broad chapters. Chapter 1 presents an introduction to the project, the background of the problem, aim, objectives, scope, benefits and project plan. The literature review, similar systems and the technical foundations needed for the proposed solution are reviewed in this chapter. The selected methodology, data gathering design, planned interview structure, survey instrument, and approach to analysis of the data is discussed in chapter 3. The first part of the project ends with chapter 4 summarizing the achievements, gaps, limitations and recommendations for the next phase of development.
+   197→   197→[Heading 2] 1.8 Project Plan
+   198→   198→[Normal] The Investigation Report will be prepared, and early prototype planning will be carried out between 8 March 2026 and 10 May 2026. The time-sequence is based on mini-iterative cycles to allow the literature review, the survey (data collection), the technical design, and the planning of the prototype to be carried out simultaneously without the risk of missing the academic deadline.
+   199→   199→[Caption] Table 1
+   200→   200→[Caption] Investigation Report Project Timeline
+   201→   201→[Heading 1] CHAPTER 2: LITERATURE REVIEW
+   202→   202→[Heading 2] 2.1 Domain Research
+   203→   203→[Heading 3] 2.1.1 Intelligence Amplification and Tools for Thought
+   204→   204→[Normal] The beginning of Cogdoc is not the intellectual tradition of AI but of the arduous notion of "intelligence amplification". Bush (1945) envisions the Memex as a ‘personal knowledge system' capable of storing, linking and indexing thoughts by associative trails. It wasn't so much about substituting the thinking process, but on the machine assisting the thinker in dealing with complexity.
+   205→   205→[Normal] Engelbart (1962) later encapsulated this in his notion of augmenting human intellect. His writings maintained that computers must "amplify" an individual's capacity to learn about situations that are difficult, and to solve problems. Cogdoc uses this historic claim to the current conversation about generative AI writing. Digital artefacts are not authors, but Cogdoc makes the computer artifact a reflective and adversarial layer around the human author.
+   206→   206→[Heading 3] 2.1.2 Cognitive Offloading and Cognitive Atrophy
+   207→   207→[Normal] Cognitive offloading refers to using external resources to decrease mental load (Risko & Gilbert, 2016). Offloading can be beneficial in academic settings if it helps relieve low value items of memory, like remembering citation styles or storing research notes. The danger occurs when the high-level task of argumentation, synthesis and evaluation is taken off the shoulders of the person being offered. Allowing AI to determine the structure, evidence and wording for a piece of work might allow a user to write an essay while practicing fewer of the cognitive operations which develop academic competence.
+   208→   208→[Normal] Gerlich (2025) offers empirical data which shows that high AI tool usage is associated with cognitive offloading and lower critical thinking patterns. Lee et al. (2025) similarly report that knowledge workers who have higher confidence in generative AI tend to report less critical thinking effort. At the same time, Stadler et al. (2024) demonstrate that the use of LLM can help to decrease cognitive load but can also decrease depth of reasoning in scientific inquiry. Based on these insights, the design decision was made to intentionally slow and challenge Cogdoc down from traditional AI writing assistants.
+   209→   209→[Heading 3] 2.1.3 Automation Bias and the Stochastic Parrot Problem
+   210→   210→[Normal] Automation bias is the situation in which users believe completely in the automated suggestions even when they are not complete or accurate. This risk is greater with language models, as they tend to produce coherent and grammatically correct text. Bender et al. (2021) state that LLM's produce plausible language sequences without grounded knowledge. This can cause the reader of academic texts to believe persuasive, but unsupported explanations, false claims, or made-up references.
+   211→   211→[Normal] Cogdoc directly addresses this issue by using Citation Sentinel. The system does not accept as evidence. Rather, it requires uploaded research documents to serve as evidence for verification. Claims must only be identified as supported if they can be found in a source passage from the user's own research library that is relevant to this claim.
+   212→   212→[Heading 3] 2.1.4 Desirable Difficulties and Productive Friction
+   213→   213→[Normal] Cogdoc Educational Logic is based on Desirable Difficulties. Bjork (1994) believes that learning conditions that seem harder in the short term improve retention and transfer in the long term. In writing, this is not a failure of the process, it's a part of the process. They are a component of improved thinking skills.
+   214→   214→[Normal] Recent research on ‘frictional AI' confirms this. Drawing on the idea of “over-reliance” and the “deskilling” of workers, Cabitza et al. (2024) define frictional AI as a method to prevent dependency and deskilling through interaction protocols that maintain the human's active engagement. Frictional AI is also described as intentional design inefficiency that increases the cognitive involvement in decisions support (Natali, 2024). Cogdoc takes the idea of the AI assistant to the academic writing world by designing AI not as a ghost writer, but as a challenger in the margin instead.
+   215→   215→[Heading 3] 2.1.5 Retrieval-Augmented Generation and Evidence-Grounded Writing
+   216→   216→[Normal] Retrieval-Augmented Generation (RAG) is appropriate since in academic writing it is important that claims are supported by evidence. For Cogdoc, PDFs are converted to text chunks, embeddings, and stored in a vector database. A user requests that the Citation Sentinel verify a paragraph and the system retrieves the most relevant paragraphs from the library of uploaded content and verifies whether the user's claim is supported, partially supported, or not supported.
+   217→   217→[Normal] This does not completely remove hallucination, but it restricts evidence base and makes it verifiable. Cogdoc is designed to reason over a local research library, in contrast to the general training data upon which the model is asked to answer. In academic environments, such as for students and researchers, design is particularly crucial as unsupported claims can undermine the credibility of academic work.
+   218→   218→[Caption] Figure 2
+   219→   219→[Caption] Local RAG and Citation Sentinel Data Flow
+   220→   220→[Heading 3] 2.1.6 Design Principle Derived from the Literature
+   221→   221→[Normal] The literature indicates that there is one core design principle for Cogdoc: Academic writing should not be cognitively scripted. The system should help the user by raising poor questions, uncovering weak assumptions, calling for evidence and prompting revision. The final text should still be written by the learner as producing the text is part of the learning process.
+   222→   222→[Heading 2] 2.2 Similar Systems / Works
+   223→   223→[Normal] To gain an understanding of the current market, three similar systems were reviewed to determine the design gap which Cogdoc is addressing. While not the same competitors, they are all aspects of the AI-powered academic writing landscape: document composition, writing correction, and research discovery.
+   224→   224→[Heading 3] 2.2.1 Google Docs with Gemini
+   225→   225→[Normal] Google Docs with Gemini offers AI writing tools within the familiar Google Docs document editor. According to Google's documentation, it can write new text, rewrite existing text, summaries, elaborate, rephrase, and format documents based on a text prompt. The most significant advantage is its ease of use; the AI is integrated with the user's writing environment. The design goal is primarily productivity and document generation, though. Unlike Cogdoc, which purposely doesn't create final academic writing for the consumer.
+   226→   226→[Caption] Figure 3
+   227→   227→[Caption] Proposed Living Margin Interface
+   228→   228→[Heading 3] 2.2.2 Grammarly
+   229→   229→[Normal] Grammarly is an AI writing tool for grammar checking, re-writing, tone correction, summarization, drafting and communication enhancement, across numerous applications. It proves helpful to improve clarity and surface level quality. The disadvantage of this, compared to Cogdoc, is its emphasis on improving the quality and speed of writing, but Cogdoc focuses on intentional thinking. Grammarly enhances expression and Cogdoc challenges cognition.
+   230→   230→[Caption] Figure 4
+   231→   231→[Caption] Survey Demographic Distribution
+   232→   232→[Heading 3] 2.2.3 Elicit
+   233→   233→[Normal] Elicit is an AI research assistant for literature search, summarizing papers, synthesizing evidence and research workflows. It's more like Cogdoc in that it is concerned with evidence, helping researchers to work with academic papers. But Elicit is mostly research discovery and synthesis platform, not writing IDE. Cogdoc is a writing editor, productive friction, and local claim verification in one controlled academic writing environment.
+   234→   234→[Caption] Figure 5
+   235→   235→[Caption] AI Usage Frequency Survey Response
+   236→   236→[Caption] Table 2
+   237→   237→[Caption] Similar Systems Comparison
+   238→   238→[Heading 2] 2.3 Technical Research
+   239→   239→[Heading 3] 2.3.1 System Requirement Analysis
+   240→   240→[Normal] Cogdoc wants to run across a stack of technologies that enable a custom writing interface, PDF processing, embeddings, vector retrieval, AI-assisted interventions and responsive streaming between client and server. The project is limited by its short development timeline, which is why the chosen stack features fast development, a robust AI ecosystem, and low deployment complexity.
+   241→   241→[Caption] Table 3
+   242→   242→[Caption] Development and Production System Requirements
+   243→   243→[Heading 3] 2.3.2 Selected Frontend: React with Tiptap
+   244→   244→[Normal] The use of the frontend is made more convenient by React with Tiptap being chosen as the rich-text editor library framework, which is headless and is based on ProseMirror. It also has an architecture based on extensions, so that the editor can be customized without taking on the interface of the company. It's appropriate for Cogdoc, as at the heart of the project is the need for a custom writing surface, a Living Margin, custom idle detection, and controls for interaction that are not like the standard AI chat interfaces.
+   245→   245→[Heading 3] 2.3.3 Selected Backend: FastAPI
+   246→   246→[Normal] FastAPI is chosen as the backend framework as it is a Python-based web framework that is appropriate for the creation of high-performance APIs with automatic documentation and type validation. There's also a vibrant ecosystem around parsing and embedding PDFs, and the integration of AI APIs, such as embedding in RAG pipelines in Python. For this prototype, which is mostly AI-centric, FastAPI is more fitting than Laravel, while Laravel is still a viable option for a standard Web app.
+   247→   247→[Heading 3] 2.3.4 Database and Local RAG: Supabase with pgvector
+   248→   248→[Normal] For user accounts, document metadata, document text chunks and vector embeddings, Supabase PostgreSQL with the pgvector extension is chosen. According to Supabase documentation, pgvector is an extension for PostgreSQL which enables vector similarity search and retrieval-augmented AI applications. It's a good match for Cogdoc because Citation Sentinel needs to find passages in the source documents that are semantically similar to a user-written statement.
+   249→   249→[Heading 3] 2.3.5 AI Services: Gemini API
+   250→   250→[Normal] The Gemini ecosystem enables content creation, long-context reasoning, and embedding models, making Gemini API services ideal for AI interventions and embedding workflows. In Cogdoc, the model is not employed for the generation of the final paragraphs. It can be used to categorize the intent of a prompt, make Socratic questions, provide structural scaffolds, and verify claims with evidence. API availability and cost, along with latency, can be used to tweak the exact production model during implementation.
+   251→   251→[Heading 3] 2.3.6 Streaming Layer: Server-Sent Events
+   252→   252→[Normal] Server-Sent Events (SSE) is recommended for streaming AI interventions from the backend to the front end as the system is primarily used to send one-way updates from the server to the client. This could be an Interceptor response, a Socratic Spacer ghost question, or a Citation Sentinel verification status, etc. If the system has a requirement for bi-directional real-time collaboration, consideration of WebSockets may be considered later.
+   253→   253→[Heading 3] 2.3.7 Security and Privacy Considerations
+   254→   254→[Normal] Cogdoc processes academic writing and uploaded research PDFs. The system must therefore avoid unnecessary personal data collection, isolate each user's document library, protect uploaded documents, and clearly state that AI outputs are advisory. The prototype should include basic authentication, secure file handling, user-level data separation, and deletion controls. Since the project is academic, no sensitive institutional or confidential research data should be required for testing.
+   255→   255→[Caption] Table 4
+   256→   256→[Caption] Selected Technology Stack for Cogdoc
+   257→   257→[Caption] Figure 6
+   258→   258→[Caption] Interceptor Middleware Workflow
+   259→   259→[Heading 1] CHAPTER 3: METHODOLOGY
+   260→   260→[Heading 2] 3.1 System Development Methodology
+   261→   261→[Normal] This project adopts a Rapid Application Development (RAD) methodology with support of Scrum-lite sprint practices. The alternative was selected because of the short development time frame, the requirement for visible progress in the prototype and the fact that Cogdoc is a user-interface-heavy application. A strict Waterfall would result in very strong documentation but would be too inflexible for a project where the user feedback, editor interaction design and iterative improvement of the AI behaviors are all crucial.
+   262→   262→[Heading 3] 3.1.1 Comparison of Development Methodologies
+   263→   263→[Caption] Table 5
+   264→   264→[Caption] Comparison of System Development Methodologies
+   265→   265→[Heading 3] 3.1.2 Chosen Methodology: RAD with Scrum-lite
+   266→   266→[Normal] RAD is chosen because Cogdoc is an interactive prototype where the value of the writing interface is dependent upon how it feels to use. The system needs to be tested rapidly: design the editor, test the friction behaviour, adjust the prompt rules, and fine-tune the Citation Sentinel. Within RAD, scrum-lite practices will be implemented, such as the weekly sprint goals, a small product backlog, sprint review notes, and incremental builds. This provides the project with sufficient structure while avoiding excessive ceremony for a one-developer academic project.
+   267→   267→[Heading 3] 3.1.3 RAD Phases Applied to Cogdoc
+   268→   268→[Caption] Table 6
+   269→   269→[Caption] RAD Phases Applied to Cogdoc
+   270→   270→[Heading 2] 3.2 Data Gathering Design
+   271→   271→[Heading 3] 3.2.1 Chosen Data Gathering Methods
+   272→   272→[Normal] A mixed-method data gathering approach is used. The quantitative part of the study is an online questionnaire survey, and the qualitative part is a set of semi-structured interviews. The survey is ongoing and will seek to gather a minimum of 30 valid responses from undergraduate, postgraduate, PhD, researcher and academic writers. At least three people will be interviewed from the same target group.
+   273→   273→[List Paragraph] Questionnaire survey: used to assess the use of AI, cognitive offloading, automation bias, illusion of mastery, and receptivity to productive friction.
+   274→   274→[List Paragraph] Semi-structured interviews: These were conducted to gain insight into the participants' writing processes, perspectives on AI, academic stress, and willingness to adopt a friction-based writing tool.
+   275→   275→[List Paragraph] Document analysis: This involves reading academic literature, similar systems, and technical documentation related to the proposed solution.
+   276→   276→[Heading 3] 3.2.2 Target Population and Sampling
+   277→   277→[Normal] The target audience is academic users who might use generative AI to write or research. It is for undergraduate students, postgraduate students, PhD students, academic staff, researchers and professional academic writers. The project will employ purposive sampling, as the respondents are expected to have first-hand experience with academic writing and AI-assisted work. For convenience reasons, the survey might also include friends or other respondents, but it will not be restricted to friends or other non-related respondents.
+   278→   278→[Heading 3] 3.2.3 Questionnaire Structure and Design
+   279→   279→[Caption] Table 7
+   280→   280→[Caption] Questionnaire Structure
+   281→   281→[Heading 3] 3.2.4 Survey Question Mapping to Research Objectives
+   282→   282→[Caption] Table 8
+   283→   283→[Caption] Survey Question Mapping to Research Objectives
+   284→   284→[Heading 3] 3.2.5 Interview Design
+   285→   285→[Caption] The interview will be semi-structured with the same basic questions being asked to all participants, but with follow-up questions. The aim is to gain insight into the lived reality of the responses to the survey. The participants of the interviews will be anonymised and referred to as Participant A, Participant B and Participant C in the final report.
+   286→   286→[Caption] Table 9
+   287→   287→[Caption] Semi-Structured Interview Guide
+   288→   288→[Heading 3] 3.2.6 Ethical Considerations
+   289→   289→[Normal] This project has an ethics form drafted prior to the time of data collection. You will be asked to participate in the survey and interviews if you wish to do so. The participants will be told about the research project, the time involved and their right to opt out before giving in. It will not collect unnecessarily personally identifiable information. Responses subject of the interview will be anonymised with pseudonymous. Any data relating to this Final Year Project collected through the survey will be kept securely and will only be utilized for academics purposes.
+   290→   290→[Normal] 3.3 Analysis
+   291→   291→[Normal] This section gives preliminary analysis of the survey questions collected during the Cogdoc project. The survey aimed to explore academic implications of generative AI, the concept of cognitive offloading and automation bias, the potential for the “illusion of mastery” based on the fact that AI-generated content is often used to draft texts, and the receptivity of its respondents with regards to Cogdoc as a friction-based academic writing tool. Currently, 33 responses are received. The findings of the survey are preliminary because some items in the survey had missing response and the survey is still ongoing. Percentages of items representing demographic and usage variables are based on all respondents and Likert-scale item interpretation is based on valid responses for each of the respective items.
+   292→   292→[Normal] 3.3.1 Respondent Demographic Profile
+   293→   293→[Normal] The respondent group mainly consisted of undergraduate and postgraduate students, which aligns with the target audience of Cogdoc. Thirty-three respondents (66.7%) responded, 22 of which were undergraduate students. 27.3% of the respondents (9) were Postgraduate students. There were no responses for “Other” and one response did not provide a status. It shows that the goal of the survey is being met, reaching the desired academic user base, particularly students who will need to use generative AI tools in writing, researching and in preparation for assignments.
+   294→   294→[Caption] Table 10
+   295→   295→[Caption] Survey Demographics
+   296→   296→[Normal] ‘Academic discipline' was perhaps the most popular field that was left blank and 27 respondents out of 33 left this field as a blank answer. Of the positive answers, two respondents were for STEM, two for the Social Sciences, and two for the Humanities. Because there are many missing discipline responses, the factor of discipline-based interpretation will not be considered as a large interpretive analytical factor in this part of the report.
+   297→   297→[Normal] 3.3.2 Generative AI Usage Patterns
+   298→   298→[Normal] The consumer survey findings show consumer familiarity with the use of generative AI for its users. 63.6% of respondents (21) indicated that they use generative AI tools daily for academic or research purposes. In comparison to this, a smaller proportion said that they use them weekly, occasionally or rarely. This reinforces the Cogdoc project's relevance by catering to academic users who use generative AI during their writing and research work.
+   299→   299→[Normal] The most common academic uses of generative AI were summarizing literature or complex articles, rephrasing sentences or paragraphs, checking grammar and basic editing, brainstorming ideas, drafting sections, generating outlines, and finding preliminary sources or citations.
+   300→   300→[Caption] Table 11
+   301→   301→[Caption] Survey AI Usage Data
+   302→   302→[Normal] The results reveal that respondents are engaging with AI beyond basic editing assistance and also for more complex academic tasks like drafting, summarising and outlining, and finding citations. This is noteworthy because these activities are related to reasoning, synthesis, development of arguments, and evaluation of evidence. Based on the problem background stated in Cogdoc, the research results confirm that the over-dependence of generative AI might limit active cognition while learning to write academically.
+   303→   303→[Normal] 3.3.3 Cognitive Offloading and Automation Bias
+   304→   304→[Normal] This survey consisted of some questions based on a Likert scale to record cognitive offloading and automation bias. The results reveal a significant trend of relying on AI-generated academic content. For the statement 'I often copy and paste text generated by AI into academic drafts without much change' there were 23 valid responses and 16 respondents checked either Agree or Strongly Agree. This equates to 69.6% agreeing with the statement with valid respondents.
+   305→   305→[Normal] For the latter statement regarding the accuracy of facts and statistics provided by AI, there are 13 'Agree' and 6 'Strongly Agree' responses out of 19 valid answers.The second statement about the accuracy of the facts and statistics provided by AI, 13/19 (68.4%) of valid respondents selected either 'Agree' or 'Strongly Agree'. This indicates that whilst these responses may contain some false and non-factual data, many respondents trust AI facts despite them.
+   306→   306→[Normal] The most disturbing figure is in relation to citation verification. Only 5 out of 19 valid respondents strongly agree that they verify AI generated citations or source information with original documents before they add them to their work.Fewer respondents (5 of 19) strongly agree that they check AI-generated citations and/or source information against the original documents before using in their work. In the meantime, 12 respondents chose the option 'Strongly Disagree'. That means that a small number of the respondents have weak habits for verifying a citation, directly affirming the need for Cogdoc 's Citation Sentinel feature.
+   307→   307→[Caption] Table 12
+   308→   308→[Caption] Cognitive Offloading Survey Data Response
+   309→   309→[Normal] The outcome for structure and flow is also important. 72.2% of the 18 respondents with valid answers, who responded, said that they spend less time thinking about the structure and flow of their argument when they use AI. Furthermore, 12 of the 20 valid respondents (60.0%) said they are "very likely" or "somewhat likely" to accept a proposed argument or structure that AI has suggested, without considering other alternatives. The findings indicate that generative AI might foster the tendency to cut back on planning independently and to minimize engagement in constructing arguments.
+   310→   310→[Caption] Figure
+   311→   311→[Caption] Cognitive Offloading Likert Distribution Placeholder
+   312→   312→[Normal] In general, the results lend support to the claim that (college) academic users might be delegating not just the surface writing processes, but more fundamental cognitive operations, like structuring, evaluating, and verifying academic claims. It's a confirmation that the need for Cogdoc's Interceptor and Socratic Spacer features is valid, as they aim to foster a more active mode of engagement with the AI output, positioning the user to deepen their comprehension and critical thinking.
+   313→   313→[Normal] 3.3.4 Illusion of Mastery
+   314→   314→[Normal] The survey also included the illusion of mastery, where users were presented with an AI-generated summary of the concept and reported feeling as if they understood the concept without being extensively engaged in the original literature. When asked whether if an AI provided a short summary or explanation of a complex academic concept, 15 out of 22 valid responses (or 68.2%) selected Agree or Strongly Agree, indicating that 15 individuals felt they had mastered the topic as a result of the AI's work.
+   315→   315→[Normal] 14/25 (56.0%) of the valid respondents agreed or strongly agreed that reading AI-generated text on a topic is a good substitute for reading original academic sources with great depth. This suggests that while they are more likely to use the AI-generated explanations as a replacement for genuine learning in academics, more than half may do so.
+   316→   316→[Normal] This is further confirmed by the memory retrieval question. 11 respondents reported that they “always rely on AI generation”, and 4 that they “mostly rely on AI generation”. Fifty-five point five percent of the final sample of respondents (15/33) were more likely to report AI generation, which is using AI tools to generate new content than memory retrieval, which is using AI tools to recall existing content. By contrast just 4 respondents were inclined to remember information.
+   317→   317→[Caption] Table 13
+   318→   318→[Caption] Illusion of Mastery Survey Data
+   319→   319→[Normal] For the Cogdoc project, one of the most salient takeaways from these results is that the threat lies not just in whether students use AI, it is not that they don't use it but rather that they might mistakenly equate fluency with understanding. Cogdoc answers this with an assumption that the user will not take the time to write out the final product; instead, it writes out questions that require the user to explain, justify, connect and verify his own ideas.
+   320→   320→[Caption] Figure 8
+   321→   321→[Caption] Illusion of Mastery and Memory Retrieval Distribution
+   322→   322→[Normal] 3.3.5 Receptivity Toward Productive Friction and Cogdoc
+   323→   323→[Normal] The last part of the survey assessed the receptivity of the respondents towards the concept of the Cogdoc. Those who responded were first introduced to the concept of a tool that would not simply present text, but rather serve as a rigorous Socratic” teacher during academic writing. The findings indicate that respondents understand the long-term benefits that this could provide but also believe that it would be unpleasant, quicker to be rushed through.
+   324→   324→[Normal] Of the 22 valid responses for this question, 13 (59.1%) marked Cogdoc as useful/extremely useful for their long-term learning and skill development. This implies that for many of the respondents it is clear that this tool can have an educational value, as they are interested in a longer process of thinking, producing, and verifying the work's quality.
+   325→   325→[Normal] But so was the frustration score as well. 78.3% (18 of 23) of the valid respondents found Cogdoc was 'frustrating' or 'extremely frustrating' when required to work under short deadlines with high stress. This doesn't have to be something negative. It instead reinforces the main design paradox of the project, that Cogdoc is a built-not-to-maximise-speed, but to create productive friction that facilitates deeper thinking. A key design challenge is to turn it into a friction that isn't opposed but supportive.
+   326→   326→[Normal] 12 of the 19 valid respondents (63.2%) have responded to the statement: “I would prefer an AI tool that encourages deep and slow thinking compared to one that is fast and productive.” This means that a significant share of respondents are willing to adopt a writing device which is not as fast but more intellectually challenging.
+   327→   327→[Caption] Table 14
+   328→   328→[Caption] Receptivity Toward Productive Friction Survey Data
+   329→   329→[Normal] These results suggest that Cogdoc should not completely remove user control. Instead, the system should allow structured friction to appear at meaningful moments, such as after an unsupported claim, during writer’s block, or when the user attempts to delegate too much writing responsibility to AI. This supports the proposed MVP features: the Interceptor, Socratic Spacer, and Citation Sentinel.
+   330→   330→[Caption] Figure
+   331→   331→[Caption] Receptivity Toward Cogdoc and Productive Friction
+   332→   332→[Normal] 3.3.6 Qualitative Feedback
+   333→   333→[Normal] The open-ended responses provide further support for the survey findings. Several respondents described how generative AI has changed their academic writing process. Some stated that they now outline less and mainly edit AI-generated material. Others reported using AI for structural advice, grammar checking, rephrasing, and reading summaries instead of full articles. These responses suggest that AI has become embedded in the academic writing workflow, but not always in ways that encourage deep learning.
+   334→   334→[Normal] Examples of reported changes include:
+   335→   335→[Normal] Respondents also identified several important features they would want in a research-assisted writing tool. These included forced citations, interactive feedback loops, critical questioning prompts, seamless editor integration, direct links to PDF sources, assumption highlighting, grammar fixes, structuring help, and creative prompts.
+   336→   336→[Normal] The qualitative responses confirm that users do not necessarily reject AI assistance. Instead, they want AI to be more reliable, more evidence-based, and better integrated into their writing process. This supports the design of Cogdoc as an intelligence amplification tool rather than a conventional generative writing assistant.
+   337→   337→[Normal] 3.3.7 Summary of Findings
+   338→   338→[Normal] The survey findings support the main problem statement of the Cogdoc project. First, the majority of respondents are active academic users of generative AI, with daily usage being the most common pattern. Second, respondents use AI not only for grammar and rephrasing, but also for summarising literature, drafting sections, generating outlines, and finding citations. These tasks involve higher-order cognitive activity, which creates the risk of cognitive offloading.
+   339→   339→[Normal] Third, the Likert-scale responses show evidence of automation bias and reduced verification behaviour. Many respondents reported trusting AI-generated claims, while only a small portion strongly verified AI-generated citations against original documents. Fourth, the findings show signs of the illusion of mastery, where respondents may feel they understand complex topics from AI-generated summaries without fully reading the original literature.
+   340→   340→[Normal] Finally, the survey suggests that respondents are receptive to the Cogdoc concept, especially for long-term learning and skill development. However, they also expect such a tool to be frustrating under deadline pressure. This confirms that Cogdoc must balance productive friction with usability. The system should be strict enough to encourage reflection and verification, but not so obstructive that users abandon it entirely.
+   341→   341→[Normal] 3.3.8 Final List of User Requirements
+   342→   342→[Normal] Based on the preliminary survey analysis, the following user requirements have been identified.
+   343→   343→[Normal] Functional Requirements
+   344→   344→[Normal] 1. The system shall allow users to write academic drafts in a focused editor interface.
+   345→   345→[Normal] 2. The system shall prevent users from directly delegating full academic writing tasks to AI.
+   346→   346→[Normal] 3. The system shall provide Socratic questions when users appear stuck or cognitively passive.
+   347→   347→[Normal] 4. The system shall allow users to upload research PDFs for local evidence grounding.
+   348→   348→[Normal] 5. The system shall verify user-written claims against uploaded research materials.
+   349→   349→[Normal] 6. The system shall flag unsupported, weak, or unverifiable claims.
+   350→   350→[Normal] 7. The system shall provide citation-related feedback linked to retrieved evidence.
+   351→   351→[Normal] 8. The system shall support structural scaffolding without writing the final paragraph for the user.
+   352→   352→[Normal] 9. The system shall display AI interventions in a Living Margin beside the user’s text.
+   353→   353→[Normal] 10. The system shall provide feedback that encourages reflection, assumption checking, and argument improvement.
+   354→   354→[Normal] Non-Functional Requirements
+   355→   355→[Normal] 1. The interface should be simple, readable, and suitable for academic writing.
+   356→   356→[Normal] 2. The system should respond quickly enough to avoid disrupting the writing process.
+   357→   357→[Normal] 3. The system should protect uploaded research documents and user drafts.
+   358→   358→[Normal] 4. The system should be transparent about whether a claim is supported or unsupported.
+   359→   359→[Normal] 5. The system should minimise hallucination by grounding responses in uploaded documents.
+   360→   360→[Normal] 6. The system should remain usable under academic deadline pressure.
+   361→   361→[Normal] 7. The system should maintain a clear separation between AI assistance and user-authored writing.
+   362→   362→[Normal] 8. The system should support long-term learning, critical thinking, and academic integrity.
+   363→   363→[Heading 1] CHAPTER 4: CONCLUSION
+   364→   364→[Heading 2] 4.1 Achievement of the First Part of the Project
+   365→   365→[Normal] First part of Cogdoc project has set a clear research problem, theoretical foundation, system direction and methodology for development. The title, aim, objectives and initial scope have been defined in the Project Proposal Form. The ethics form has also been completed for the data gathering process, so the survey and planned interviews can be conducted in an ethical way.
+   366→   366→[Normal] A significant gap in the academic and design aspects has been identified during the investigation. The current AI writing tools focus primarily on speed, drafting, rewriting and ease of use. Cogdoc, on the other hand, suggests an alternative, with AI as a Socratic coach, challenging the thinking of the user. This support is reflected in the literature review, examining the concepts of cognitive offloading, automation bias, desirable difficulties, and frictional AI..
+   367→   367→[Normal] A viable MVP architecture has also been developed from the technical investigation. The custom editor interface will be appropriate for React with Tiptap. The AI and RAG backend can be implemented with FastAPI.FastAPI can be used for the AI and RAG backend. Supabase PostgreSQL + pgvector can be used to store embeddings and find evidence passages. AI interventions, workflows with embeddings, and prompt classification are suitable activities for Gemini API services. This provides a practical building block for implementation in the available time frame.
+   368→   368→[Heading 2] 4.2 Research and Design Gaps
+   369→   369→[List Bullet] Survey: The data collection is still being carried out, statistical results will be entered once the survey reaches at least 30 valid responses.
+   370→   370→[List Bullet] Three interviews have been planned but not yet completed; hence, qualitative data is represented with placeholders.
+   371→   371→[List Bullet] The degree of accuracy of Citation Sentinel is hard to prove without deploying the RAG pipeline with authentic PDFs uploaded.
+   372→   372→[List Bullet] There needs to be just the right amount of friction to create a productive process, not too much so that users become frustrated.
+   373→   373→[List Bullet] Advanced features like long-term learning analytics, collaborative editing, Devil's Autocomplete and Blindspot Monitor are not included in the current MVP.
+   374→   374→[Heading 2] 4.3 Future Work and Recommendations
+   375→   375→[List Bullet] Collate all survey information and include any charts, percentages and demographics of the survey takers in Chapter 3.
+   376→   376→[List Bullet] At least 3 semi-structured interviews with target users, thematic analysis in final report.
+   377→   377→[List Bullet] Implement MVP in short RAD cycles (editor + Interceptor, plus Socratic Spacer and Citation Sentinel).
+   378→   378→[List Bullet] Test a small number of academic PDFs using the Citation Sentinel to evaluate claims, partial claims and no claims detection.
+   379→   379→[List Bullet] Future work – add Blindspot Monitor after MVP is stable. This is a feature that allows the user to compare his/her draft with under-used views at the research library.
+   380→   380→[List Bullet] Add a feature to the future that autofills the text for the user (Devil's Autocomplete), provided that it is possible to do so without the user actually typing the text.
+   381→   381→[List Bullet] Carry out usability testing to determine perceived value of learning, frustration, trust and usefulness of checking evidence.
+   382→   382→[Heading 2] 4.4 Concluding Remarks
+   383→   383→[Normal] Cogdoc is a Final Year Project (FYP) that is both technically feasible and academically significant as it tackles an emerging and existing problem in the world of AI-supported academic-quality writing: that ease-of-use of writing tools can degrade mental faculties as they attempt to support the same faculties. The project's contribution is not just another chatbot or writing generator but a friction-writing environment that will preserve the human effort that goes into the writing process (from start to finish). The following step of CogDoc is to conduct survey and interviews and create a minimum viable product (MVP) to enable CogDoc to offer a responsible alternative to the traditional generative AI assisted writing.
+   384→   384→[Heading 1] REFERENCES
+   385→   385→[Normal] Bender, E. M., Gebru, T., McMillan-Major, A., & Shmitchell, S. (2021). On the dangers of stochastic parrots: Can language models be too big? In Proceedings of the 2021 ACM Conference on Fairness, Accountability, and Transparency (pp. 610-623). Association for Computing Machinery. https://doi.org/10.1145/3442188.3445922
+   386→   386→[Normal] Bjork, R. A. (1994). Memory and metamemory considerations in the training of human beings. In J. Metcalfe & A. Shimamura (Eds.), Metacognition: Knowing about knowing (pp. 185-205). MIT Press. https://doi.org/10.7551/mitpress/4561.003.0011
+   387→   387→[Normal] Bush, V. (1945). As we may think. The Atlantic Monthly. https://www.w3.org/History/1945/vbush/
+   388→   388→[Normal] Cabitza, F., Natali, C., Famiglini, L., Campagner, A., Caccavella, V., & Gallazzi, E. (2024). Never tell me the odds: Investigating pro-hoc explanations in medical decision making. Artificial Intelligence in Medicine, 150, Article 102819. https://doi.org/10.1016/j.artmed.2024.102819
+   389→   389→[Normal] Choi, M., & Zhang, J. (2025, July 14). Gemini Embedding now generally available in the Gemini API. Google Developers Blog. https://developers.googleblog.com/en/gemini-embedding-available-gemini-api/
+   390→   390→[Normal] Elicit. (n.d.). AI for scientific research. Retrieved April 20, 2026, from https://elicit.com/
+   391→   391→[Normal] Engelbart, D. C. (1962). Augmenting human intellect: A conceptual framework. Stanford Research Institute. https://www.dougengelbart.org/content/view/138/
+   392→   392→[Normal] FastAPI. (n.d.). FastAPI framework. Retrieved Apil 23, 2026, from https://fastapi.tiangolo.com/
+   393→   393→[Normal] Gerlich, M. (2025). AI tools in society: Impacts on cognitive offloading and the future of critical thinking. Societies, 15(1), Article 6. https://doi.org/10.3390/soc15010006
+   394→   394→[Normal] Google. (n.d.). Write with Gemini in Google Docs. Google Docs Editors Help. Retrieved May 11, 2026, from https://support.google.com/docs/answer/13951448
+   395→   395→[Normal] Google AI for Developers. (n.d.). Gemini API documentation. Retrieved April 23, 2026, from https://ai.google.dev/gemini-api/docs
+   396→   396→[Normal] Grammarly. (n.d.). AI writing assistant. Retrieved April 23, 2026, from https://www.grammarly.com/ai-writing-assistant
+   397→   397→[Normal] Kosmyna, N., Hauptmann, E., Yuan, Y. T., Situ, J., Liao, X. H., Beresnitzky, A. V., Braunstein, I., & Maes, P. (2025). Your brain on ChatGPT: Accumulation of cognitive debt when using an AI assistant for essay writing task. arXiv. https://doi.org/10.48550/arXiv.2506.08872
+   398→   398→[Normal] Lee, H.-P. H., Sarkar, A., Tankelevitch, L., Drosos, I., Rintel, S., Banks, R., & Wilson, N. (2025). The impact of generative AI on critical thinking: Self-reported reductions in cognitive effort and confidence effects from a survey of knowledge workers. In Proceedings of the 2025 CHI Conference on Human Factors in Computing Systems (Article 1121, pp. 1-22). Association for Computing Machinery. https://doi.org/10.1145/3706598.3713778
+   399→   399→[Normal] Natali, C. (2024). Frictional AI: Designing desirable inefficiencies in decision support systems for knowledge work. Proceedings of the 22nd European Conference on Computer-Supported Cooperative Work: Doctoral Colloquium Contributions. https://doi.org/10.48340/ecscw2024_dc07
+   400→   400→[Normal] Risko, E. F., & Gilbert, S. J. (2016). Cognitive offloading. Trends in Cognitive Sciences, 20(9), 676-688. https://doi.org/10.1016/j.tics.2016.07.002
+
+[showing lines 1-400 of 500; use offset=401 with limit to continue reading]
