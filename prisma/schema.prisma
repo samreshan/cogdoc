@@ -1,0 +1,113 @@
+// Cogdoc MVP - Prisma schema (SQLite)
+// Mirrors the 3NF data model from the architecture design document.
+// Note: SQLite has no native vector type; the MVP uses keyword-overlap retrieval
+// over PdfChunk.content, simulating the RAG pattern without pgvector.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  displayName  String?
+  dailyTokenBudget Int @default(100000)
+  createdAt    DateTime @default(now())
+  lastLogin    DateTime?
+  projects     Project[]
+  interventions Intervention[]
+  pdfs         Pdf[]
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document    Document?
+  pdfs        Pdf[]
+  interventions Intervention[]
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  projectId   String   @unique
+  content     String   @default("") // HTML content from contenteditable
+  lastSaved   DateTime @default(now())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Pdf {
+  id           String   @id @default(cuid())
+  projectId    String
+  userId       String
+  filename     String
+  rawText      String   @default("") // extracted text content
+  sizeBytes    Int      @default(0)
+  parseStatus  String   @default("queued") // queued | ready | failed
+  uploadedAt   DateTime @default(now())
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chunks       PdfChunk[]
+}
+
+model PdfChunk {
+  id           String   @id @default(cuid())
+  pdfId        String
+  chunkIndex   Int
+  content      String
+  charCount    Int
+  pageApprox   Int      @default(1) // simulated page number
+  createdAt    DateTime @default(now())
+  pdf          Pdf      @relation(fields: [pdfId], references: [id], onDelete: Cascade)
+  evidences    InterventionEvidence[]
+}
+
+model Intervention {
+  id              String   @id @default(cuid())
+  userId          String
+  projectId       String
+  paragraphId     String?  // synthetic id from frontend (paragraph hash)
+  promptTemplateTag String? // [Provocation], [Lens], [Structural Scaffold], [The Spark Gap]
+  engineType      String   // interceptor | socratic | citation | scaffold
+  promptText      String?
+  responseText    String?
+  verdict         String?  // supported | partially_supported | unsupported | insufficient_evidence | null
+  status          String   @default("active") // active | faded | resolved
+  userAction      String?  // engaged | dismissed | ignored
+  createdAt       DateTime @default(now())
+  resolvedAt      DateTime?
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  evidences       InterventionEvidence[]
+}
+
+model InterventionEvidence {
+  id              String   @id @default(cuid())
+  interventionId  String
+  chunkId         String
+  similarityScore Float
+  citedExcerpt    String
+  intervention    Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  chunk           PdfChunk     @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+}
+
+model PromptTemplate {
+  id            String   @id @default(cuid())
+  behaviorTag   String   @unique // Provocation | Lens | Structural Scaffold | The Spark Gap
+  name          String
+  template      String
+  modelId       String   @default("default")
+  version       Int      @default(1)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+}
