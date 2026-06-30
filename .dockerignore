@@ -1,0 +1,56 @@
+# Build artefacts
+.next/
+out/
+dist/
+build/
+
+# Dev / runtime logs
+dev.log
+server.log
+*.log
+
+# Local database (will be created in /data volume at runtime)
+db/*.db
+db/*.db-journal
+
+# Local env (the wizard writes to /data/.env at runtime)
+.env
+.env.local
+.env.*.local
+
+# Docker artefacts
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Version control
+.git
+.gitignore
+.github
+.gitlab-ci.yml
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed at runtime — they're in the standalone build's public/ if referenced)
+README.md
+README-DOCKER.md
+worklog.md
+download/
+scripts/cogdoc/
+skills/
+tool-results/
+upload/
+mini-services/
+examples/
+.zscripts/
+.z-ai-config
+
+# Tests
+__tests__/
+*.test.ts
+*.spec.ts
+coverage/

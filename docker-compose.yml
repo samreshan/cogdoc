@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Cogdoc — docker-compose for local testing
+#
+# Usage:
+#   docker compose up              # build + run (interactive — wizard runs)
+#   docker compose up -d           # detached (set env vars first)
+#   docker compose down            # stop + remove container
+#   docker compose logs -f         # follow logs
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  cogdoc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cogdoc:latest
+    container_name: cogdoc
+    ports:
+      - "3000:3000"
+    volumes:
+      - cogdoc_data:/data
+      # Optional: pre-mount a .env to skip the wizard
+      # - ./.env:/data/.env:ro
+      # Optional: pre-mount a .z-ai-config
+      # - ./.z-ai-config:/data/.z-ai-config:ro
+    environment:
+      # Set these to skip the wizard (non-interactive mode)
+      # GEMINI_API_KEY: "AIza..."
+      # GROQ_API_KEY: "gsk_..."
+      # AI_PROVIDER: "gemini"
+      # AI_BASE_URL: "https://generativelanguage.googleapis.com/v1beta/openai"
+      # AI_MODEL: "gemini-2.0-flash"
+      # DATABASE_URL: "file:/data/cogdoc.db"
+      # SUPABASE_URL: ""
+      # SUPABASE_ANON_KEY: ""
+      # SUPABASE_SERVICE_ROLE_KEY: ""
+      # SUPABASE_JWT_SECRET: ""
+      # DAILY_TOKEN_BUDGET: "100000"
+      # IDLE_THRESHOLD: "45"
+      - COGDOC_SKIP_WIZARD=${COGDOC_SKIP_WIZARD:-}
+    stdin_open: true   # so the wizard can prompt
+    tty: true          # allocate a TTY
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  cogdoc_data:
+    driver: local
