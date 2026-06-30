@@ -1,0 +1,84 @@
+%% Cogdoc Use Case Diagram
+%% Single actor: Writer
+%% 4 packages of use cases
+flowchart LR
+    %% Actor
+    Writer((Writer<br/>Student / Researcher))
+
+    %% System boundary
+    subgraph SYS [Cogdoc System]
+        direction TB
+
+        subgraph ACCT [Account Management]
+            UC1([Register Account])
+            UC2([Log In / Log Out])
+        end
+
+        subgraph WS [Workspace]
+            UC3([Create Project])
+            UC4([Open Editor])
+            UC5([Upload Research PDF])
+            UC6([Delete Project])
+            UC7([Manage PDF Library])
+        end
+
+        subgraph WRT [Writing & Friction]
+            UC8([Type Draft Paragraph])
+            UC9([Trigger Prompt Interceptor])
+            UC10([Receive Socratic Spacer])
+            UC11([Verify Claim via<br/>Citation Sentinel])
+            UC12([Dismiss / Accept<br/>Margin Intervention])
+            UC13([Apply Structural Scaffold])
+        end
+
+        subgraph LIB [Library & RAG]
+            UC14([Parse & Chunk PDF])
+            UC15([Generate Embedding])
+            UC16([Retrieve Evidence Chunks])
+        end
+    end
+
+    %% External systems (shown as actors on the right)
+    Gemini((Gemini API))
+    Supabase[(Supabase<br/>Auth + pgvector)]
+
+    %% Associations
+    Writer --> UC1
+    Writer --> UC2
+    Writer --> UC3
+    Writer --> UC4
+    Writer --> UC5
+    Writer --> UC6
+    Writer --> UC7
+    Writer --> UC8
+    Writer --> UC9
+    Writer --> UC10
+    Writer --> UC11
+    Writer --> UC12
+    Writer --> UC13
+
+    %% Includes & extends
+    UC9 -. <<include>> .-> UC16
+    UC11 -. <<include>> .-> UC16
+    UC11 -. <<include>> .-> UC9
+    UC10 -. <<extend>> .-> UC8
+    UC13 -. <<extend>> .-> UC9
+    UC5 -. <<include>> .-> UC14
+    UC14 -. <<include>> .-> UC15
+
+    %% External service interactions
+    UC9 --> Gemini
+    UC10 --> Gemini
+    UC11 --> Gemini
+    UC15 --> Gemini
+    UC1 --> Supabase
+    UC2 --> Supabase
+    UC16 --> Supabase
+
+    %% Styling
+    classDef actor fill:#EFF6FF,stroke:#226b90,stroke-width:2px,color:#181a1b
+    classDef ext fill:#FFF7ED,stroke:#be6a4e,stroke-width:2px,color:#181a1b
+    classDef pkg fill:#f5f8fb,stroke:#354d59,color:#181a1b
+    class Writer,Gemini actor
+    class Supabase ext
+    class ACCT,WS,WRT,LIB pkg

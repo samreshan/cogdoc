@@ -1,0 +1,33 @@
+%% Sequence: Citation Sentinel RAG Flow
+sequenceDiagram
+    autonumber
+    actor U as Writer
+    participant FE as React + Tiptap
+    participant GW as FastAPI Gateway
+    participant CIT as Citation Sentinel
+    participant VS as Vector Search
+    participant DB as Postgres + pgvector
+    participant AI as AIService (Gemini)
+    participant MR as Margin Repository
+
+    U->>FE: Selects paragraph + clicks "Verify Claim"
+    FE->>GW: POST /citation-sentinel/verify<br/>{project_id, paragraph_id, claim_text}
+    GW->>GW: JWT + rate limit
+    GW->>CIT: verify_claim()
+    CIT->>CIT: Extract atomic claims<br/>from paragraph
+    CIT->>VS: retrieve_top_k(claim_embedding, k=5)
+    VS->>DB: SELECT chunks ORDER BY<br/>embedding <=> claim_embedding<br/>LIMIT 5
+    DB-->>VS: top 5 PDF chunks<br/>with source metadata
+    VS-->>CIT: retrieved_evidence[]
+    CIT->>AI: Verify claim against evidence<br/>(prompt template: [Lens: Sceptical Examiner])
+    AI-->>CIT: {verdict: "partially_supported",<br/>supported_claims: [...],<br/>unsupported_claims: [...],<br/>citations: [chunk_ids]}
+    CIT->>MR: persist intervention<br/>(type=citation, verdict, citations)
+    MR->>DB: INSERT intervention +<br/>intervention_evidence junction
+    CIT-->>GW: {verdict, citations,<br/>intervention_id}
+    GW-->>FE: 200 OK + verdict payload
+    FE->>FE: Render verdict card in Living Margin<br/>with clickable chunk references
+    FE-->>U: Margin shows:<br/>"Partially Supported" +<br/>3 source passages highlighted
+    U->>FE: Clicks source passage
+    FE->>GW: GET /pdfs/{pdf_id}/chunks/{chunk_id}
+    GW-->>FE: chunk_text + page_number
+    FE-->>U: Modal displays source passage

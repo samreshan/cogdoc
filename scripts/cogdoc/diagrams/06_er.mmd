@@ -1,0 +1,125 @@
+%% Cogdoc ER Diagram
+erDiagram
+    USER ||--o{ PROJECT : owns
+    USER ||--o{ INTERVENTION : triggers
+    USER ||--|| AI_PROVIDER_CONFIG : configures
+    PROJECT ||--|| DOCUMENT : contains
+    PROJECT ||--o{ PDF : has
+    DOCUMENT ||--o{ PARAGRAPH : contains
+    PARAGRAPH ||--o{ INTERVENTION : receives
+    PDF ||--o{ PDF_CHUNK : parsed_into
+    PDF_CHUNK ||--|| EMBEDDING : has
+    PDF_CHUNK ||--o{ INTERVENTION_EVIDENCE : cited_in
+    INTERVENTION ||--o{ INTERVENTION_EVIDENCE : references
+    PROMPT_TEMPLATE ||--o{ INTERVENTION : generates
+
+    USER {
+        uuid id PK
+        string email UK
+        string display_name
+        timestamp created_at
+        timestamp last_login
+        int daily_token_budget
+    }
+
+    PROJECT {
+        uuid id PK
+        uuid user_id FK
+        string title
+        text description
+        timestamp created_at
+        timestamp updated_at
+        boolean archived
+    }
+
+    DOCUMENT {
+        uuid id PK
+        uuid project_id FK
+        text content
+        jsonb tiptap_state
+        timestamp last_saved
+    }
+
+    PARAGRAPH {
+        uuid id PK
+        uuid document_id FK
+        int order_index
+        text content
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    PDF {
+        uuid id PK
+        uuid project_id FK
+        string filename
+        string storage_path
+        bigint size_bytes
+        string mime_type
+        int page_count
+        timestamp uploaded_at
+        string parse_status
+    }
+
+    PDF_CHUNK {
+        uuid id PK
+        uuid pdf_id FK
+        int chunk_index
+        text content
+        int page_number
+        int char_count
+        timestamp created_at
+    }
+
+    EMBEDDING {
+        uuid id PK
+        uuid chunk_id FK
+        vector embedding
+        string model_version
+        timestamp created_at
+    }
+
+    INTERVENTION {
+        uuid id PK
+        uuid user_id FK
+        uuid project_id FK
+        uuid paragraph_id FK
+        uuid prompt_template_id FK
+        string engine_type
+        string behavior_tag
+        text prompt_text
+        text response_text
+        string verdict
+        string status
+        string user_action
+        timestamp created_at
+        timestamp resolved_at
+    }
+
+    INTERVENTION_EVIDENCE {
+        uuid id PK
+        uuid intervention_id FK
+        uuid chunk_id FK
+        float similarity_score
+        text cited_excerpt
+    }
+
+    PROMPT_TEMPLATE {
+        uuid id PK
+        string behavior_tag
+        string name
+        text template
+        string model_id
+        int version
+        boolean active
+        timestamp created_at
+    }
+
+    AI_PROVIDER_CONFIG {
+        uuid id PK
+        uuid user_id FK
+        string provider
+        string api_key_encrypted
+        jsonb model_preferences
+        timestamp updated_at
+    }

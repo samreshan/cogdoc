@@ -1,0 +1,116 @@
+%% Cogdoc System Architecture - Modular Monolith
+flowchart TB
+    %% Client layer
+    subgraph CLIENT [Client Layer - Browser]
+        direction LR
+        REACT[React SPA<br/>+ Tiptap Editor]
+        MARGIN[Living Margin<br/>UI Component]
+        IDLE[Idle Detector<br/>Service]
+        SSEC[SSE Client<br/>EventSource]
+    end
+
+    %% API Gateway (single entry point)
+    APIGW[FastAPI Gateway<br/>JWT validation<br/>Rate limiting]
+
+    %% Modular Monolith - single deployable
+    subgraph MONO [FastAPI Modular Monolith - Single Deployable]
+        direction TB
+
+        subgraph CORE [Core Modules]
+            AUTH[auth<br/>Supabase JWT verify]
+            DOC[documents<br/>Project + Draft CRUD]
+            PDFM[pdf_manager<br/>Upload + Parse]
+        end
+
+        subgraph RAG [RAG Pipeline Module]
+            CHUNK[chunker<br/>PDF → text chunks]
+            EMB[embedder<br/>Gemini text-embedding]
+            VSEARCH[vector_search<br/>pgvector cosine]
+        end
+
+        subgraph ENGINES [AI Engines Module]
+            INT[Interceptor<br/>Lazy-prompt detector]
+            SOC[Socratic Spacer<br/>Idle ghost-question generator]
+            CIT[Citation Sentinel<br/>Claim verifier]
+            SCAF[Structural Scaffold<br/>Outline generator]
+        end
+
+        subgraph MARGINMOD [Margin Module]
+            MREPO[Intervention Repository<br/>Full audit log]
+            SSE_PUSH[SSE Push Service]
+        end
+
+        subgraph AIABS [AI Provider Abstraction]
+            AISVC[AIService Interface]
+            GEMADP[GeminiAdapter]
+            PROMPT[PromptTemplate Registry<br/>versioned + behavior tags]
+            BUDGET[Token Budget Tracker]
+        end
+
+        subgraph TELEM [Telemetry]
+            LOG[Structured Logger]
+            METRICS[Metrics Collector]
+        end
+    end
+
+    %% External services
+    subgraph EXT [External Services]
+        direction LR
+        SUPAUTH[(Supabase Auth)]
+        SUPDB[(Supabase Postgres<br/>+ pgvector)]
+        GEMAPI[(Gemini API<br/>Classification<br/>Embedding<br/>Generation)]
+        STORAGE[(Object Storage<br/>Raw PDFs)]
+    end
+
+    %% Connections
+    REACT -->|HTTPS REST| APIGW
+    MARGIN -.->|events| SSEC
+    IDLE -.->|trigger| REACT
+    SSEC -.->|SSE stream| MARGIN
+
+    APIGW --> AUTH
+    APIGW --> DOC
+    APIGW --> PDFM
+    APIGW --> ENGINES
+    APIGW --> MARGINMOD
+
+    AUTH --> SUPAUTH
+    DOC --> SUPDB
+    PDFM --> STORAGE
+    PDFM --> CHUNK
+    CHUNK --> EMB
+    EMB --> GEMAPI
+    EMB --> SUPDB
+    VSEARCH --> SUPDB
+
+    INT --> AISVC
+    SOC --> AISVC
+    CIT --> AISVC
+    SCAF --> AISVC
+    CIT --> VSEARCH
+
+    AISVC --> GEMADP
+    GEMADP --> GEMAPI
+    AISVC --> PROMPT
+    AISVC --> BUDGET
+
+    MARGINMOD --> MREPO
+    MARGINMOD --> SSE_PUSH
+    MREPO --> SUPDB
+    SSE_PUSH -.->|SSE| SSEC
+
+    ENGINES -.-> TELEM
+    RAG -.-> TELEM
+
+    %% Styling
+    classDef client fill:#EFF6FF,stroke:#226b90,stroke-width:1.5px,color:#181a1b
+    classDef gateway fill:#FEF3C7,stroke:#92400e,stroke-width:2px,color:#181a1b
+    classDef module fill:#f5f8fb,stroke:#354d59,color:#181a1b
+    classDef engine fill:#FFF7ED,stroke:#be6a4e,stroke-width:1.5px,color:#181a1b
+    classDef ext fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#181a1b
+
+    class REACT,MARGIN,IDLE,SSEC client
+    class APIGW gateway
+    class AUTH,DOC,PDFM,CHUNK,EMB,VSEARCH,MREPO,SSE_PUSH,AISVC,GEMADP,PROMPT,BUDGET,LOG,METRICS module
+    class INT,SOC,CIT,SCAF engine
+    class SUPAUTH,SUPDB,GEMAPI,STORAGE ext

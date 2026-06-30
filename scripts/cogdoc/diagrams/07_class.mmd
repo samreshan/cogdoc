@@ -1,0 +1,114 @@
+%% Cogdoc AI Service Layer - Class Diagram
+classDiagram
+    direction TB
+
+    %% Interface
+    class AIService {
+        <<interface>>
+        +classify_prompt(text: str, context: dict) ClassifyResult
+        +generate_socratic(question_type: BehaviorTag, context: dict) SocraticResponse
+        +verify_claim(claim: str, evidence: List~Chunk~) VerdictResult
+        +generate_embedding(text: str) Vector
+        +generate_scaffold(outline_type: str, context: dict) ScaffoldResult
+    }
+
+    %% Abstract base
+    class BaseAdapter {
+        <<abstract>>
+        #provider: str
+        #api_key: str
+        #model_map: dict
+        #token_budget: TokenBudget
+        +call_api(method, payload) Response
+        #track_tokens(used: int)
+        #fallback_to_default_model()
+    }
+
+    %% Concrete adapters
+    class GeminiAdapter {
+        -gemini_client: GeminiSDK
+        +classify_prompt(text, context) ClassifyResult
+        +generate_socratic(question_type, context) SocraticResponse
+        +verify_claim(claim, evidence) VerdictResult
+        +generate_embedding(text) Vector
+        +generate_scaffold(outline_type, context) ScaffoldResult
+        -build_classification_prompt(text) str
+        -build_verification_prompt(claim, evidence) str
+    }
+
+    class OpenAIAdapter {
+        -openai_client: OpenAISDK
+        +classify_prompt(text, context) ClassifyResult
+        +generate_socratic(question_type, context) SocraticResponse
+        +verify_claim(claim, evidence) VerdictResult
+        +generate_embedding(text) Vector
+    }
+
+    class LocalLLMAdapter {
+        -model_path: str
+        +classify_prompt(text, context) ClassifyResult
+        +generate_socratic(question_type, context) SocraticResponse
+        +verify_claim(claim, evidence) VerdictResult
+    }
+
+    %% Supporting classes
+    class PromptTemplateRegistry {
+        -templates: dict
+        +get(behavior_tag: str) PromptTemplate
+        +register(template: PromptTemplate)
+        +activate(version: int)
+        +deactivate(version: int)
+    }
+
+    class PromptTemplate {
+        +id: uuid
+        +behavior_tag: BehaviorTag
+        +name: str
+        +template: str
+        +model_id: str
+        +version: int
+        +active: bool
+        +render(context: dict) str
+    }
+
+    class TokenBudget {
+        +daily_limit: int
+        +used_today: int
+        +reset_at: timestamp
+        +check_available(amount: int) bool
+        +consume(amount: int)
+        +reset()
+    }
+
+    class BehaviorTag {
+        <<enumeration>>
+        PROVOCATION
+        LENS_PERSPECTIVE
+        STRUCTURAL_SCAFFOLD
+        THE_SPARK_GAP
+    }
+
+    class ClassifyResult {
+        +tag: str
+        +confidence: float
+        +is_delegative: bool
+    }
+
+    class VerdictResult {
+        +verdict: str
+        +supported_claims: list
+        +unsupported_claims: list
+        +citations: list
+    }
+
+    %% Relationships
+    AIService <|.. BaseAdapter : implements
+    BaseAdapter <|-- GeminiAdapter
+    BaseAdapter <|-- OpenAIAdapter
+    BaseAdapter <|-- LocalLLMAdapter
+    BaseAdapter o-- PromptTemplateRegistry : uses
+    BaseAdapter o-- TokenBudget : tracks
+    PromptTemplateRegistry o-- PromptTemplate : manages
+    PromptTemplate --> BehaviorTag : tagged with
+    GeminiAdapter ..> ClassifyResult : produces
+    GeminiAdapter ..> VerdictResult : produces

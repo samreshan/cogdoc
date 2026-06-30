@@ -1,0 +1,27 @@
+%% Sequence: Prompt Interceptor Flow
+sequenceDiagram
+    autonumber
+    actor U as Writer
+    participant FE as React + Tiptap
+    participant GW as FastAPI Gateway
+    participant INT as Interceptor Engine
+    participant AI as AIService (Gemini)
+    participant DB as Postgres
+    participant MR as Margin Repository
+
+    U->>FE: Types prompt:<br/>"write a paragraph about X"
+    FE->>FE: Detect delegative pattern<br/>(regex + heuristics)
+    FE->>GW: POST /interceptor<br/>{paragraph_context, prompt_text}
+    GW->>GW: Validate JWT + rate limit
+    GW->>INT: classify_prompt()
+    INT->>AI: classify via Gemini<br/>(behavior tag classifier)
+    AI-->>INT: {tag: "delegative",<br/>confidence: 0.92}
+    INT->>AI: generate_socratic_reframing<br/>(prompt template: [Spark Gap])
+    AI-->>INT: "What claim must your<br/>reader accept first?"
+    INT->>MR: persist intervention<br/>(type=interceptor, status=active)
+    MR->>DB: INSERT intervention
+    INT-->>GW: {action: "reframe",<br/>socratic_question, intervention_id}
+    GW-->>FE: 200 OK + intervention payload
+    FE->>FE: Render ghost question in<br/>Living Margin (NOT in body)
+    FE-->>U: Margin displays:<br/>"What claim must your<br/>reader accept first?"
+    U->>FE: Writer types their own answer<br/>(original prose preserved)

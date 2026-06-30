@@ -1,0 +1,43 @@
+%% Sequence: Socratic Spacer Idle-Detection Flow
+sequenceDiagram
+    autonumber
+    actor U as Writer
+    participant FE as React + Tiptap
+    participant ID as Idle Detector<br/>(frontend timer)
+    participant GW as FastAPI Gateway
+    participant SOC as Socratic Spacer Engine
+    participant AI as AIService (Gemini)
+    participant SSE as SSE Push Service
+    participant DB as Postgres
+
+    Note over U,FE: Writer stops typing for 45s
+    U->>FE: (inactivity - no keystrokes)
+    FE->>ID: keystroke timer expires<br/>(threshold: 45s)
+    ID->>FE: emit idle event with<br/>current paragraph context
+    FE->>GW: POST /socratic-spacer<br/>{project_id, paragraph_id,<br/>last_text, cursor_position}
+    GW->>GW: JWT + rate limit
+    GW->>SOC: generate_ghost_question()
+    SOC->>SOC: Build context window<br/>(last 3 paragraphs +<br/>current paragraph stub)
+    SOC->>AI: Generate Socratic question<br/>(prompt template: [Provocation])
+    AI-->>SOC: "What evidence would<br/>make this claim false?"
+    SOC->>SSE: push intervention<br/>(type=socratic, intervention_id)
+    SOC->>DB: INSERT intervention<br/>(status=active)
+    SSE-->>FE: SSE event:<br/>intervention payload
+    FE->>FE: Render ghost question<br/>in Living Margin (dimmed,<br/>non-blocking)
+    FE-->>U: Margin shows ghost question:<br/>"What evidence would<br/>make this claim false?"
+    
+    alt Writer engages with question
+        U->>FE: Clicks "Explore this"
+        FE->>GW: PATCH /interventions/{id}<br/>{action: "engaged"}
+        GW->>DB: UPDATE intervention<br/>SET user_action='engaged'
+        FE-->>U: Question promotes to<br/>primary intervention card
+    else Writer dismisses
+        U->>FE: Clicks "Dismiss"
+        FE->>GW: PATCH /interventions/{id}<br/>{action: "dismissed"}
+        GW->>DB: UPDATE intervention<br/>SET user_action='dismissed'
+        FE-->>U: Margin clears ghost question
+    else Writer keeps typing (ignores)
+        U->>FE: Resumes typing
+        FE->>ID: Reset idle timer
+        Note over FE: Ghost question auto-fades<br/>after 90s of inactivity
+    end
