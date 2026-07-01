@@ -220,7 +220,15 @@ export default function Dashboard() {
         {loading ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3].map((i) => (
-              <Card key={i} className="border-stone-200 bg-white/70 animate-pulse h-40" />
+              <Card key={i} className="border-stone-200 bg-white/70 overflow-hidden">
+                <CardHeader className="pb-3">
+                  <div className="h-4 w-2/3 bg-stone-200 rounded animate-pulse" />
+                  <div className="h-3 w-full bg-stone-100 rounded animate-pulse mt-2" />
+                </CardHeader>
+                <CardContent>
+                  <div className="h-3 w-1/3 bg-stone-100 rounded animate-pulse" />
+                </CardContent>
+              </Card>
             ))}
           </div>
         ) : projects.length === 0 ? (

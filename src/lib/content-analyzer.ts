@@ -59,12 +59,13 @@ export function analyzeSentence(sentence: string): AnalysisResult {
     return { engines, reasons }
   }
 
-  // ── Socratic: fires on EVERY sentence (it's the baseline provocation) ─────
-  // Skip only if the sentence is a question (the writer is already questioning)
+  // ── Socratic: fires ONLY on questions (the writer is already questioning,
+  // so provoke them further) OR on idle (handled separately by the idle timer).
+  // Do NOT fire on every sentence — that was over-firing and spamming the margin.
   const isQuestion = trimmed.endsWith('?') || QUESTION_PATTERNS.test(trimmed)
-  if (!isQuestion) {
+  if (isQuestion) {
     engines.push('socratic')
-    reasons.socratic = 'default_provocation'
+    reasons.socratic = 'question_provocation'
   }
 
   // ── Interceptor: fires on vague language OR absolute claims ───────────────

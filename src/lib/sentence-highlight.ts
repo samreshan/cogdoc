@@ -35,7 +35,16 @@ export function buildSentenceMap(interventions: Intervention[]): Map<string, Int
 }
 
 function normalizeKey(text: string): string {
-  return text.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 300)
+  // Fuzzy normalize: lowercase, collapse whitespace, strip leading/trailing
+  // punctuation, and trim to 300 chars. This makes matching resilient to
+  // minor edits the writer makes after the intervention was created.
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/^["'(\[]+/, '')
+    .replace(/[)"'\].!?;:,]+$/, '')
+    .slice(0, 300)
 }
 
 function saveCursorOffset(editor: HTMLElement): number {
@@ -144,10 +153,24 @@ export function highlightSentences(
     const matches: Match[] = []
     const lower = text.toLowerCase()
     for (const [key, ints] of sentenceMap) {
+      // Try exact match first
       let idx = 0
       while ((idx = lower.indexOf(key, idx)) !== -1) {
         matches.push({ start: idx, end: idx + key.length, key, ints })
         idx += key.length
+      }
+      // If no exact match, try matching the first 40 chars of the key
+      // (handles cases where the writer edited the end of the sentence)
+      if (!matches.some((m) => m.key === key) && key.length > 40) {
+        const prefix = key.slice(0, 40)
+        idx = lower.indexOf(prefix)
+        if (idx !== -1) {
+          // Extend to the end of the sentence in the editor
+          let end = idx + prefix.length
+          while (end < lower.length && !'[.!?]'.includes(lower[end])) end++
+          if (end < lower.length) end++ // include the punctuation
+          matches.push({ start: idx, end, key, ints })
+        }
       }
     }
 

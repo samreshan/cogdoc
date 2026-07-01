@@ -16,7 +16,7 @@ import SentencePopover from './sentence-popover'
 
 const IDLE_THRESHOLD_MS = 2_000 // 2s idle → Socratic Spacer
 const SOCRATIC_DEBOUNCE_MS = 3_000
-const HIGHLIGHT_DEBOUNCE_MS = 1_500 // 1.5s after last keystroke → re-highlight
+const HIGHLIGHT_DEBOUNCE_MS = 2_500 // 2.5s after last keystroke → re-highlight (longer = fewer cursor jumps)
 
 function htmlToText(html: string): string {
   if (typeof document === 'undefined') return ''
@@ -52,6 +52,7 @@ export default function Editor() {
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null)
   const highlightTimerRef = useRef<NodeJS.Timeout | null>(null)
   const isHighlightingRef = useRef(false)
+  const lastHighlightedIdsRef = useRef<string>('')
   const lastFireRef = useRef<Record<EngineType, number>>({
     socratic: 0, interceptor: 0, citation: 0, scaffold: 0,
   })
@@ -97,11 +98,20 @@ export default function Editor() {
     [project, updateActiveProjectContent],
   )
 
-  // Schedule sentence highlighting (debounced 1.5s)
+  // Schedule sentence highlighting (debounced 2.5s)
   const scheduleHighlight = useCallback(() => {
     if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
     highlightTimerRef.current = setTimeout(() => {
       if (!editorRef.current) return
+      // Skip if the set of active intervention IDs hasn't changed since
+      // the last highlight (avoids redundant DOM manipulation + cursor jumps)
+      const currentIds = activeInterventions
+        .filter((i) => i.status === 'active')
+        .map((i) => i.id)
+        .sort()
+        .join(',')
+      if (currentIds === lastHighlightedIdsRef.current) return
+      lastHighlightedIdsRef.current = currentIds
       isHighlightingRef.current = true
       highlightSentences(editorRef.current, activeInterventions)
       isHighlightingRef.current = false
@@ -209,8 +219,9 @@ export default function Editor() {
     }
   }
 
-  // Handle Enter key for paragraph completion (Scaffold)
+  // Handle keyboard shortcuts
   function handleKeyDown(e: React.KeyboardEvent) {
+    // Enter → paragraph completion (Scaffold)
     if (e.key === 'Enter' && !e.shiftKey) {
       setTimeout(() => {
         if (!editorRef.current) return
@@ -221,6 +232,21 @@ export default function Editor() {
           fireEngine('scaffold', '', context, 'paragraph_complete')
         }
       }, 50)
+    }
+
+    // Cmd/Ctrl+B → bold, Cmd/Ctrl+I → italic, Cmd/Ctrl+U → underline
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      const key = e.key.toLowerCase()
+      if (key === 'b' || key === 'i' || key === 'u') {
+        e.preventDefault()
+        document.execCommand(key === 'b' ? 'bold' : key === 'i' ? 'italic' : 'underline', false)
+        if (editorRef.current) scheduleSave(editorRef.current.innerHTML)
+      }
+    }
+
+    // Esc → clear selection (closes any open popover via the hover state)
+    if (e.key === 'Escape') {
+      window.getSelection()?.removeAllRanges()
     }
   }
 

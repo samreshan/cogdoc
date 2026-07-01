@@ -5,7 +5,10 @@ import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { BookOpen, BarChart3, History, ArrowLeft, Focus, Eye, EyeOff } from 'lucide-react'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { BookOpen, BarChart3, History, ArrowLeft, Focus, Eye, EyeOff, Download, FileText, FileType, FileCode } from 'lucide-react'
 import Editor from './editor'
 import ResearchLibrary from './research-library'
 import AnalyticsPanel from './analytics-panel'
@@ -44,6 +47,11 @@ export default function EditorShell() {
   function handleBack() {
     setActiveProject(null)
     setView('dashboard')
+  }
+
+  function downloadExport(format: 'md' | 'txt' | 'html') {
+    if (!project) return
+    window.open(`/api/projects/${project.id}/export?format=${format}`, '_blank')
   }
 
   // Fetch history when the history modal opens
@@ -104,6 +112,27 @@ export default function EditorShell() {
           >
             <History className="w-3.5 h-3.5 mr-1" /> History
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 px-2.5 text-xs text-stone-500 hover:text-stone-900">
+                <Download className="w-3.5 h-3.5 mr-1" /> Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => downloadExport('md')}>
+                <FileText className="w-4 h-4 mr-2" /> Markdown (.md)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => downloadExport('txt')}>
+                <FileText className="w-4 h-4 mr-2" /> Plain text (.txt)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => downloadExport('html')}>
+                <FileCode className="w-4 h-4 mr-2" /> HTML (.html)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.print()}>
+                <FileType className="w-4 h-4 mr-2" /> Print / PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
