@@ -1,95 +1,124 @@
 /**
- * Content Analyzer — decides which AI engine to fire based on sentence content.
+ * Content Analyzer — decides which engines to fire for each completed sentence.
  *
- * On every sentence completion (`.`, `?`, `!`), the editor calls analyzeSentence()
- * to determine which engine is most relevant. This ensures ALL four engines fire
- * automatically throughout the writing session, not just Socratic Spacer.
- *
- * The classification is purely heuristic (no LLM call) to save tokens. The LLM
- * is only invoked by the chosen engine itself.
+ * Design principles:
+ *  1. ALL four engines should fire proactively throughout a writing session,
+ *     not just one. A single sentence can trigger multiple engines.
+ *  2. Each engine has its own classification logic — if any matches, that
+ *     engine fires. Multiple engines can match the same sentence.
+ *  3. Per-engine cooldowns prevent spam, but are short enough that a single
+ *     sentence can trigger 2-3 engines in quick succession.
  */
 
 export type EngineType = 'socratic' | 'citation' | 'interceptor' | 'scaffold'
 
 export interface AnalysisResult {
-  engine: EngineType
-  reason: string
+  engines: EngineType[]   // ALL engines that should fire for this sentence
+  reasons: Record<EngineType, string>
 }
 
-// Vague / delegative language — triggers the Interceptor
+// ── Vague / delegative language → Interceptor ──────────────────────────────
 const VAGUE_PATTERNS =
-  /\b(basically|etc|and so on|stuff|things|whatever|you know|simply|just|literally|in conclusion|to summarize|overall|generally|it is said|people say|experts say|some say|many believe)\b/i
+  /\b(basically|etc|and so on|stuff|things|whatever|you know|simply|just|literally|in conclusion|to summarize|overall|generally|it is said|people say|experts say|some say|many believe|sort of|kind of|very|really|quite|pretty)\b/i
 
-// Factual claim language — triggers the Citation Sentinel
+// ── Absolute / unsubstantiated claims → Interceptor ─────────────────────────
+const ABSOLUTE_PATTERNS =
+  /\b(always|never|everyone|nobody|all|none|every|completely|totally|absolutely|definitely|certainly|undoubtedly|clearly|obviously|undeniably|unquestionably)\b/i
+
+// ── Factual claim language → Citation Sentinel ─────────────────────────────
 const CLAIM_PATTERNS =
-  /\b(is|are|shows|demonstrates?|proves?|according to|found|reported|study|studies|research|survey|data|evidence|%|percent|increase|decrease|correlates?|causes?|leads? to|results? in|suggests?|indicates?|reveals?|confirms?|establishes?)\b/i
+  /\b(is|are|shows|demonstrates?|proves?|according to|found|reported|study|studies|research|survey|data|evidence|%|percent|increase|decrease|correlates?|causes?|leads? to|results? in|suggests?|indicates?|reveals?|confirms?|establishes?|argues?|claims?|asserts?|concludes?)\b/i
 
-// Question language — triggers Socratic (the writer is already questioning)
+// ── Question language → Socratic (the writer is already questioning) ────────
 const QUESTION_PATTERNS =
   /\b(why|how|what|when|where|who|whether|if|should|could|would|might|may)\b/i
 
-// Absolute / unsupported claims — triggers Interceptor (challenge the absoluteness)
-const ABSOLUTE_PATTERNS =
-  /\b(always|never|everyone|nobody|all|none|every|no |completely|totally|absolutely|definitely|certainly|undoubtedly|clearly|obviously)\b/i
+// ── Long sentence (good candidate for Scaffold — break it down) ────────────
+const LONG_SENTENCE_THRESHOLD = 25 // words
+
+// ── Sentence starters that suggest the writer needs structural help ─────────
+const SCAFFOLD_PATTERNS =
+  /\b(first|second|third|finally|next|then|in addition|furthermore|moreover|however|therefore|thus|hence|consequently)\b/i
 
 /**
- * Analyze a completed sentence and decide which engine should fire.
- *
- * Priority (first match wins):
- *  1. Vague/delegative language → Interceptor (challenge the vagueness)
- *  2. Absolute/unsubstantiated claims → Interceptor (challenge the absoluteness)
- *  3. Factual claim with evidence language → Citation Sentinel (verify the claim)
- *  4. Default → Socratic Spacer (provoke deeper thinking)
- *
- * Scaffold is NOT triggered by sentence analysis — it fires on paragraph
- * completion (double Enter) instead.
+ * Analyze a completed sentence and decide which engines should fire.
+ * Multiple engines can match — all of them fire.
  */
 export function analyzeSentence(sentence: string): AnalysisResult {
   const trimmed = sentence.trim()
   const words = trimmed.split(/\s+/).filter(Boolean)
+  const engines: EngineType[] = []
+  const reasons: Record<EngineType, string> = {
+    socratic: '', interceptor: '', citation: '', scaffold: '',
+  }
 
-  // Too short — probably a heading, fragment, or typo. Don't fire.
+  // Too short — probably a heading or fragment. Fire only Socratic.
   if (words.length < 4) {
-    return { engine: 'socratic', reason: 'short_fragment' }
+    engines.push('socratic')
+    reasons.socratic = 'short_fragment'
+    return { engines, reasons }
   }
 
-  // 1. Vague language — Interceptor challenges the writer to be specific
+  // ── Socratic: fires on EVERY sentence (it's the baseline provocation) ─────
+  // Skip only if the sentence is a question (the writer is already questioning)
+  const isQuestion = trimmed.endsWith('?') || QUESTION_PATTERNS.test(trimmed)
+  if (!isQuestion) {
+    engines.push('socratic')
+    reasons.socratic = 'default_provocation'
+  }
+
+  // ── Interceptor: fires on vague language OR absolute claims ───────────────
   if (VAGUE_PATTERNS.test(trimmed)) {
-    return { engine: 'interceptor', reason: 'vague_language' }
+    engines.push('interceptor')
+    reasons.interceptor = 'vague_language'
+  } else if (ABSOLUTE_PATTERNS.test(trimmed) && !isQuestion) {
+    engines.push('interceptor')
+    reasons.interceptor = 'absolute_claim'
   }
 
-  // 2. Absolute claims without hedging — Interceptor challenges the absoluteness
-  if (ABSOLUTE_PATTERNS.test(trimmed) && !QUESTION_PATTERNS.test(trimmed)) {
-    return { engine: 'interceptor', reason: 'absolute_claim' }
+  // ── Citation Sentinel: fires on factual claims ────────────────────────────
+  // Don't fire on questions — those go to Socratic
+  if (CLAIM_PATTERNS.test(trimmed) && !isQuestion && words.length >= 6) {
+    engines.push('citation')
+    reasons.citation = 'factual_claim'
   }
 
-  // 3. Factual claim — Citation Sentinel verifies against the PDF library
-  if (CLAIM_PATTERNS.test(trimmed) && words.length >= 6) {
-    return { engine: 'citation', reason: 'factual_claim' }
+  // ── Scaffold: fires on long sentences OR transition words ─────────────────
+  // Suggests the writer may benefit from a structural breakdown
+  if (words.length >= LONG_SENTENCE_THRESHOLD) {
+    engines.push('scaffold')
+    reasons.scaffold = 'long_sentence'
+  } else if (SCAFFOLD_PATTERNS.test(trimmed) && !isQuestion) {
+    engines.push('scaffold')
+    reasons.scaffold = 'transition_word'
   }
 
-  // 4. Default — Socratic Spacer provokes deeper thinking
-  return { engine: 'socratic', reason: 'default' }
+  // Guarantee at least one engine fires
+  if (engines.length === 0) {
+    engines.push('socratic')
+    reasons.socratic = 'fallback'
+  }
+
+  return { engines, reasons }
 }
 
 /**
  * Extract the last completed sentence from a block of text.
- * A "completed" sentence ends with `.`, `?`, or `!`.
  */
 export function extractLastSentence(text: string): string {
-  // Match all sentences ending with . ! or ?
   const matches = text.match(/[^.!?]*[.!?]/g)
   if (!matches || matches.length === 0) return ''
   return matches[matches.length - 1].trim()
 }
 
 /**
- * Per-engine cooldowns (ms). Prevents rapid-fire when multiple sentences
- * trigger the same engine in quick succession.
+ * Per-engine cooldowns (ms). Short enough that multiple engines can fire
+ * on the same sentence in quick succession, long enough to prevent spam
+ * when typing multiple sentences rapidly.
  */
 export const ENGINE_COOLDOWNS: Record<EngineType, number> = {
-  socratic: 4_000, // 4s — most frequent, it's the lightest engine
-  interceptor: 6_000, // 6s — slightly less frequent
-  citation: 12_000, // 12s — most expensive (RAG + LLM), fire less often
-  scaffold: 30_000, // 30s — only on paragraph completion, rare
+  socratic: 2_000,   // 2s — fires on almost every sentence
+  interceptor: 4_000, // 4s
+  citation: 6_000,    // 6s — more expensive (RAG + LLM)
+  scaffold: 8_000,    // 8s
 }

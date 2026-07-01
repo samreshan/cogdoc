@@ -197,8 +197,14 @@ export default function Editor() {
       const sentence = extractLastSentence(text)
       if (sentence.split(/\s+/).length >= 4) {
         const { context } = extractContext(html)
+        // Fire ALL matching engines — multiple can fire on the same sentence.
+        // Stagger them by 500ms to avoid LLM rate-limiting (429).
         const analysis = analyzeSentence(sentence)
-        fireEngine(analysis.engine, sentence, context, analysis.reason)
+        analysis.engines.forEach((engine, idx) => {
+          setTimeout(() => {
+            fireEngine(engine, sentence, context, analysis.reasons[engine])
+          }, idx * 500)
+        })
       }
     }
   }

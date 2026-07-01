@@ -59,14 +59,30 @@ function fillTemplate(template: string, vars: Record<string, string>): string {
 
 async function callLLM(systemPrompt: string): Promise<string> {
   const zai = await ZAI.create()
-  const completion = await zai.chat.completions.create({
-    messages: [
-      { role: 'assistant', content: systemPrompt },
-      { role: 'user', content: 'Respond now.' },
-    ],
-    thinking: { type: 'disabled' },
-  })
-  return completion.choices[0]?.message?.content ?? ''
+  try {
+    const completion = await zai.chat.completions.create({
+      messages: [
+        { role: 'assistant', content: systemPrompt },
+        { role: 'user', content: 'Respond now.' },
+      ],
+      thinking: { type: 'disabled' },
+    })
+    return completion.choices[0]?.message?.content ?? ''
+  } catch (e) {
+    // If rate-limited (429), wait 2s and retry once
+    if ((e as Error).message.includes('429')) {
+      await new Promise((r) => setTimeout(r, 2000))
+      const completion = await zai.chat.completions.create({
+        messages: [
+          { role: 'assistant', content: systemPrompt },
+          { role: 'user', content: 'Respond now.' },
+        ],
+        thinking: { type: 'disabled' },
+      })
+      return completion.choices[0]?.message?.content ?? ''
+    }
+    throw e
+  }
 }
 
 // ─── ZAIAdapter (concrete implementation) ─────────────────────────────────
