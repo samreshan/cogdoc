@@ -36,6 +36,8 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { FileText, Plus, Trash2, Sparkles, ArrowRight, BookOpen, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
+import { ENGINE_CHARACTERS, EnginePet } from '@/lib/engine-characters'
+import type { EngineType } from '@/lib/types'
 
 export default function Dashboard() {
   const setView = useCogdoc((s) => s.setView)
@@ -115,11 +117,22 @@ export default function Dashboard() {
       <header className="border-b border-stone-200 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-stone-900 text-amber-100 flex items-center justify-center font-bold text-lg">
-              C
+            {/* Cogdoc logo — pixelated mark with all 4 pet colors */}
+            <div className="w-10 h-10 rounded-lg bg-stone-900 flex items-center justify-center overflow-hidden relative">
+              <div className="grid grid-cols-2 grid-rows-2 gap-px w-6 h-6">
+                <div style={{ background: ENGINE_CHARACTERS.interceptor.color }} />
+                <div style={{ background: ENGINE_CHARACTERS.socratic.color }} />
+                <div style={{ background: ENGINE_CHARACTERS.citation.color }} />
+                <div style={{ background: ENGINE_CHARACTERS.scaffold.color }} />
+              </div>
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-stone-900 tracking-tight">Cogdoc</h1>
+              <h1
+                className="text-xl font-bold text-stone-900 tracking-tight"
+                style={{ fontFamily: 'var(--font-newsreader), Georgia, serif' }}
+              >
+                Cogdoc
+              </h1>
               <p className="text-xs text-stone-500 -mt-0.5">A research-assisted writing IDE</p>
             </div>
           </div>
@@ -170,46 +183,56 @@ export default function Dashboard() {
       </header>
 
       <section className="max-w-6xl w-full mx-auto px-6 pt-12 pb-8">
-        <div className="grid md:grid-cols-3 gap-4 mb-10">
-          <Card className="border-stone-200 bg-white/70">
-            <CardHeader className="pb-3">
-              <div className="w-9 h-9 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center mb-1">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <CardTitle className="text-base">Productive Friction</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-stone-600">
-                AI never writes your prose. It interrupts, questions, and challenges — preserving your cognitive responsibility.
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-stone-200 bg-white/70">
-            <CardHeader className="pb-3">
-              <div className="w-9 h-9 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center mb-1">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <CardTitle className="text-base">Citation Sentinel</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-stone-600">
-                Verify any claim against your uploaded research library. Get supported, partially supported, or unsupported verdicts with cited passages.
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-stone-200 bg-white/70">
-            <CardHeader className="pb-3">
-              <div className="w-9 h-9 rounded-md bg-rose-100 text-rose-700 flex items-center justify-center mb-1">
-                <BookOpen className="w-5 h-5" />
-              </div>
-              <CardTitle className="text-base">Living Margin</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-stone-600">
-                Every AI intervention appears beside your text — never inside it. Dismiss, engage, or ignore — your call.
-              </p>
-            </CardContent>
-          </Card>
+        {/* Hero — branded pitch with the 4 pixelated pets */}
+        <div className="text-center mb-12">
+          <h2
+            className="text-4xl md:text-5xl font-bold text-stone-900 mb-4 leading-tight"
+            style={{ fontFamily: 'var(--font-newsreader), Georgia, serif' }}
+          >
+            Write better by thinking harder.
+          </h2>
+          <p className="text-lg text-stone-600 max-w-2xl mx-auto leading-relaxed">
+            Cogdoc never writes your prose. Four AI guardians read every sentence you type —
+            questioning, challenging, verifying, and scaffolding. They intervene in the margin.
+            You stay the author.
+          </p>
+        </div>
+
+        {/* The 4 pets — branded cards */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+          {(['interceptor', 'socratic', 'citation', 'scaffold'] as EngineType[]).map((engine) => {
+            const char = ENGINE_CHARACTERS[engine]
+            return (
+              <Card
+                key={engine}
+                className="border-2 hover:shadow-lg transition-all cursor-default group"
+                style={{ borderColor: char.color + '40', backgroundColor: char.bgColor + '60' }}
+              >
+                <CardHeader className="pb-2 pt-4 text-center">
+                  <div
+                    className="w-16 h-16 mx-auto rounded-xl flex items-center justify-center mb-2 group-hover:scale-110 transition-transform"
+                    style={{ backgroundColor: char.bgColor }}
+                  >
+                    <EnginePet engine={engine} size={40} />
+                  </div>
+                  <CardTitle
+                    className="text-lg font-bold"
+                    style={{ color: char.color, fontFamily: 'var(--font-newsreader), Georgia, serif' }}
+                  >
+                    {char.name}
+                  </CardTitle>
+                  <p className="text-[10px] uppercase tracking-widest text-stone-500 font-medium">
+                    {char.role}
+                  </p>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <p className="text-xs text-stone-600 text-center leading-relaxed">
+                    {char.personality}
+                  </p>
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
 
         <div className="flex items-baseline justify-between mb-4">

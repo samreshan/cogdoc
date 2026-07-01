@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
 import { getInterventionsForKey, ENGINE_COLORS } from '@/lib/sentence-highlight'
+import { ENGINE_CHARACTERS, EnginePet } from '@/lib/engine-characters'
 import {
   Sparkles, ShieldCheck, ListTree, BookOpen, X,
   Quote, ChevronDown, ChevronUp, AlertTriangle,
@@ -12,13 +13,14 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Intervention, EngineType, Verdict } from '@/lib/types'
 
+// Use the character names from engine-characters.tsx
 const ENGINE_META: Record<EngineType, {
   label: string; icon: typeof Sparkles
 }> = {
-  interceptor: { label: 'Interceptor', icon: AlertTriangle },
-  socratic:    { label: 'Socratic',    icon: BookOpen },
-  citation:    { label: 'Citation Sentinel', icon: ShieldCheck },
-  scaffold:    { label: 'Scaffold',    icon: ListTree },
+  interceptor: { label: ENGINE_CHARACTERS.interceptor.name, icon: AlertTriangle },
+  socratic:    { label: ENGINE_CHARACTERS.socratic.name,    icon: BookOpen },
+  citation:    { label: ENGINE_CHARACTERS.citation.name,    icon: ShieldCheck },
+  scaffold:    { label: ENGINE_CHARACTERS.scaffold.name,    icon: ListTree },
 }
 
 const VERDICT_META: Record<Verdict, { label: string; bg: string; color: string }> = {
@@ -184,10 +186,18 @@ export default function SentencePopover() {
                   className="px-3 py-2.5 border-b border-stone-100 last:border-b-0"
                   style={{ borderLeft: `3px solid ${color}` }}
                 >
-                  {/* Card header */}
+                  {/* Card header with pixelated pet */}
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <Icon className="w-3.5 h-3.5" style={{ color }} />
-                    <span className="text-xs font-medium" style={{ color }}>{meta.label}</span>
+                    <div
+                      className="rounded p-0.5"
+                      style={{ backgroundColor: ENGINE_CHARACTERS[i.engineType].bgColor }}
+                    >
+                      <EnginePet engine={i.engineType} size={20} />
+                    </div>
+                    <span className="text-xs font-bold" style={{ color }}>{meta.label}</span>
+                    <span className="text-[9px] text-stone-400 uppercase tracking-wide">
+                      {ENGINE_CHARACTERS[i.engineType].role}
+                    </span>
                     {verdict && (
                       <span className={`text-[10px] px-1.5 py-0.5 rounded ${verdict.bg} ${verdict.color}`}>
                         {verdict.label}

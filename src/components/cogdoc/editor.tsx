@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import SentencePopover from './sentence-popover'
+import RunningPets, { IdlePetBadge } from './running-pets'
+import { ENGINE_CHARACTERS } from '@/lib/engine-characters'
 
 const IDLE_THRESHOLD_MS = 2_000 // 2s idle → Socratic Spacer
 const SOCRATIC_DEBOUNCE_MS = 3_000
@@ -327,13 +329,12 @@ export default function Editor() {
           {activeEngines.length > 0 && (
             <>
               <span className="text-stone-300">·</span>
-              <span className="flex items-center gap-1.5 text-amber-600">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                {activeEngines.map((e) => {
-                  const Icon = ENGINE_ICON[e]
-                  return <Icon key={e} className="w-3 h-3" />
-                })}
-                analyzing…
+              <span className="flex items-center gap-1.5">
+                <Loader2 className="w-3 h-3 animate-spin text-stone-400" />
+                {activeEngines.map((e) => (
+                  <IdlePetBadge key={e} engine={e} />
+                ))}
+                <span className="text-stone-500 text-xs">checking…</span>
               </span>
             </>
           )}
@@ -411,6 +412,9 @@ export default function Editor() {
       <div data-sentence-popover>
         <SentencePopover />
       </div>
+
+      {/* Running pixelated pets — animate across the screen when engines fire */}
+      <RunningPets />
     </div>
   )
 }

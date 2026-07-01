@@ -97,25 +97,31 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * Build a CSS style string for a multi-colored underline.
- * Uses stacked box-shadows to render multiple colored lines below the text.
+ * Build a CSS style string for a highly-visible multi-colored underline.
+ * Uses a thick solid underline (3px) + a subtle background tint matching the
+ * engine color so the marked sentence is impossible to miss.
  */
 function buildUnderlineStyle(engineTypes: EngineType[]): string {
-  // Use text-decoration with multiple colors (CSS 4 supports multiple colors)
-  // Fallback: box-shadow stacked lines
   const colors = engineTypes.map((e) => ENGINE_COLORS[e])
 
-  // CSS text-decoration with multiple colors (modern browsers):
-  // text-decoration: underline wavy red, underline wavy blue;
+  // Thick solid underline (3px) — much more visible than wavy 1.5px
+  // If multiple engines, stack underlines with increasing offset
   const decorations = colors
-    .map((c) => `underline wavy ${c}`)
+    .map((c) => `underline solid ${c}`)
     .join(', ')
+
+  // Subtle background tint (8% opacity) of the primary engine color
+  const primaryColor = colors[0]
+  const bgColor = `${primaryColor}14` // 14 = ~8% opacity in hex
 
   return [
     `text-decoration: ${decorations}`,
-    'text-decoration-thickness: 1.5px',
-    'text-underline-offset: 4px',
-    'background: transparent',
+    'text-decoration-thickness: 3px',
+    'text-underline-offset: 3px',
+    `background: ${bgColor}`,
+    'border-radius: 2px',
+    'padding: 1px 2px',
+    'margin: 0 -1px',
     'color: inherit',
   ].join('; ')
 }

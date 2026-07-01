@@ -120,3 +120,40 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ── Cogdoc pet animations ─────────────────────────────────────────── */
+@keyframes cogdoc-pet-bounce {
+  0%   { transform: translateY(0) rotate(-2deg); }
+  100% { transform: translateY(-4px) rotate(2deg); }
+}
+
+@keyframes cogdoc-pet-run {
+  0%   { transform: translateX(-40px) translateY(0); opacity: 0; }
+  10%  { opacity: 1; }
+  50%  { transform: translateX(50%) translateY(-6px); }
+  90%  { opacity: 1; }
+  100% { transform: translateX(calc(100vw + 40px)) translateY(0); opacity: 0; }
+}
+
+@keyframes cogdoc-pet-inspect {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25%      { transform: rotate(-8deg) scale(1.1); }
+  75%      { transform: rotate(8deg) scale(1.1); }
+}
+
+@keyframes cogdoc-pet-idle {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
+}
+
+.cogdoc-pet-running {
+  animation: cogdoc-pet-run 2s ease-in-out forwards;
+}
+
+.cogdoc-pet-inspecting {
+  animation: cogdoc-pet-inspect 0.8s ease-in-out;
+}
+
+.cogdoc-pet-idle {
+  animation: cogdoc-pet-idle 2s ease-in-out infinite;
+}
