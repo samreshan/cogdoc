@@ -4,17 +4,19 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
 import { analyzeSentence, extractLastSentence, ENGINE_COOLDOWNS } from '@/lib/content-analyzer'
-import type { EngineType } from '@/lib/types'
+import { highlightSentences } from '@/lib/sentence-highlight'
+import type { EngineType, Intervention } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Send, Loader2, Clock, Check, Sparkles, ShieldCheck, ListTree, BookOpen,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import FloatingInterventions from './floating-interventions'
+import SentencePopover from './sentence-popover'
 
 const IDLE_THRESHOLD_MS = 2_000 // 2s idle → Socratic Spacer
-const SOCRATIC_DEBOUNCE_MS = 3_000 // gap between Socratic fires
+const SOCRATIC_DEBOUNCE_MS = 3_000
+const HIGHLIGHT_DEBOUNCE_MS = 1_500 // 1.5s after last keystroke → re-highlight
 
 function htmlToText(html: string): string {
   if (typeof document === 'undefined') return ''
@@ -30,21 +32,6 @@ function extractContext(html: string): { context: string; stub: string } {
   return { context: paras.slice(-3).join('\n\n'), stub: paras[paras.length - 1] }
 }
 
-/**
- * Capture the cursor's y-position relative to the scrollable content container.
- * Used to place floating intervention tooltips at the right vertical offset.
- */
-function captureCursorTop(container: HTMLElement | null): number {
-  if (!container) return 0
-  const sel = window.getSelection()
-  if (!sel || sel.rangeCount === 0) return 0
-  const range = sel.getRangeAt(0).cloneRange()
-  range.collapse(true)
-  const cursorRect = range.getBoundingClientRect()
-  const containerRect = container.getBoundingClientRect()
-  return cursorRect.bottom - containerRect.top + 8
-}
-
 const ENGINE_ICON: Record<EngineType, typeof Sparkles> = {
   socratic: BookOpen, interceptor: Sparkles, citation: ShieldCheck, scaffold: ListTree,
 }
@@ -52,16 +39,19 @@ const ENGINE_ICON: Record<EngineType, typeof Sparkles> = {
 export default function Editor() {
   const project = useCogdoc((s) => s.activeProject)
   const updateActiveProjectContent = useCogdoc((s) => s.updateActiveProjectContent)
-  const pushPositionedIntervention = useCogdoc((s) => s.pushPositionedIntervention)
+  const pushIntervention = useCogdoc((s) => s.pushIntervention)
+  const activeInterventions = useCogdoc((s) => s.activeInterventions)
   const engineLoading = useCogdoc((s) => s.engineLoading)
   const setEngineLoading = useCogdoc((s) => s.setEngineLoading)
   const bumpAnalytics = useCogdoc((s) => s.bumpAnalytics)
   const focusMode = useCogdoc((s) => s.focusMode)
+  const setHovered = useCogdoc((s) => s.setHovered)
 
   const editorRef = useRef<HTMLDivElement>(null)
-  const scrollContentRef = useRef<HTMLDivElement>(null)
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const highlightTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const isHighlightingRef = useRef(false)
   const lastFireRef = useRef<Record<EngineType, number>>({
     socratic: 0, interceptor: 0, citation: 0, scaffold: 0,
   })
@@ -79,6 +69,12 @@ export default function Editor() {
     }
     setLastSavedAt(project?.document?.lastSaved ?? null)
   }, [project?.id])
+
+  // Re-highlight when active interventions change
+  useEffect(() => {
+    if (!editorRef.current || isHighlightingRef.current) return
+    scheduleHighlight()
+  }, [activeInterventions])
 
   // Auto-save (debounced 1.5s)
   const scheduleSave = useCallback(
@@ -101,35 +97,49 @@ export default function Editor() {
     [project, updateActiveProjectContent],
   )
 
+  // Schedule sentence highlighting (debounced 1.5s)
+  const scheduleHighlight = useCallback(() => {
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+    highlightTimerRef.current = setTimeout(() => {
+      if (!editorRef.current) return
+      isHighlightingRef.current = true
+      highlightSentences(editorRef.current, activeInterventions)
+      isHighlightingRef.current = false
+    }, HIGHLIGHT_DEBOUNCE_MS)
+  }, [activeInterventions])
+
   // ── Unified engine fire function ──────────────────────────────────────
-  // Handles all four engines. Captures cursor position, calls the right API,
-  // pushes a positioned intervention to the store.
   const fireEngine = useCallback(
     async (engine: EngineType, sentence: string, context: string, reason: string) => {
       if (!project || !editorRef.current) return
 
-      // Per-engine cooldown check
       const now = Date.now()
       if (now - lastFireRef.current[engine] < ENGINE_COOLDOWNS[engine]) return
       lastFireRef.current[engine] = now
 
-      // For Socratic, also respect the shorter debounce
       if (engine === 'socratic' && now - lastFireRef.current.socratic < SOCRATIC_DEBOUNCE_MS) {
         return
       }
 
-      const position = { top: captureCursorTop(scrollContentRef.current) }
+      // For Socratic idle trigger, use the last completed sentence so it
+      // can be linked to a sentence in the editor (for underlining)
+      let effectiveSentence = sentence
+      if (engine === 'socratic' && !effectiveSentence) {
+        const text = htmlToText(editorRef.current.innerHTML)
+        effectiveSentence = extractLastSentence(text)
+        if (!effectiveSentence) return
+      }
+
       setEngineLoading(engine, true)
 
       try {
-        let intervention
+        let intervention: Intervention | null = null
         if (engine === 'citation') {
-          const res = await api.citationSentinel(project.id, sentence)
+          const res = await api.citationSentinel(project.id, effectiveSentence)
           intervention = res.intervention
         } else if (engine === 'interceptor') {
-          const res = await api.interceptor(project.id, sentence, context)
+          const res = await api.interceptor(project.id, effectiveSentence, context)
           if (res.action === 'pass') {
-            // LLM says this sentence isn't actually vague/delegative — no-op
             setEngineLoading(engine, false)
             return
           }
@@ -138,23 +148,22 @@ export default function Editor() {
           const res = await api.scaffold(project.id, 'Provide a structural scaffold for my next paragraph.', context)
           intervention = res.intervention
         } else {
-          // socratic
-          const res = await api.socraticSpacer(project.id, context, sentence)
+          // socratic — pass the sentence as stub so it's stored as promptText
+          const res = await api.socraticSpacer(project.id, context, effectiveSentence)
           intervention = res.intervention
         }
 
         if (intervention) {
-          pushPositionedIntervention(intervention, position)
+          pushIntervention(intervention)
           bumpAnalytics()
         }
       } catch (e) {
-        // Silent fail — never block the writer
         console.error(`${engine} failed:`, e)
       } finally {
         setEngineLoading(engine, false)
       }
     },
-    [project, pushPositionedIntervention, setEngineLoading, bumpAnalytics],
+    [project, pushIntervention, setEngineLoading, bumpAnalytics],
   )
 
   // Idle detector — fires Socratic Spacer after 2s of no input
@@ -168,15 +177,18 @@ export default function Editor() {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
     }
   }, [])
 
   // ── Handle every keystroke ────────────────────────────────────────────
   function handleInput() {
+    if (isHighlightingRef.current) return // ignore input events triggered by highlighting
     if (!editorRef.current) return
     const html = editorRef.current.innerHTML
     scheduleSave(html)
     resetIdleTimer()
+    scheduleHighlight()
 
     // Sentence completion: `.`, `?`, `!` as the last typed character
     const text = htmlToText(html)
@@ -194,12 +206,10 @@ export default function Editor() {
   // Handle Enter key for paragraph completion (Scaffold)
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
-      // Check if this creates a new paragraph (Enter on an empty line or at end of paragraph)
       setTimeout(() => {
         if (!editorRef.current) return
         const text = htmlToText(editorRef.current.innerHTML)
         const paras = text.split(/\n\s*\n/).filter((p) => p.trim())
-        // If we just started a new paragraph and the previous one was substantial
         if (paras.length >= 2 && paras[paras.length - 1].length < 10 && paras[paras.length - 2].length > 50) {
           const { context } = extractContext(editorRef.current.innerHTML)
           fireEngine('scaffold', '', context, 'paragraph_complete')
@@ -208,19 +218,45 @@ export default function Editor() {
     }
   }
 
-  // Submit a prompt to the Interceptor (explicit prompt input at the bottom)
+  // ── Hover handling for sentence marks ─────────────────────────────────
+  function handleMouseOver(e: React.MouseEvent) {
+    const target = e.target as HTMLElement
+    if (target.classList?.contains('cogdoc-mark')) {
+      const key = target.dataset.sentenceKey
+      if (!key) return
+      const rect = target.getBoundingClientRect()
+      setHovered(key, { top: rect.bottom, left: rect.left })
+    }
+  }
+
+  function handleMouseOut(e: React.MouseEvent) {
+    const target = e.target as HTMLElement
+    const related = e.relatedTarget as HTMLElement | null
+    if (target.classList?.contains('cogdoc-mark')) {
+      // Only hide if not moving to the popover
+      if (!related?.closest('[data-sentence-popover]')) {
+        // Delay hide to allow moving cursor into popover
+        setTimeout(() => {
+          // The popover's own mouseenter will cancel this by setting hoveredKey
+          // We check if the current hovered key is still this one
+          // This is handled by the popover's onMouseEnter setting popoverHovered
+        }, 100)
+      }
+    }
+  }
+
+  // Submit a prompt to the Interceptor
   async function handlePromptSubmit() {
     if (!project || !promptInput.trim() || !editorRef.current) return
     const html = editorRef.current.innerHTML
     const { context } = extractContext(html)
-    const position = { top: captureCursorTop(scrollContentRef.current) }
     setEngineLoading('interceptor', true)
     try {
       const res = await api.interceptor(project.id, promptInput, context)
       if (res.action === 'pass') {
         toast('Prompt was not delegative — passed through')
       } else if (res.intervention) {
-        pushPositionedIntervention(res.intervention, position)
+        pushIntervention(res.intervention)
         bumpAnalytics()
       }
       setPromptInput('')
@@ -234,8 +270,6 @@ export default function Editor() {
   if (!project) return null
 
   const wordCount = htmlToText(editorRef.current?.innerHTML ?? '').split(/\s+/).filter(Boolean).length
-
-  // Active engine indicators
   const activeEngines = (Object.keys(engineLoading) as EngineType[]).filter((e) => engineLoading[e])
 
   return (
@@ -272,12 +306,15 @@ export default function Editor() {
             </>
           )}
         </div>
+        <div className="text-[11px] text-stone-400">
+          Sentences with interventions are <span style={{ textDecoration: 'underline wavy #78716c', textUnderlineOffset: '3px' }}>underlined</span> — hover to see them
+        </div>
       </div>
 
-      {/* Scrollable writing surface + floating interventions */}
+      {/* Scrollable writing surface */}
       <div className="flex-1 overflow-y-auto">
-        <div ref={scrollContentRef} className="relative w-full max-w-[1000px] mx-auto px-8 py-16">
-          {/* Title (inline editable) */}
+        <div className="relative w-full max-w-[1000px] mx-auto px-8 py-16">
+          {/* Title */}
           <h1
             contentEditable
             suppressContentEditableWarning
@@ -292,6 +329,8 @@ export default function Editor() {
             suppressContentEditableWarning
             onInput={handleInput}
             onKeyDown={handleKeyDown}
+            onMouseOver={handleMouseOver}
+            onMouseOut={handleMouseOut}
             className={`outline-none focus:outline-none transition-opacity ${focusMode ? 'focus-within:[&_p:not(:last-child)]:opacity-40' : ''}`}
             style={{
               fontFamily: 'var(--font-newsreader), Georgia, serif',
@@ -302,14 +341,12 @@ export default function Editor() {
               margin: '0 auto',
               minHeight: '50vh',
             }}
-            data-placeholder="Start writing here. Cogdoc analyzes every sentence and intervenes in the margin — questioning, challenging, and verifying."
+            data-placeholder="Start writing here. Cogdoc analyzes every sentence — interventions appear as underlines you can hover to read."
           />
-          {/* Floating interventions layer */}
-          <FloatingInterventions />
         </div>
       </div>
 
-      {/* Discreet prompt bar at the bottom */}
+      {/* Discreet prompt bar */}
       <div className="border-t border-stone-200/50 px-6 py-2.5" style={{ background: '#fffefb' }}>
         <div className="max-w-[680px] mx-auto flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
@@ -336,6 +373,11 @@ export default function Editor() {
             {engineLoading.interceptor ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
           </Button>
         </div>
+      </div>
+
+      {/* Hover popover (renders outside the scrollable area) */}
+      <div data-sentence-popover>
+        <SentencePopover />
       </div>
     </div>
   )

@@ -1,18 +1,13 @@
 /**
  * Global Zustand store for Cogdoc.
- * Holds the current view, active project, positioned interventions (for
- * floating tooltip rendering), and modal state.
+ * Holds the current view, active project, active interventions (linked to
+ * sentences, not positioned), and hovered-sentence state for the popover.
  */
 import { create } from 'zustand'
 import type { Project, Intervention, EngineType } from '@/lib/types'
 
 export type View = 'dashboard' | 'editor'
 export type ModalName = 'none' | 'library' | 'stats' | 'history'
-
-export interface PositionedIntervention extends Intervention {
-  position: { top: number } // y-offset relative to the scrollable content area
-  fadingOut?: boolean
-}
 
 interface CogdocState {
   // Navigation
@@ -24,18 +19,23 @@ interface CogdocState {
   setActiveProject: (p: Project | null) => void
   updateActiveProjectContent: (content: string, lastSaved?: string) => void
 
-  // Positioned interventions (rendered as floating tooltips in the editor)
-  positionedInterventions: PositionedIntervention[]
-  pushPositionedIntervention: (i: Intervention, position: { top: number }) => void
+  // Active interventions (linked to sentences via promptText)
+  activeInterventions: Intervention[]
+  pushIntervention: (i: Intervention) => void
   markInterventionFading: (id: string) => void
-  removePositionedIntervention: (id: string) => void
-  clearPositionedInterventions: () => void
+  removeIntervention: (id: string) => void
+  clearInterventions: () => void
 
-  // Modals (Library / Stats / History — shown as overlays since we removed the right panel)
+  // Hovered sentence (for popover display)
+  hoveredSentenceKey: string | null
+  hoveredPosition: { top: number; left: number } | null
+  setHovered: (key: string | null, position: { top: number; left: number } | null) => void
+
+  // Modals
   activeModal: ModalName
   setActiveModal: (m: ModalName) => void
 
-  // Library + analytics refresh triggers
+  // Refresh triggers
   libraryVersion: number
   bumpLibrary: () => void
   analyticsVersion: number
@@ -45,7 +45,7 @@ interface CogdocState {
   engineLoading: Record<EngineType, boolean>
   setEngineLoading: (engine: EngineType, b: boolean) => void
 
-  // Focus mode (dims all paragraphs except the one being edited)
+  // Focus mode
   focusMode: boolean
   toggleFocusMode: () => void
 }
@@ -58,7 +58,8 @@ export const useCogdoc = create<CogdocState>((set) => ({
   setActiveProject: (p) =>
     set({
       activeProject: p,
-      positionedInterventions: [],
+      activeInterventions: [],
+      hoveredSentenceKey: null,
     }),
   updateActiveProjectContent: (content, lastSaved) =>
     set((s) => {
@@ -73,25 +74,26 @@ export const useCogdoc = create<CogdocState>((set) => ({
       }
     }),
 
-  positionedInterventions: [],
-  pushPositionedIntervention: (i, position) =>
+  activeInterventions: [],
+  pushIntervention: (i) =>
     set((s) => ({
-      positionedInterventions: [
-        ...s.positionedInterventions,
-        { ...i, position },
-      ].slice(-8), // cap at 8 visible tooltips
+      activeInterventions: [...s.activeInterventions, i].slice(-30),
     })),
   markInterventionFading: (id) =>
     set((s) => ({
-      positionedInterventions: s.positionedInterventions.map((i) =>
-        i.id === id ? { ...i, fadingOut: true } : i,
+      activeInterventions: s.activeInterventions.map((i) =>
+        i.id === id ? { ...i, status: 'resolved' as const } : i,
       ),
     })),
-  removePositionedIntervention: (id) =>
+  removeIntervention: (id) =>
     set((s) => ({
-      positionedInterventions: s.positionedInterventions.filter((i) => i.id !== id),
+      activeInterventions: s.activeInterventions.filter((i) => i.id !== id),
     })),
-  clearPositionedInterventions: () => set({ positionedInterventions: [] }),
+  clearInterventions: () => set({ activeInterventions: [] }),
+
+  hoveredSentenceKey: null,
+  hoveredPosition: null,
+  setHovered: (key, position) => set({ hoveredSentenceKey: key, hoveredPosition: position }),
 
   activeModal: 'none',
   setActiveModal: (m) => set({ activeModal: m }),
