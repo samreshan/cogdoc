@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Intervention, EngineType, Verdict } from '@/lib/types'
+import SourcesResults from './sources-results'
 
 // Use the character names from engine-characters.tsx
 const ENGINE_META: Record<EngineType, {
@@ -76,6 +77,10 @@ export default function SentencePopover() {
   const [popoverHovered, setPopoverHovered] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null) // interventionId+actionId
   const [expandedEvidence, setExpandedEvidence] = useState<string | null>(null)
+  const [sourcesDialog, setSourcesDialog] = useState<{ open: boolean; claim: string }>({
+    open: false,
+    claim: '',
+  })
 
   const visible = hoveredKey !== null && hoveredPosition !== null
   if (!visible) return null
@@ -98,9 +103,9 @@ export default function SentencePopover() {
     } catch { /* silent */ }
 
     // Trigger follow-up action if applicable
-    if (action.id === 'sources' && project && intervention.promptText) {
-      // Open the library modal so the user can search for sources
-      useCogdoc.getState().setActiveModal('library')
+    if ((action.id === 'sources' || action.id === 'evidence') && intervention.promptText) {
+      // Open the web-search sources dialog with the claim prefilled
+      setSourcesDialog({ open: true, claim: intervention.promptText })
     }
     if (action.id === 'scaffold' && project && intervention.promptText) {
       // Fire the scaffold engine on this sentence's context
@@ -292,6 +297,13 @@ export default function SentencePopover() {
           </div>
         </motion.div>
       </AnimatePresence>
+
+      {/* Web-search sources dialog — opens when user clicks "Find sources" */}
+      <SourcesResults
+        open={sourcesDialog.open}
+        onOpenChange={(open) => setSourcesDialog({ open, claim: sourcesDialog.claim })}
+        claim={sourcesDialog.claim}
+      />
     </div>
   )
 }

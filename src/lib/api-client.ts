@@ -110,4 +110,35 @@ export const api = {
   // Analytics
   getAnalytics: (projectId: string) =>
     jsonFetch<Analytics>(`/api/analytics?projectId=${projectId}`),
+
+  // Find sources (web search)
+  findSources: (claim: string, projectId?: string) =>
+    jsonFetch<{
+      sources: Array<{
+        title: string
+        url: string
+        snippet: string
+        relevance: 'high' | 'medium' | 'low'
+      }>
+      query?: string
+      totalFound?: number
+      message?: string
+      error?: string
+      detail?: string
+    }>('/api/find-sources', {
+      method: 'POST',
+      body: JSON.stringify({ claim, projectId }),
+    }),
+
+  // Add a web source to the project library
+  addSource: (projectId: string, url: string, title?: string) =>
+    jsonFetch<{
+      ok: boolean
+      source?: { id: string; filename: string; url: string; chunkCount: number; sizeBytes: number }
+      error?: string
+      detail?: string
+    }>(`/api/projects/${projectId}/add-source`, {
+      method: 'POST',
+      body: JSON.stringify({ url, title }),
+    }),
 }
