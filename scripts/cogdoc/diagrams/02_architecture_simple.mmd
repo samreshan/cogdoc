@@ -2,28 +2,28 @@
 %% Three layers: Browser, Next.js App, External Services
 flowchart TB
     %% ── Layer 1: Browser ────────────────────────────────────────────
-    subgraph BROWSER [🌐 Browser]
+    subgraph BROWSER [Browser]
         direction LR
-        EDITOR[✍️ Notebook Editor<br/>contenteditable + auto-save]
-        UNDERLINE[🎯 Underlined Sentences<br/>hover → popover]
-        PETS[🐾 Pixelated Pets<br/>animate when engines fire]
+        EDITOR[Notebook Editor<br/>contenteditable + auto-save]
+        UNDERLINE[Underlined Sentences<br/>hover to see popover]
+        PETS[Pixelated Pets<br/>animate when engines fire]
     end
 
     %% ── Layer 2: Next.js App (the monolith) ────────────────────────
-    subgraph APP [⚙️ Next.js App — Single Deployable]
+    subgraph APP [Next.js App — Single Deployable]
         direction TB
 
         subgraph ENGINES [4 AI Engines]
             direction LR
-            SOC[🦊 Diogenes<br/>Socratic]
-            INT[🦉 Socrates<br/>Interceptor]
-            CIT[🐕 Galileo<br/>Citation]
-            SCAF[🦫 Aristotle<br/>Scaffold]
+            SOC[Diogenes<br/>Socratic]
+            INT[Socrates<br/>Interceptor]
+            CIT[Galileo<br/>Citation]
+            SCAF[Aristotle<br/>Scaffold]
         end
 
-        ANALYZER[📖 Content Analyzer<br/>classifies each sentence<br/>→ routes to engines]
-        SEARCH[🔍 Find Sources<br/>web search + add to library]
-        AISERVICE[🤖 AI Service<br/>provider abstraction]
+        ANALYZER[Content Analyzer<br/>classifies each sentence<br/>routes to engines]
+        SEARCH[Find Sources<br/>web search + add to library]
+        AISERVICE[AI Service<br/>provider abstraction]
 
         ANALYZER --> ENGINES
         ENGINES --> AISERVICE
@@ -31,11 +31,11 @@ flowchart TB
     end
 
     %% ── Layer 3: External Services ─────────────────────────────────
-    subgraph EXTERNAL [🔌 External Services]
+    subgraph EXTERNAL [External Services]
         direction LR
-        DB[(💾 Database<br/>SQLite / Postgres)]
-        LLM[(🧠 LLM API<br/>Gemini / Groq / OpenAI)]
-        WEB[(🌍 Web Search<br/>+ Page Reader)]
+        DB[(Database<br/>SQLite / Postgres)]
+        LLM[(LLM API<br/>Gemini / Groq / OpenAI)]
+        WEB[(Web Search<br/>+ Page Reader)]
     end
 
     %% ── Connections (kept minimal) ─────────────────────────────────

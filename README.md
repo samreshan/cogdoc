@@ -129,24 +129,24 @@ Open http://localhost:3000.
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  🌐 Browser                                      │
-│  ├─ ✍️ Notebook Editor (contenteditable)        │
-│  ├─ 🎯 Underlined Sentences (hover → popover)   │
-│  └─ 🐾 Pixelated Pets (animate when engines fire)│
+│  Browser                                         │
+│  ├─ Notebook Editor (contenteditable)            │
+│  ├─ Underlined Sentences (hover to see popover)  │
+│  └─ Pixelated Pets (animate when engines fire)   │
 └───────────────────────┬─────────────────────────┘
                         │ sentence completed
 ┌───────────────────────▼─────────────────────────┐
-│  ⚙️ Next.js App (single deployable)              │
-│  ├─ 📖 Content Analyzer → routes to engines      │
+│  Next.js App (single deployable)                 │
+│  ├─ Content Analyzer → routes to engines         │
 │  ├─ 4 AI Engines:                                │
-│  │   🦊 Diogenes  🦉 Socrates  🐕 Galileo  🦫 Aristotle │
-│  ├─ 🔍 Find Sources (web search + add to library)│
-│  └─ 🤖 AI Service (provider abstraction)         │
+│  │   Diogenes  Socrates  Galileo  Aristotle      │
+│  ├─ Find Sources (web search + add to library)   │
+│  └─ AI Service (provider abstraction)            │
 └──────┬────────────────┬──────────────────────────┘
        │                │
        ▼                ▼
 ┌──────────┐    ┌──────────────┐
-│ 💾 DB    │    │ 🧠 LLM API   │
+│ Database │    │ LLM API      │
 │ SQLite/  │    │ Gemini/Groq/ │
 │ Postgres │    │ OpenAI       │
 └──────────┘    └──────────────┘

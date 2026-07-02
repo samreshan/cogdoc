@@ -1,22 +1,22 @@
 %% Cogdoc — Writing Loop (how a sentence flows through the system)
 %% Simplified to show the user-facing experience
 flowchart LR
-    WRITE[✍️ Writer types<br/>a sentence] --> DOT[. ? !<br/>sentence complete]
-    DOT --> ANALYZE[📖 Cogdoc analyzes<br/>the sentence]
+    WRITE[Writer types<br/>a sentence] --> DOT[. ? !<br/>sentence complete]
+    DOT --> ANALYZE[Cogdoc analyzes<br/>the sentence]
     ANALYZE --> FIRE{Which engines<br/>should fire?}
 
-    FIRE -->|vague language| SOC[🦉 Socrates<br/>challenges vagueness]
-    FIRE -->|factual claim| CIT[🐕 Galileo<br/>verifies claim]
-    FIRE -->|idle pause| DIO[🦊 Diogenes<br/>provokes thinking]
-    FIRE -->|long sentence| ARI[🦫 Aristotle<br/>offers scaffold]
+    FIRE -->|vague language| SOC[Socrates<br/>challenges vagueness]
+    FIRE -->|factual claim| CIT[Galileo<br/>verifies claim]
+    FIRE -->|idle pause| DIO[Diogenes<br/>provokes thinking]
+    FIRE -->|long sentence| ARI[Aristotle<br/>offers scaffold]
 
-    SOC --> UNDERLINE[🎯 Sentence gets<br/>colored underline]
+    SOC --> UNDERLINE[Sentence gets<br/>colored underline]
     CIT --> UNDERLINE
     DIO --> UNDERLINE
     ARI --> UNDERLINE
 
-    UNDERLINE --> HOVER[👆 Writer hovers]
-    HOVER --> ACTIONS[📋 Actionable insights<br/>Find sources / Rewrite / Answer]
+    UNDERLINE --> HOVER[Writer hovers]
+    HOVER --> ACTIONS[Actionable insights<br/>Find sources / Rewrite / Answer]
     ACTIONS --> WRITE
 
     %% Styling
