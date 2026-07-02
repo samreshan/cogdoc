@@ -129,39 +129,30 @@ Open http://localhost:3000.
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  Browser (React + contenteditable + Framer Motion)│
-│  ├─ Editor (Newsreader serif, auto-save)          │
-│  ├─ Sentence highlighting (<mark> wavy underline) │
-│  ├─ Hover popover (actionable insights)           │
-│  └─ Modals (Library / Stats / History)            │
+│  🌐 Browser                                      │
+│  ├─ ✍️ Notebook Editor (contenteditable)        │
+│  ├─ 🎯 Underlined Sentences (hover → popover)   │
+│  └─ 🐾 Pixelated Pets (animate when engines fire)│
 └───────────────────────┬─────────────────────────┘
-                        │ REST + fetch
+                        │ sentence completed
 ┌───────────────────────▼─────────────────────────┐
-│  Next.js 16 API Routes (FastAPI-equivalent)       │
-│  ├─ /api/projects (CRUD + export)                 │
-│  ├─ /api/interceptor                              │
-│  ├─ /api/socratic-spacer                          │
-│  ├─ /api/citation-sentinel (RAG)                  │
-│  ├─ /api/scaffold                                 │
-│  ├─ /api/interventions (list + patch)             │
-│  ├─ /api/pdfs (upload + chunk)                    │
-│  ├─ /api/analytics                                │
-│  └─ /api/settings (runtime config)                │
+│  ⚙️ Next.js App (single deployable)              │
+│  ├─ 📖 Content Analyzer → routes to engines      │
+│  ├─ 4 AI Engines:                                │
+│  │   🦊 Diogenes  🦉 Socrates  🐕 Galileo  🦫 Aristotle │
+│  ├─ 🔍 Find Sources (web search + add to library)│
+│  └─ 🤖 AI Service (provider abstraction)         │
 └──────┬────────────────┬──────────────────────────┘
        │                │
        ▼                ▼
 ┌──────────┐    ┌──────────────┐
-│ Prisma   │    │ AIService    │
-│ (SQLite  │    │ (provider    │
-│  or PG)  │    │  abstraction)│
-└──────────┘    └──────┬───────┘
-                       │
-                       ▼
-                ┌──────────────┐
-                │ z-ai-web-dev │
-                │ -sdk (LLM)   │
-                └──────────────┘
+│ 💾 DB    │    │ 🧠 LLM API   │
+│ SQLite/  │    │ Gemini/Groq/ │
+│ Postgres │    │ OpenAI       │
+└──────────┘    └──────────────┘
 ```
+
+**See also**: `download/cogdoc/diagram_pngs/02_architecture_simple.png` for the rendered Mermaid diagram, and `08_writing_loop.png` for the user-facing writing loop.
 
 **Stack**: Next.js 16 · TypeScript 5 · Tailwind CSS 4 · shadcn/ui · Prisma ORM · Zustand · Framer Motion · z-ai-web-dev-sdk · pdf-parse
 

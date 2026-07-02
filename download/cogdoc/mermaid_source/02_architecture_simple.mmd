@@ -1,0 +1,59 @@
+%% Cogdoc — Simplified System Architecture
+%% Three layers: Browser, Next.js App, External Services
+flowchart TB
+    %% ── Layer 1: Browser ────────────────────────────────────────────
+    subgraph BROWSER [🌐 Browser]
+        direction LR
+        EDITOR[✍️ Notebook Editor<br/>contenteditable + auto-save]
+        UNDERLINE[🎯 Underlined Sentences<br/>hover → popover]
+        PETS[🐾 Pixelated Pets<br/>animate when engines fire]
+    end
+
+    %% ── Layer 2: Next.js App (the monolith) ────────────────────────
+    subgraph APP [⚙️ Next.js App — Single Deployable]
+        direction TB
+
+        subgraph ENGINES [4 AI Engines]
+            direction LR
+            SOC[🦊 Diogenes<br/>Socratic]
+            INT[🦉 Socrates<br/>Interceptor]
+            CIT[🐕 Galileo<br/>Citation]
+            SCAF[🦫 Aristotle<br/>Scaffold]
+        end
+
+        ANALYZER[📖 Content Analyzer<br/>classifies each sentence<br/>→ routes to engines]
+        SEARCH[🔍 Find Sources<br/>web search + add to library]
+        AISERVICE[🤖 AI Service<br/>provider abstraction]
+
+        ANALYZER --> ENGINES
+        ENGINES --> AISERVICE
+        SEARCH --> AISERVICE
+    end
+
+    %% ── Layer 3: External Services ─────────────────────────────────
+    subgraph EXTERNAL [🔌 External Services]
+        direction LR
+        DB[(💾 Database<br/>SQLite / Postgres)]
+        LLM[(🧠 LLM API<br/>Gemini / Groq / OpenAI)]
+        WEB[(🌍 Web Search<br/>+ Page Reader)]
+    end
+
+    %% ── Connections (kept minimal) ─────────────────────────────────
+    EDITOR -->|sentence completed| ANALYZER
+    PETS -.->|engine fired| ENGINES
+    UNDERLINE -.->|hover| EDITOR
+
+    APP -->|Prisma| DB
+    AISERVICE -->|chat| LLM
+    SEARCH -->|find evidence| WEB
+
+    %% ── Styling ────────────────────────────────────────────────────
+    classDef browser fill:#EFF6FF,stroke:#226b90,stroke-width:2px,color:#181a1b
+    classDef engine fill:#FFF7ED,stroke:#be6a4e,stroke-width:1.5px,color:#181a1b
+    classDef app fill:#f5f8fb,stroke:#354d59,stroke-width:1.5px,color:#181a1b
+    classDef external fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#181a1b
+
+    class EDITOR,UNDERLINE,PETS browser
+    class SOC,INT,CIT,SCAF engine
+    class ANALYZER,SEARCH,AISERVICE app
+    class DB,LLM,WEB external
