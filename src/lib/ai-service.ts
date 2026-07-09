@@ -53,8 +53,75 @@ async function getTemplate(behaviorTag: BehaviourTag): Promise<string> {
   return t.template
 }
 
-function fillTemplate(template: string, vars: Record<string, string>): string {
+/**
+ * Pure template filler. Replaces {varName} placeholders; missing vars → ''.
+ * @internal — exported for unit testing.
+ */
+export function fillTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '')
+}
+
+/**
+ * The delegation heuristic regex used by classifyPrompt. Tests for the
+ * "write me a paragraph/section/essay..." pattern without an LLM call.
+ * @internal — exported for unit testing.
+ */
+export const DELEGATION_REGEX =
+  /\b(write|draft|generate|create|produce)\b.*\b(paragraph|section|essay|paper|introduction|conclusion|summary|outline|literature review)\b/i
+
+/**
+ * Pure test of the delegation heuristic.
+ * @internal — exported for unit testing.
+ */
+export function isHeuristicDelegative(prompt: string): boolean {
+  return DELEGATION_REGEX.test(prompt)
+}
+
+/**
+ * Parse a verdict JSON blob out of an LLM response, which may contain
+ * surrounding prose. Falls back gracefully per the rules in verifyClaim.
+ * @internal — exported for unit testing the fallback contract.
+ */
+export function parseVerdictJSON(
+  raw: string,
+  hasEvidence: boolean,
+):
+  | { ok: true; verdict: VerdictResult['verdict']; explanation: string; supported_claims: string[]; unsupported_claims: string[] }
+  | { ok: false; fallback: VerdictResult } {
+  try {
+    const start = raw.indexOf('{')
+    const end = raw.lastIndexOf('}')
+    if (start === -1 || end === -1) throw new Error('no JSON')
+    const parsed = JSON.parse(raw.slice(start, end + 1))
+    return {
+      ok: true,
+      verdict: parsed.verdict ?? 'insufficient_evidence',
+      explanation: parsed.explanation ?? '',
+      supported_claims: Array.isArray(parsed.supported_claims) ? parsed.supported_claims : [],
+      unsupported_claims: Array.isArray(parsed.unsupported_claims) ? parsed.unsupported_claims : [],
+    }
+  } catch {
+    if (hasEvidence === false) {
+      return {
+        ok: false,
+        fallback: {
+          verdict: 'insufficient_evidence',
+          explanation: 'No relevant evidence was found in your research library.',
+          supported_claims: [],
+          unsupported_claims: [],
+        },
+      }
+    }
+    return {
+      ok: false,
+      fallback: {
+        verdict: 'partially_supported',
+        explanation: raw.slice(0, 200),
+        supported_claims: [],
+        unsupported_claims: [],
+      },
+    }
+  }
 }
 
 async function callLLM(systemPrompt: string): Promise<string> {
@@ -91,10 +158,7 @@ export class ZAIAdapter implements AIService {
   async classifyPrompt(prompt: string, context: string): Promise<ClassifyResult> {
     // Heuristic pre-check: regex catches the obvious delegative patterns
     // without an LLM call, saving token budget.
-    const delegativeRegex = /\b(write|draft|generate|create|produce)\b.*\b(paragraph|section|essay|paper|introduction|conclusion|summary|outline|literature review)\b/i
-    const isHeuristicDelegative = delegativeRegex.test(prompt)
-
-    if (isHeuristicDelegative) {
+    if (isHeuristicDelegative(prompt)) {
       // Skip LLM call — save tokens for higher-value queries
       return { isDelegative: true, confidence: 0.95, raw: 'heuristic_match' }
     }
@@ -150,37 +214,16 @@ export class ZAIAdapter implements AIService {
     })
     const raw = await callLLM(filled)
 
-    // Try to parse JSON; fall back gracefully
-    try {
-      // Find the first { and last } in case there's surrounding prose
-      const start = raw.indexOf('{')
-      const end = raw.lastIndexOf('}')
-      if (start === -1 || end === -1) throw new Error('no JSON')
-      const jsonStr = raw.slice(start, end + 1)
-      const parsed = JSON.parse(jsonStr)
+    const result = parseVerdictJSON(raw, evidence.length > 0)
+    if (result.ok) {
       return {
-        verdict: parsed.verdict ?? 'insufficient_evidence',
-        explanation: parsed.explanation ?? '',
-        supported_claims: Array.isArray(parsed.supported_claims) ? parsed.supported_claims : [],
-        unsupported_claims: Array.isArray(parsed.unsupported_claims) ? parsed.unsupported_claims : [],
-      }
-    } catch {
-      // Heuristic fallback: if no evidence was retrieved, it's insufficient
-      if (evidence.length === 0) {
-        return {
-          verdict: 'insufficient_evidence',
-          explanation: 'No relevant evidence was found in your research library.',
-          supported_claims: [],
-          unsupported_claims: [],
-        }
-      }
-      return {
-        verdict: 'partially_supported',
-        explanation: raw.slice(0, 200),
-        supported_claims: [],
-        unsupported_claims: [],
+        verdict: result.verdict,
+        explanation: result.explanation,
+        supported_claims: result.supported_claims,
+        unsupported_claims: result.unsupported_claims,
       }
     }
+    return result.fallback
   }
 
   async generateScaffold(prompt: string, context: string): Promise<ScaffoldResult> {

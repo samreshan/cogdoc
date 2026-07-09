@@ -30,6 +30,29 @@ function tokenize(text: string): string[] {
     .filter((w) => w.length > 2 && !STOP_WORDS.has(w))
 }
 
+/**
+ * Pure Jaccard-overlap similarity scorer.
+ *
+ * Extracted from retrieveTopK so the scoring math is unit-testable without a
+ * DB. Computes |intersection| / |union| of the token sets. Returns 0 if the
+ * union is empty.
+ *
+ * @internal — exported only for testing; the contract is Jaccard similarity.
+ */
+export function _scoreChunks(
+  queryTokens: Set<string>,
+  chunkTokens: string[],
+): number {
+  if (chunkTokens.length === 0) return 0
+  const chunkTokenSet = new Set(chunkTokens)
+  let intersection = 0
+  for (const t of queryTokens) {
+    if (chunkTokenSet.has(t)) intersection++
+  }
+  const union = new Set([...queryTokens, ...chunkTokens]).size
+  return union === 0 ? 0 : intersection / union
+}
+
 export interface RetrievedChunk {
   chunkId: string
   content: string
@@ -61,15 +84,7 @@ export async function retrieveTopK(
 
   const scored = chunks.map((chunk) => {
     const chunkTokens = tokenize(chunk.content)
-    if (chunkTokens.length === 0) return { chunk, score: 0 }
-    const chunkTokenSet = new Set(chunkTokens)
-    // Jaccard-like overlap: |intersection| / |union|
-    let intersection = 0
-    for (const t of queryTokens) {
-      if (chunkTokenSet.has(t)) intersection++
-    }
-    const union = new Set([...queryTokens, ...chunkTokens]).size
-    const score = union === 0 ? 0 : intersection / union
+    const score = _scoreChunks(queryTokens, chunkTokens)
     return {
       chunk,
       score,
