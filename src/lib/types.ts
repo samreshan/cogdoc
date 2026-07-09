@@ -4,6 +4,8 @@
 
 export type EngineType = 'interceptor' | 'socratic' | 'citation' | 'scaffold'
 
+export type PetState = 'idle' | 'alert' | 'active' | 'react' | 'sleep'
+
 export type Verdict =
   | 'supported'
   | 'partially_supported'

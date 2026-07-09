@@ -191,13 +191,14 @@ export default function SentencePopover() {
                   className="px-3 py-2.5 border-b border-stone-100 last:border-b-0"
                   style={{ borderLeft: `3px solid ${color}` }}
                 >
-                  {/* Card header with pixelated pet */}
+                  {/* Card header with pixelated pet (alert state — perked up) */}
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <div
                       className="rounded p-0.5"
                       style={{ backgroundColor: ENGINE_CHARACTERS[i.engineType].bgColor }}
+                      title={ENGINE_CHARACTERS[i.engineType].archetype}
                     >
-                      <EnginePet engine={i.engineType} size={20} />
+                      <EnginePet engine={i.engineType} size={20} state="alert" />
                     </div>
                     <span className="text-xs font-bold" style={{ color }}>{meta.label}</span>
                     <span className="text-[9px] text-stone-400 uppercase tracking-wide">

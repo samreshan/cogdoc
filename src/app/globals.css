@@ -157,3 +157,54 @@
 .cogdoc-pet-idle {
   animation: cogdoc-pet-idle 2s ease-in-out infinite;
 }
+
+/* ── Cogdoc pet state animations ───────────────────────────────────── */
+/* Idle: gentle breathing (subtle scale up/down, 2s loop) */
+@keyframes cogdoc-pet-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-1px) scale(1.03); }
+}
+.cogdoc-pet-breathe {
+  animation: cogdoc-pet-breathe 2s ease-in-out infinite;
+}
+
+/* Sleep: very slow breathing (4s loop, smaller scale) */
+@keyframes cogdoc-pet-sleep {
+  0%, 100% { transform: translateY(0) scale(0.97); }
+  50%      { transform: translateY(-0.5px) scale(1); }
+}
+.cogdoc-pet-sleep {
+  animation: cogdoc-pet-sleep 4s ease-in-out infinite;
+}
+
+/* Active: bouncy (engine is working) */
+@keyframes cogdoc-pet-bounce {
+  0%   { transform: translateY(0) rotate(-2deg); }
+  100% { transform: translateY(-4px) rotate(2deg); }
+}
+.cogdoc-pet-bounce {
+  animation: cogdoc-pet-bounce 0.6s ease-in-out infinite alternate;
+}
+
+/* React: quick pulse (engine returned a result) */
+@keyframes cogdoc-pet-pulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.cogdoc-pet-pulse {
+  animation: cogdoc-pet-pulse 0.4s ease-in-out;
+}
+
+/* Respect prefers-reduced-motion — fall back to static */
+@media (prefers-reduced-motion: reduce) {
+  .cogdoc-pet-breathe,
+  .cogdoc-pet-sleep,
+  .cogdoc-pet-bounce,
+  .cogdoc-pet-pulse,
+  .cogdoc-pet-running,
+  .cogdoc-pet-inspecting,
+  .cogdoc-pet-idle {
+    animation: none !important;
+  }
+}

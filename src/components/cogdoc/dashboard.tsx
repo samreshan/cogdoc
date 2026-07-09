@@ -212,8 +212,9 @@ export default function Dashboard() {
                   <div
                     className="w-16 h-16 mx-auto rounded-xl flex items-center justify-center mb-2 group-hover:scale-110 transition-transform"
                     style={{ backgroundColor: char.bgColor }}
+                    title={char.archetype}
                   >
-                    <EnginePet engine={engine} size={40} />
+                    <EnginePet engine={engine} size={40} state="idle" />
                   </div>
                   <CardTitle
                     className="text-lg font-bold"
@@ -226,8 +227,11 @@ export default function Dashboard() {
                   </p>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <p className="text-xs text-stone-600 text-center leading-relaxed">
+                  <p className="text-xs text-stone-600 text-center leading-relaxed mb-2">
                     {char.personality}
+                  </p>
+                  <p className="text-[10px] text-stone-400 text-center italic leading-relaxed">
+                    {char.archetype}
                   </p>
                 </CardContent>
               </Card>
