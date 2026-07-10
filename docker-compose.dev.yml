@@ -1,0 +1,67 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Cogdoc — development docker-compose (Next.js + FastAPI + Postgres+pgvector)
+#
+# Sprint 3 portfolio artifact: a multi-service deployment that matches the
+# target architecture in PRODUCT.md §10.1. The app-level services use env vars
+# from .env.local; Postgres is the future home of pgvector once the data store
+# migrates off SQLite.
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up         # all three services
+#   docker compose -f docker-compose.dev.yml up rag     # just the FastAPI service
+#   docker compose -f docker-compose.dev.yml down
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+  # ── Postgres + pgvector (the future data store) ──────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: cogdoc-postgres
+    environment:
+      POSTGRES_USER: cogdoc
+      POSTGRES_PASSWORD: cogdoc_dev
+      POSTGRES_DB: cogdoc
+    ports:
+      - "5432:5432"
+    volumes:
+      - cogdoc_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cogdoc"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── FastAPI RAG service (Sprint 1) ───────────────────────────────────────
+  rag:
+    build:
+      context: ./fastapi
+      dockerfile: Dockerfile
+    container_name: cogdoc-rag
+    ports:
+      - "8000:8000"
+    environment:
+      # Point at the Postgres service (future pgvector home)
+      DATABASE_URL: "postgresql://cogdoc:cogdoc_dev@postgres:5432/cogdoc"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["full"]   # opt-in; run with --profile full
+
+  # ── Next.js app (the BFF + frontend) ─────────────────────────────────────
+  # Built from the existing Dockerfile; configured via the setup wizard or env.
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cogdoc-app
+    ports:
+      - "3000:3000"
+    environment:
+      FASTAPI_URL: "http://rag:8000"
+      USE_VECTOR_RETRIEVAL: "true"
+    depends_on:
+      rag:
+        condition: service_started
+    profiles: ["full"]
+
+volumes:
+  cogdoc_pgdata:
