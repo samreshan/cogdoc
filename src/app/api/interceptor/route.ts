@@ -9,7 +9,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getDefaultUser } from '@/lib/auth'
+import { requireUserId, authed } from '@/lib/auth-supabase'
 import { getAIService } from '@/lib/ai-service'
 
 export const runtime = 'nodejs'
@@ -28,48 +28,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'projectId and prompt are required' }, { status: 400 })
   }
 
-  const user = await getDefaultUser()
-  const project = await db.project.findUnique({ where: { id: projectId } })
-  if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+  // authed handles the 401 (no session) → 401 JSON mapping automatically.
+  return authed(req, async (userId) => {
+    const project = await db.project.findUnique({ where: { id: projectId } })
+    if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
-  const ai = getAIService()
-  const classification = await ai.classifyPrompt(prompt, context ?? '')
+    const ai = getAIService()
+    const classification = await ai.classifyPrompt(prompt, context ?? '')
 
-  if (!classification.isDelegative) {
-    // Non-delegative prompt — pass through silently (no intervention persisted)
-    return NextResponse.json({
-      action: 'pass',
-      isDelegative: false,
-      confidence: classification.confidence,
+    if (!classification.isDelegative) {
+      // Non-delegative prompt — pass through silently (no intervention persisted)
+      return NextResponse.json({
+        action: 'pass',
+        isDelegative: false,
+        confidence: classification.confidence,
+      })
+    }
+
+    // Delegative — generate Socratic reframing
+    const socratic = await ai.generateSocratic(
+      'The Spark Gap',
+      context ?? '',
+      undefined,
+      prompt,
+    )
+
+    const intervention = await db.intervention.create({
+      data: {
+        userId,
+        projectId,
+        paragraphId: paragraphId ?? null,
+        promptTemplateTag: 'The Spark Gap',
+        engineType: 'interceptor',
+        promptText: prompt,
+        responseText: socratic.question,
+        status: 'active',
+      },
     })
-  }
 
-  // Delegative — generate Socratic reframing
-  const socratic = await ai.generateSocratic(
-    'The Spark Gap',
-    context ?? '',
-    undefined,
-    prompt,
-  )
-
-  const intervention = await db.intervention.create({
-    data: {
-      userId: user.id,
-      projectId,
-      paragraphId: paragraphId ?? null,
-      promptTemplateTag: 'The Spark Gap',
-      engineType: 'interceptor',
-      promptText: prompt,
-      responseText: socratic.question,
-      status: 'active',
-    },
-  })
-
-  return NextResponse.json({
-    action: 'reframe',
-    isDelegative: true,
-    confidence: classification.confidence,
-    socraticQuestion: socratic.question,
-    intervention,
+    return NextResponse.json({
+      action: 'reframe',
+      isDelegative: true,
+      confidence: classification.confidence,
+      socraticQuestion: socratic.question,
+      intervention,
+    })
   })
 }

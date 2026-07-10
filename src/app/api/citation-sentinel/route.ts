@@ -10,7 +10,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getDefaultUser } from '@/lib/auth'
+import { requireUserId } from '@/lib/auth-supabase'
 import { getAIService } from '@/lib/ai-service'
 import { retrieveTopK } from '@/lib/retrieval'
 import { retrieveVectorChunks, useVectorRetrieval } from '@/lib/ai-gateway'
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'projectId and claim are required' }, { status: 400 })
   }
 
-  const user = await getDefaultUser()
+  const userId = await requireUserId(req)
   const project = await db.project.findUnique({ where: { id: projectId } })
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   // Step 3: Persist intervention + evidence junction
   const intervention = await db.intervention.create({
     data: {
-      userId: user.id,
+      userId,
       projectId,
       paragraphId: paragraphId ?? null,
       promptTemplateTag: 'Lens',

@@ -111,3 +111,23 @@ describe('POST /api/interceptor — project lookup', () => {
     expect(res.status).toBe(404)
   })
 })
+
+describe('POST /api/interceptor — auth gate (Supabase configured)', () => {
+  it('returns 401 when no valid session', async () => {
+    // Configure Supabase env so requireUserId enforces auth, then make
+    // requireUserId throw by stubbing getSession to return no session.
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://x.supabase.co'
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'key'
+    const authSupa = await import('@/lib/auth-supabase')
+    vi.spyOn(authSupa, 'getSession').mockResolvedValue(null as any)
+    const res = await POST(makeReq({ projectId: 'proj-1', prompt: 'write a paragraph' }))
+    expect(res.status).toBe(401)
+    const body = await res.json()
+    expect(body.error).toMatch(/Authentication required/)
+    // the AI service and DB were never reached
+    expect(getService).not.toHaveBeenCalled()
+    expect(createIntervention).not.toHaveBeenCalled()
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL
+    delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  })
+})

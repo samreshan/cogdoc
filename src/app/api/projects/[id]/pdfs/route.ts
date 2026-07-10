@@ -10,7 +10,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getDefaultUser } from '@/lib/auth'
+import { requireUserId } from '@/lib/auth-supabase'
 import { chunkText } from '@/lib/retrieval'
 
 export const runtime = 'nodejs'
@@ -21,7 +21,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: projectId } = await params
-  const user = await getDefaultUser()
+  const userId = await requireUserId(req)
 
   const project = await db.project.findUnique({ where: { id: projectId } })
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
@@ -82,7 +82,7 @@ export async function POST(
   const pdf = await db.pdf.create({
     data: {
       projectId,
-      userId: user.id,
+      userId,
       filename,
       rawText,
       sizeBytes,

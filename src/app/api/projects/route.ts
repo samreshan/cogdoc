@@ -4,12 +4,12 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getDefaultUser } from '@/lib/auth'
+import { requireUserId } from '@/lib/auth-supabase'
 
-export async function GET() {
-  const user = await getDefaultUser()
+export async function GET(req: NextRequest) {
+  const userId = await requireUserId(req)
   const projects = await db.project.findMany({
-    where: { userId: user.id, archived: false },
+    where: { userId, archived: false },
     orderBy: { updatedAt: 'desc' },
     include: {
       _count: {
@@ -22,14 +22,14 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await getDefaultUser()
+  const userId = await requireUserId(req)
   const body = await req.json().catch(() => ({}))
   const title = (body.title ?? '').trim() || 'Untitled Project'
   const description = (body.description ?? '').trim() || null
 
   const project = await db.project.create({
     data: {
-      userId: user.id,
+      userId,
       title,
       description,
       document: { create: { content: '' } },

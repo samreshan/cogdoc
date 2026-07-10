@@ -7,7 +7,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getDefaultUser } from '@/lib/auth'
+import { requireUserId } from '@/lib/auth-supabase'
 import { getAIService } from '@/lib/ai-service'
 
 export const runtime = 'nodejs'
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'projectId and prompt are required' }, { status: 400 })
   }
 
-  const user = await getDefaultUser()
+  const userId = await requireUserId(req)
   const project = await db.project.findUnique({ where: { id: projectId } })
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   const intervention = await db.intervention.create({
     data: {
-      userId: user.id,
+      userId,
       projectId,
       paragraphId: paragraphId ?? null,
       promptTemplateTag: 'Structural Scaffold',

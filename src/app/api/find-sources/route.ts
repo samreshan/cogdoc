@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 import { db } from '@/lib/db'
-import { getDefaultUser } from '@/lib/auth'
+import { requireUserId } from '@/lib/auth-supabase'
 
 export const runtime = 'nodejs'
 export const maxDuration = 45
@@ -35,9 +35,9 @@ export async function POST(req: NextRequest) {
 
   // Verify project ownership (if projectId provided)
   if (projectId) {
-    const user = await getDefaultUser()
+    const userId = await requireUserId(req)
     const project = await db.project.findFirst({
-      where: { id: projectId, userId: user.id },
+      where: { id: projectId, userId },
     })
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
   }

@@ -18,17 +18,49 @@ import { db } from '@/lib/db'
 const user = getDefaultUser as ReturnType<typeof vi.fn>
 const pdfDelete = db.pdf.delete as ReturnType<typeof vi.fn>
 
+function makeReq(cookie = '') {
+  return new NextRequest('http://localhost/api/user', {
+    headers: cookie ? { cookie } : {},
+  })
+}
+
 beforeEach(() => {
   user.mockReset(); pdfDelete.mockReset()
 })
 
-describe('GET /api/user', () => {
+describe('GET /api/user (fallback path — Supabase not configured)', () => {
   it('returns the default user profile fields', async () => {
+    // Global setup ensures Supabase env is unset here.
     user.mockResolvedValue({ id: 'u1', email: 'w@c.local', displayName: 'Writer', dailyTokenBudget: 100000 })
-    const res = await getUser()
+    const res = await getUser(makeReq())
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.user).toEqual({ id: 'u1', email: 'w@c.local', displayName: 'Writer', dailyTokenBudget: 100000 })
+  })
+})
+
+describe('GET /api/user (Supabase-configured path)', () => {
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://x.supabase.co'
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'key'
+  })
+
+  it('returns the session user when authenticated', async () => {
+    // Stub the auth-supabase module's getSession for this test
+    const authSupa = await import('@/lib/auth-supabase')
+    vi.spyOn(authSupa, 'getSession').mockResolvedValue({ user: { id: 'sb-1', email: 'sb@x.co' } } as any)
+    const res = await getUser(makeReq('sb-token=abc'))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.user.id).toBe('sb-1')
+    expect(body.user.email).toBe('sb@x.co')
+  })
+
+  it('returns 401 when unauthenticated', async () => {
+    const authSupa = await import('@/lib/auth-supabase')
+    vi.spyOn(authSupa, 'getSession').mockResolvedValue(null as any)
+    const res = await getUser(makeReq())
+    expect(res.status).toBe(401)
   })
 })
 
