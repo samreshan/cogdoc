@@ -13,6 +13,7 @@ import { db } from '@/lib/db'
 import { getDefaultUser } from '@/lib/auth'
 import { getAIService } from '@/lib/ai-service'
 import { retrieveTopK } from '@/lib/retrieval'
+import { retrieveVectorChunks, useVectorRetrieval } from '@/lib/ai-gateway'
 
 export const runtime = 'nodejs'
 export const maxDuration = 45
@@ -34,7 +35,11 @@ export async function POST(req: NextRequest) {
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
   // Step 1: Retrieve top-k chunks (RAG)
-  const retrieved = await retrieveTopK(projectId, claim, 5, 0.05)
+  // Vector retrieval (FastAPI + pgvector) when the flag is set; otherwise the
+  // keyword-overlap baseline. Both return the same RetrievedChunk[] shape.
+  const retrieved = useVectorRetrieval()
+    ? await retrieveVectorChunks(projectId, claim, 5)
+    : await retrieveTopK(projectId, claim, 5, 0.05)
 
   // Step 2: Verify claim via LLM
   const ai = getAIService()

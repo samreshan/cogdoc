@@ -30,7 +30,12 @@ fi
 # Python gate (Sprint 1+)
 if [ -d "$(pwd)/fastapi" ]; then
   echo "─── pytest (coverage ≥80% enforced) ─────────────────────────"
-  (cd fastapi && pytest --cov=app --cov-report=term-missing --cov-fail-under=80 -q)
+  # Use the venv if present, else fall back to system pytest
+  if [ -f "$(pwd)/fastapi/.venv/bin/pytest" ]; then
+    (cd fastapi && .venv/bin/pytest --cov=app --cov-report=term-missing --cov-fail-under=80 -q)
+  else
+    (cd fastapi && python3 -m pytest --cov=app --cov-report=term-missing --cov-fail-under=80 -q)
+  fi
   echo "✅ Python gate passed"
 fi
 

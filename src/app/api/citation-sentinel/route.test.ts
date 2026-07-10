@@ -23,12 +23,18 @@ vi.mock('@/lib/ai-service', () => ({ getAIService: vi.fn() }))
 vi.mock('@/lib/retrieval', () => ({
   retrieveTopK: vi.fn(),
 }))
+// Mock the gateway so the vector path is testable without a live FastAPI.
+vi.mock('@/lib/ai-gateway', () => ({
+  retrieveVectorChunks: vi.fn(),
+  useVectorRetrieval: vi.fn(() => false), // keyword path by default in tests
+}))
 
 import { POST } from '@/app/api/citation-sentinel/route'
 import { db } from '@/lib/db'
 import { getDefaultUser } from '@/lib/auth'
 import { getAIService } from '@/lib/ai-service'
 import { retrieveTopK } from '@/lib/retrieval'
+import { retrieveVectorChunks, useVectorRetrieval } from '@/lib/ai-gateway'
 import { makeReq, fakeAI, DEFAULT_USER, DEFAULT_PROJECT } from '@/app/api/_test-helpers'
 import type { RetrievedChunk } from '@/lib/retrieval'
 
@@ -37,11 +43,14 @@ const createIntervention = db.intervention.create as ReturnType<typeof vi.fn>
 const getUser = getDefaultUser as ReturnType<typeof vi.fn>
 const getService = getAIService as ReturnType<typeof vi.fn>
 const retrieve = retrieveTopK as ReturnType<typeof vi.fn>
+const retrieveVector = retrieveVectorChunks as ReturnType<typeof vi.fn>
+const flagOn = useVectorRetrieval as ReturnType<typeof vi.fn>
 
 beforeEach(() => {
-  findProject.mockReset(); createIntervention.mockReset(); getUser.mockReset(); getService.mockReset(); retrieve.mockReset()
+  findProject.mockReset(); createIntervention.mockReset(); getUser.mockReset(); getService.mockReset(); retrieve.mockReset(); retrieveVector.mockReset(); flagOn.mockReset()
   getUser.mockResolvedValue(DEFAULT_USER)
   findProject.mockResolvedValue(DEFAULT_PROJECT)
+  flagOn.mockReturnValue(false) // keyword path by default
 })
 
 const CHUNKS: RetrievedChunk[] = [
@@ -137,5 +146,45 @@ describe('POST /api/citation-sentinel — unsupported claim', () => {
     expect(body.evidence).toEqual([])
     // persisted verdict reflects the model output
     expect(createIntervention.mock.calls[0][0].data.verdict).toBe('insufficient_evidence')
+  })
+})
+
+describe('POST /api/citation-sentinel — vector retrieval flag (USE_VECTOR_RETRIEVAL)', () => {
+  it('uses the FastAPI gateway when the flag is on, not the keyword path', async () => {
+    flagOn.mockReturnValue(true)
+    retrieveVector.mockResolvedValue(CHUNKS)
+    getService.mockReturnValue(
+      fakeAI({
+        verifyClaim: async () => ({
+          verdict: 'supported' as const,
+          explanation: 'vector evidence supports it',
+          supported_claims: [],
+          unsupported_claims: [],
+        }),
+      }),
+    )
+    createIntervention.mockResolvedValue({
+      id: 'iv-1', evidences: CHUNKS.map((c, i) => ({
+        id: `ev-${i}`, similarityScore: c.similarityScore, citedExcerpt: c.content.slice(0, 100),
+        chunk: { pageApprox: c.pageApprox, pdf: { filename: c.pdfFilename } },
+      })),
+    })
+
+    const res = await POST(makeReq({ projectId: 'proj-1', claim: 'a vector-backed claim' }))
+    expect(res.status).toBe(200)
+    // the gateway was called, the keyword path was NOT
+    expect(retrieveVector).toHaveBeenCalledWith('proj-1', 'a vector-backed claim', 5)
+    expect(retrieve).not.toHaveBeenCalled()
+  })
+
+  it('uses the keyword path when the flag is off', async () => {
+    flagOn.mockReturnValue(false)
+    retrieve.mockResolvedValue(CHUNKS)
+    getService.mockReturnValue(fakeAI())
+    createIntervention.mockResolvedValue({ id: 'iv-1', evidences: [] })
+
+    await POST(makeReq({ projectId: 'proj-1', claim: 'a keyword claim' }))
+    expect(retrieve).toHaveBeenCalled()
+    expect(retrieveVector).not.toHaveBeenCalled()
   })
 })
