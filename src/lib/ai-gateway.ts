@@ -13,6 +13,7 @@
  * Sprint 1: vector retrieval. Sprint 2: SSE streaming + engine gateway.
  */
 import type { RetrievedChunk } from '@/lib/retrieval'
+import { parseSSEEvents, type SSEEvent } from '@/lib/sse'
 
 /**
  * The FastAPI base URL. Read per-call (not module-load) so tests and runtime
@@ -66,4 +67,56 @@ export async function retrieveVectorChunks(
  */
 export function useVectorRetrieval(): boolean {
   return process.env.USE_VECTOR_RETRIEVAL === 'true' || process.env.USE_VECTOR_RETRIEVAL === '1'
+}
+
+/**
+ * Stream an engine intervention from the FastAPI service as an async iterator
+ * of typed SSE events (PRODUCT.md §12.3).
+ *
+ * The consumer buffers partial chunks across network reads and only emits
+ * events once their dispatching blank line arrives — so a slow token stream
+ * yields token events as they complete, never half-formed.
+ *
+ * @param engine one of: interceptor | socratic | citation | scaffold
+ * @param payload the engine-specific request body
+ */
+export async function* streamIntervention(
+  engine: 'interceptor' | 'socratic' | 'citation' | 'scaffold',
+  payload: Record<string, unknown>,
+): AsyncGenerator<SSEEvent> {
+  const res = await fetch(`${fastApiUrl()}/api/ai/${engine}/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok || !res.body) {
+    throw new Error(`FastAPI stream failed: ${res.status}`)
+  }
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      // Emit any complete events; retain the trailing partial in the buffer.
+      if (buffer.includes('\n\n')) {
+        const lastDispatch = buffer.lastIndexOf('\n\n') + 2
+        const complete = buffer.slice(0, lastDispatch)
+        buffer = buffer.slice(lastDispatch)
+        for (const event of parseSSEEvents(complete)) {
+          yield event
+        }
+      }
+    }
+    // Flush any final buffered content (terminated or not).
+    if (buffer.trim()) {
+      for (const event of parseSSEEvents(buffer + '\n\n')) {
+        yield event
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
 }

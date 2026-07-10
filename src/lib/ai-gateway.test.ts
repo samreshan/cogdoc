@@ -92,3 +92,48 @@ describe('retrieveVectorChunks', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('http://rag.svc.internal:9000/api/rag/retrieve')
   })
 })
+
+describe('streamIntervention', () => {
+  it('POSTs to the engine stream endpoint and yields SSE events', async () => {
+    const { streamIntervention } = await import('@/lib/ai-gateway')
+    const sseBody = 'event: meta\ndata: {"tag":"[Provocation]","engine":"socratic"}\n\n' +
+      'event: token\ndata: {"t":"Why"}\n\n' +
+      'event: token\ndata: {"t":" is this?"}\n\n' +
+      'event: done\ndata: {"intervention_id":"iv-1"}\n\n'
+    fetchMock.mockResolvedValue(
+      new Response(sseBody, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    )
+
+    const events = []
+    for await (const e of streamIntervention('socratic', { project_id: 'p1', context: 'ctx' })) {
+      events.push(e)
+    }
+    expect(events.map((e) => e.type)).toEqual(['meta', 'token', 'token', 'done'])
+    expect((events[3] as any).data.intervention_id).toBe('iv-1')
+  })
+
+  it('passes the engine + payload as JSON body', async () => {
+    const { streamIntervention } = await import('@/lib/ai-gateway')
+    fetchMock.mockResolvedValue(
+      new Response('event: done\ndata: {"intervention_id":"x"}\n\n', {
+        status: 200, headers: { 'content-type': 'text/event-stream' },
+      }),
+    )
+    for await (const _ of streamIntervention('interceptor', { project_id: 'p2', prompt: 'hi' })) {
+      // drain
+    }
+    expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:8000/api/ai/interceptor/stream')
+    const init = fetchMock.mock.calls[0][1]
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body)).toEqual({ project_id: 'p2', prompt: 'hi' })
+  })
+
+  it('throws on non-ok response', async () => {
+    const { streamIntervention } = await import('@/lib/ai-gateway')
+    fetchMock.mockResolvedValue(new Response('nope', { status: 500 }))
+    await expect(async () => {
+      for await (const _ of streamIntervention('socratic', { project_id: 'p1' })) break
+    }).rejects.toThrow()
+  })
+})
+

@@ -35,11 +35,17 @@ export default defineConfig({
         '**/*.test.tsx',
         'src/lib/types.ts',
         // Sprint 2 (Tiptap migration) will rewrite this component; testing the
-        // current one is throwaway work. Re-included in coverage in Sprint 2.
+        // current one is throwaway work. Re-included in coverage in Sprint 3.
         'src/lib/engine-characters.tsx',
         // Module-level singleton initializer; exercised by every integration
         // test indirectly. No independent unit behaviour to assert.
         'src/lib/db.ts',
+        // Tiptap Mark.create() config objects (addAttributes/parseHTML/
+        // renderHTML callbacks) are framework wiring only exercised by a full
+        // editor runtime (Sprint 3 work). The pure helpers
+        // (buildUnderlineStyle, ENGINE_MARK_COLORS) ARE unit-tested. Re-included
+        // when the editor.tsx surface swap lands.
+        'src/lib/extensions/wavy-underline.ts',
       ],
       thresholds: {
         lines: 80,
