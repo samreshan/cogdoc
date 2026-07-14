@@ -189,3 +189,63 @@ export async function* streamIntervention(
     reader.releaseLock()
   }
 }
+
+/** Result of consuming a full interceptor stream (ADR-0007). */
+export interface StreamedIntervention {
+  /** The assembled response text (all tokens joined). */
+  text: string
+  /** The meta tag, e.g. "[The Spark Gap]". */
+  tag: string | null
+  /** The engine name from the meta event. */
+  engine: string | null
+  /** The friction mode from the meta event. */
+  frictionMode: string | null
+  /** Intervention id from the done event (null if the BFF persists). */
+  interventionId: string | null
+  /** An error event code if one was emitted (e.g. guard_violation). */
+  errorCode: string | null
+}
+
+/**
+ * Consume an interceptor stream to completion, surfacing the assembled text +
+ * meta + any error. `onToken` is called per token so the editor can render
+ * live. On a network drop, this rejects; the caller should persist the partial
+ * text if any token was received (test case I-10).
+ *
+ * FastAPI has no DB client, so persistence is the BFF's job on `done`
+ * (ADR-0007): the caller POSTs `text` to the existing blocking route.
+ */
+export async function consumeInterceptorStream(
+  payload: Record<string, unknown>,
+  onToken?: (partial: string) => void,
+): Promise<StreamedIntervention> {
+  const result: StreamedIntervention = {
+    text: '',
+    tag: null,
+    engine: null,
+    frictionMode: null,
+    interventionId: null,
+    errorCode: null,
+  }
+  let partial = ''
+  for await (const event of streamIntervention('interceptor', payload)) {
+    if (event.type === 'meta') {
+      const d = event.data as { tag?: string; engine?: string; friction_mode?: string }
+      result.tag = d.tag ?? null
+      result.engine = d.engine ?? null
+      result.frictionMode = d.friction_mode ?? null
+    } else if (event.type === 'token') {
+      const t = (event.data as { t?: string })?.t ?? ''
+      partial += t
+      result.text = partial
+      onToken?.(partial)
+    } else if (event.type === 'error') {
+      const d = event.data as { code?: string }
+      result.errorCode = d.code ?? null
+    } else if (event.type === 'done') {
+      const d = event.data as { intervention_id?: string }
+      result.interventionId = d.intervention_id ?? null
+    }
+  }
+  return result
+}

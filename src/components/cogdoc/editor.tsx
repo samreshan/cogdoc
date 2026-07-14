@@ -6,6 +6,7 @@ import { api } from '@/lib/api-client'
 import { analyzeSentence, extractLastSentence, ENGINE_COOLDOWNS } from '@/lib/content-analyzer'
 import { getCooldown } from '@/lib/friction'
 import { useDevilsAutocomplete } from '@/lib/use-devils-autocomplete'
+import { consumeInterceptorStream } from '@/lib/ai-gateway'
 import { highlightSentences } from '@/lib/sentence-highlight'
 import type { EngineType, Intervention } from '@/lib/types'
 import { Button } from '@/components/ui/button'
@@ -165,12 +166,39 @@ export default function Editor() {
           const res = await api.citationSentinel(project.id, effectiveSentence, undefined, frictionMode)
           intervention = res.intervention
         } else if (engine === 'interceptor') {
-          const res = await api.interceptor(project.id, effectiveSentence, context, undefined, frictionMode)
-          if (res.action === 'pass') {
-            setEngineLoading(engine, false)
-            return
+          // Phase 3 (ADR-0007): stream the interceptor token-by-token from
+          // FastAPI when reachable; persist the assembled text on done via the
+          // existing blocking route. Falls back to the blocking path on error.
+          // TODO(phase-sse): stream the other engines the same way.
+          let streamed: Intervention | null = null
+          try {
+            const stream = await consumeInterceptorStream(
+              { project_id: project.id, prompt: effectiveSentence, context, friction_mode: frictionMode },
+              (partial) => {
+                // live render: push a transient streaming intervention
+                toast(`✦ ${partial}`, { id: 'interceptor-stream', duration: 1200 })
+              },
+            )
+            // persist the assembled text on done (FastAPI has no DB client)
+            const res = await api.interceptor(project.id, effectiveSentence, context, undefined, frictionMode)
+            if (res.action === 'pass') {
+              setEngineLoading(engine, false)
+              return
+            }
+            streamed = res.intervention
+            if (stream.errorCode) {
+              toast.error('Interceptor response replaced (non-generation guard)')
+            }
+            intervention = streamed
+          } catch {
+            // network drop / FastAPI down → blocking fallback
+            const res = await api.interceptor(project.id, effectiveSentence, context, undefined, frictionMode)
+            if (res.action === 'pass') {
+              setEngineLoading(engine, false)
+              return
+            }
+            intervention = res.intervention
           }
-          intervention = res.intervention
         } else if (engine === 'scaffold') {
           const res = await api.scaffold(project.id, 'Provide a structural scaffold for my next paragraph.', context, undefined, frictionMode)
           intervention = res.intervention

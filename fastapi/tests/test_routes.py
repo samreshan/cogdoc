@@ -201,3 +201,118 @@ class TestCitation:
             assert "chunk_id" in ev
             assert "excerpt" in ev
             assert "score" in ev
+
+
+def _parse_sse_stream(text: str) -> list[dict]:
+    """Parse a text/event-stream body into a list of {event, data} dicts."""
+    events = []
+    for block in text.split("\n\n"):
+        block = block.strip()
+        if not block:
+            continue
+        ev: dict = {}
+        data_lines = []
+        for line in block.split("\n"):
+            if line.startswith("event: "):
+                ev["event"] = line[len("event: "):]
+            elif line.startswith("data: "):
+                data_lines.append(line[len("data: "):])
+        if data_lines:
+            ev["data"] = data_lines[0]
+        events.append(ev)
+    return events
+
+
+class TestInterceptorStream:
+    """POST /api/ai/interceptor/stream — SSE producer (ADR-0007).
+
+    The Interceptor streams token-by-token with the §12.3 schema:
+      meta → token×N → done. The anti-generation guard runs on the assembled
+    response before done; a violation emits error{guard_violation} + a Spark
+    Gap replacement.
+    """
+
+    def _stream(self, client: TestClient, body: dict):
+        # stream=True so we read the raw text/event-stream body
+        with client.stream("POST", "/api/ai/interceptor/stream", json=body) as r:
+            assert r.status_code == 200
+            return r.read().decode("utf-8")
+
+    def test_emits_meta_then_tokens_then_done_in_order(self, client: TestClient):
+        text = self._stream(
+            client,
+            {"prompt": "write a paragraph about cats", "friction_mode": "socratic"},
+        )
+        events = _parse_sse_stream(text)
+        types = [e["event"] for e in events]
+        # meta first, done last, tokens in between
+        assert types[0] == "meta"
+        assert types[-1] == "done"
+        assert "token" in types
+        # meta precedes the first token
+        assert types.index("meta") < types.index("token")
+
+    def test_meta_carries_engine_tag_and_friction_mode(self, client: TestClient):
+        text = self._stream(
+            client,
+            {"prompt": "write about dogs", "friction_mode": "assistant"},
+        )
+        events = _parse_sse_stream(text)
+        meta = next(e for e in events if e["event"] == "meta")
+        import json
+        data = json.loads(meta["data"])
+        assert data["engine"] == "interceptor"
+        assert data["tag"] == "[The Spark Gap]"
+        assert data["friction_mode"] == "assistant"
+
+    def test_done_carries_intervention_id(self, client: TestClient):
+        text = self._stream(
+            client,
+            {"prompt": "write about cats", "friction_mode": "socratic"},
+        )
+        events = _parse_sse_stream(text)
+        done = next(e for e in events if e["event"] == "done")
+        import json
+        data = json.loads(done["data"])
+        assert "intervention_id" in data
+
+    def test_assembled_tokens_form_a_question(self, client: TestClient):
+        text = self._stream(
+            client,
+            {"prompt": "write about cats", "friction_mode": "socratic"},
+        )
+        events = _parse_sse_stream(text)
+        import json
+        assembled = "".join(
+            json.loads(e["data"])["t"] for e in events if e["event"] == "token"
+        )
+        assert len(assembled) > 0
+        # The interceptor produces a Socratic question (ends with ?)
+        assert assembled.rstrip().endswith("?")
+
+    def test_guard_violation_emits_error_and_replaces_with_spark_gap(self, client: TestClient):
+        # An injected token provider that produces multi-paragraph prose trips
+        # the non-generation guard → error{guard_violation} + Spark Gap done.
+        from app.main import create_app
+
+        blob = (
+            "Cats are mammals. They hunt at night. Their whiskers sense movement."
+        )
+        app = create_app(
+            token_provider=lambda _prompt, _ctx: blob.split(" "),  # tokenised prose
+        )
+        c = TestClient(app)
+        text = self._stream_via(c, {"prompt": "x", "friction_mode": "socratic"})
+        events = _parse_sse_stream(text)
+        types = [e["event"] for e in events]
+        assert "error" in types
+        err = next(e for e in events if e["event"] == "error")
+        import json
+        assert json.loads(err["data"])["code"] == "guard_violation"
+        # done still emitted (exactly once) with a replacement
+        assert types.count("done") == 1
+
+    def _stream_via(self, client: TestClient, body: dict):
+        with client.stream("POST", "/api/ai/interceptor/stream", json=body) as r:
+            assert r.status_code == 200
+            return r.read().decode("utf-8")

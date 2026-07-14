@@ -12,13 +12,15 @@ HashingEmbedder + in-memory store, and production swaps in pgvector + Gemini.
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Optional
+from typing import Any, Callable, Optional
 
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 from app.chunker import chunk_text
 from app.embedder import HashingEmbedder, Embedder
+from app.sse import sse_done, sse_error, sse_meta, sse_token
 from app.verdict import Verdict, classify_verdict
 from app.vector_store import VectorStore, VectorStoreBase
 
@@ -100,11 +102,59 @@ class CitationResponse(BaseModel):
     evidence: list[EvidenceOut]
 
 
+class InterceptorStreamRequest(BaseModel):
+    """POST /api/ai/interceptor/stream — the SSE interceptor (ADR-0007).
+
+    The prompt is the writer's delegative text; the engine streams a Socratic
+    reframe ([The Spark Gap]) token-by-token. friction_mode is echoed in the
+    meta event and gates the anti-generation guard threshold.
+    """
+
+    prompt: str
+    context: str = ""
+    friction_mode: str = "socratic"
+    project_id: str | None = None
+    paragraph_id: str | None = None
+
+
+def _is_generation_allowed(response: str, mode: str) -> bool:
+    """Mirror of the TS isGenerationAllowed (friction §9 non-gen invariant).
+
+    Kept inline (not imported from TS) so the FastAPI service stays standalone.
+    Hard floor: 3+ declarative sentences blocked in EVERY mode.
+    """
+    trimmed = response.strip()
+    if not trimmed:
+        return True
+    if "__" in trimmed:
+        return True
+    sentence_ends = trimmed.replace("?", ".").replace("!", ".")
+    declarative = [s for s in sentence_ends.split(".") if s.strip()]
+    if len(declarative) >= 3:
+        return False
+    word_count = len(trimmed.split())
+    if word_count > 60:
+        return False
+    thresholds = {"socratic": 2, "coach": 3, "assistant": 4}
+    return len(declarative) <= thresholds.get(mode, 2)
+
+
+def _default_token_provider(prompt: str, context: str):
+    """The default interceptor response when no LLM is injected.
+
+    Produces a short Socratic question (the Spark Gap) split into word-tokens.
+    Production injects a real LLM token stream via create_app(token_provider=).
+    """
+    question = "What must the reader accept for this to hold?"
+    return question.split(" ")
+
+
 def create_app(
     *,
     embedder: Optional[Embedder] = None,
     store: Optional[VectorStoreBase] = None,
     verdict_provider=None,
+    token_provider: Optional[Callable[[str, str], Any]] = None,
 ) -> FastAPI:
     """Build a FastAPI app with injectable dependencies.
 
@@ -114,6 +164,8 @@ def create_app(
         verdict_provider: callable(claim, passages) -> str that returns the
             model's proposed verdict. Defaults to a keyword-heuristic provider
             so the endpoint works without an LLM; production injects Gemini.
+        token_provider: callable(prompt, context) -> iterable[str] yielding the
+            tokens of an interceptor response. Defaults to a Spark Gap question.
     """
     if embedder is None:
         embedder = HashingEmbedder(dim=768)
@@ -121,11 +173,14 @@ def create_app(
         store = VectorStore(embedder=embedder)
     if verdict_provider is None:
         verdict_provider = _heuristic_verdict_provider
+    if token_provider is None:
+        token_provider = _default_token_provider
 
     app = FastAPI(title="Cogdoc RAG", version="0.1.0")
     app.state.embedder = embedder
     app.state.store = store
     app.state.verdict_provider = verdict_provider
+    app.state.token_provider = token_provider
 
     @app.get("/")
     def root():
@@ -226,6 +281,46 @@ def create_app(
                 for e in result.evidence
             ],
         )
+
+    @app.post("/api/ai/interceptor/stream")
+    def interceptor_stream(req: InterceptorStreamRequest):
+        """SSE producer for the Interceptor engine (ADR-0007, §12.3 schema).
+
+        Streams a Socratic reframe ([The Spark Gap]) token-by-token. The
+        anti-generation guard runs on the assembled response before `done`; a
+        violation emits error{guard_violation} and replaces the response with a
+        Spark Gap. The BFF persists the Intervention on `done` (FastAPI has no
+        DB client — ADR-0007).
+
+        TODO(phase-sse): stream the other three engines the same way.
+        """
+        provider = app.state.token_provider
+
+        def event_stream():
+            # meta first
+            yield sse_meta(
+                tag="[The Spark Gap]", engine="interceptor", friction_mode=req.friction_mode
+            )
+            tokens = list(provider(req.prompt, req.context))
+            assembled = " ".join(tokens)
+            # run the anti-generation guard on the assembled response
+            if not _is_generation_allowed(assembled, req.friction_mode):
+                yield sse_error(
+                    code="guard_violation",
+                    message="non-generation contract violated; replacing with Spark Gap",
+                )
+                # replace with a Spark Gap question
+                replacement = "What must be true for this to hold?"
+                for tok in replacement.split(" "):
+                    yield sse_token(tok)
+                yield sse_done(intervention_id=None, verdict=None)
+                return
+            # stream the tokens
+            for tok in tokens:
+                yield sse_token(tok)
+            yield sse_done(intervention_id=None, verdict=None)
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
 
     return app
 

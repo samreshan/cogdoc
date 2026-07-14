@@ -198,3 +198,46 @@ describe('streamIntervention', () => {
   })
 })
 
+describe('consumeInterceptorStream', () => {
+  it('assembles tokens, captures meta + done, calls onToken live', async () => {
+    const { consumeInterceptorStream } = await import('@/lib/ai-gateway')
+    const sseBody =
+      'event: meta\ndata: {"tag":"[The Spark Gap]","engine":"interceptor","friction_mode":"socratic"}\n\n' +
+      'event: token\ndata: {"t":"Why"}\n\n' +
+      'event: token\ndata: {"t":" does"}\n\n' +
+      'event: token\ndata: {"t":" this?"}\n\n' +
+      'event: done\ndata: {"intervention_id":"iv-9"}\n\n'
+    fetchMock.mockResolvedValue(
+      new Response(sseBody, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    )
+    const partials: string[] = []
+    const res = await consumeInterceptorStream({ project_id: 'p1', prompt: 'x' }, (p) => partials.push(p))
+
+    expect(res.text).toBe('Why does this?')
+    expect(res.tag).toBe('[The Spark Gap]')
+    expect(res.engine).toBe('interceptor')
+    expect(res.frictionMode).toBe('socratic')
+    expect(res.interventionId).toBe('iv-9')
+    expect(res.errorCode).toBeNull()
+    // onToken fired per token, growing
+    expect(partials).toEqual(['Why', 'Why does', 'Why does this?'])
+  })
+
+  it('surfaces a guard-violation error event', async () => {
+    const { consumeInterceptorStream } = await import('@/lib/ai-gateway')
+    const sseBody =
+      'event: meta\ndata: {"tag":"[The Spark Gap]","engine":"interceptor"}\n\n' +
+      'event: error\ndata: {"code":"guard_violation","message":"non-gen"}\n\n' +
+      'event: token\ndata: {"t":"What"}\n\n' +
+      'event: token\ndata: {"t":" next?"}\n\n' +
+      'event: done\ndata: {"intervention_id":null}\n\n'
+    fetchMock.mockResolvedValue(
+      new Response(sseBody, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    )
+    const res = await consumeInterceptorStream({ project_id: 'p1', prompt: 'x' })
+    expect(res.errorCode).toBe('guard_violation')
+    // the replacement tokens still assemble into the result text
+    expect(res.text).toBe('What next?')
+  })
+})
+
