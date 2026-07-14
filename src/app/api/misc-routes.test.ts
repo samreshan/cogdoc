@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn() }))
-vi.mock('@/lib/db', () => ({ db: { pdf: { delete: vi.fn() } } }))
+vi.mock('@/lib/db', () => ({ db: { pdf: { delete: vi.fn() }, user: { findUnique: vi.fn() } } }))
 
 import { GET as getUser } from '@/app/api/user/route'
 import { GET as getSettings } from '@/app/api/settings/route'
@@ -17,6 +17,7 @@ import { db } from '@/lib/db'
 
 const user = getDefaultUser as ReturnType<typeof vi.fn>
 const pdfDelete = db.pdf.delete as ReturnType<typeof vi.fn>
+const userFindUnique = db.user.findUnique as ReturnType<typeof vi.fn>
 
 function makeReq(cookie = '') {
   return new NextRequest('http://localhost/api/user', {
@@ -25,7 +26,8 @@ function makeReq(cookie = '') {
 }
 
 beforeEach(() => {
-  user.mockReset(); pdfDelete.mockReset()
+  user.mockReset(); pdfDelete.mockReset(); userFindUnique.mockReset()
+  user.mockResolvedValue({ id: 'u1' })
 })
 
 describe('GET /api/user (fallback path — Supabase not configured)', () => {
@@ -66,7 +68,7 @@ describe('GET /api/user (Supabase-configured path)', () => {
 
 describe('GET /api/settings', () => {
   it('returns idleThresholdSeconds and dailyTokenBudget from env with defaults', async () => {
-    const res = await getSettings()
+    const res = await getSettings(makeReq())
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body).toHaveProperty('idleThresholdSeconds')
@@ -76,7 +78,7 @@ describe('GET /api/settings', () => {
 
   it('respects the IDLE_THRESHOLD env var', async () => {
     process.env.IDLE_THRESHOLD = '45'
-    const res = await getSettings()
+    const res = await getSettings(makeReq())
     expect((await res.json()).idleThresholdSeconds).toBe(45)
     delete process.env.IDLE_THRESHOLD
   })

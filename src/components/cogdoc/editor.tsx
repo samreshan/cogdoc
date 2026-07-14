@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
 import { analyzeSentence, extractLastSentence, ENGINE_COOLDOWNS } from '@/lib/content-analyzer'
+import { getCooldown } from '@/lib/friction'
 import { highlightSentences } from '@/lib/sentence-highlight'
 import type { EngineType, Intervention } from '@/lib/types'
 import { Button } from '@/components/ui/button'
@@ -48,6 +49,7 @@ export default function Editor() {
   const bumpAnalytics = useCogdoc((s) => s.bumpAnalytics)
   const focusMode = useCogdoc((s) => s.focusMode)
   const setHovered = useCogdoc((s) => s.setHovered)
+  const frictionMode = useCogdoc((s) => s.frictionMode)
 
   const editorRef = useRef<HTMLDivElement>(null)
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -126,7 +128,12 @@ export default function Editor() {
       if (!project || !editorRef.current) return
 
       const now = Date.now()
-      if (now - lastFireRef.current[engine] < ENGINE_COOLDOWNS[engine]) return
+      // Friction §9: cooldown scales with the user's chosen mode (socratic full
+      // → assistant light). getCooldown multiplies the base engine cooldown by
+      // the mode's COOLDOWN_SCALE. The idle-threshold default stays at the 2s
+      // debug value until the Tiptap swap (Phase 5) brings the real 45s.
+      // TODO(phase5): idle = getCooldown('socratic', frictionMode) at 45s base.
+      if (now - lastFireRef.current[engine] < getCooldown(engine, frictionMode)) return
       lastFireRef.current[engine] = now
 
       if (engine === 'socratic' && now - lastFireRef.current.socratic < SOCRATIC_DEBOUNCE_MS) {
@@ -147,21 +154,21 @@ export default function Editor() {
       try {
         let intervention: Intervention | null = null
         if (engine === 'citation') {
-          const res = await api.citationSentinel(project.id, effectiveSentence)
+          const res = await api.citationSentinel(project.id, effectiveSentence, undefined, frictionMode)
           intervention = res.intervention
         } else if (engine === 'interceptor') {
-          const res = await api.interceptor(project.id, effectiveSentence, context)
+          const res = await api.interceptor(project.id, effectiveSentence, context, undefined, frictionMode)
           if (res.action === 'pass') {
             setEngineLoading(engine, false)
             return
           }
           intervention = res.intervention
         } else if (engine === 'scaffold') {
-          const res = await api.scaffold(project.id, 'Provide a structural scaffold for my next paragraph.', context)
+          const res = await api.scaffold(project.id, 'Provide a structural scaffold for my next paragraph.', context, undefined, frictionMode)
           intervention = res.intervention
         } else {
           // socratic — pass the sentence as stub so it's stored as promptText
-          const res = await api.socraticSpacer(project.id, context, effectiveSentence)
+          const res = await api.socraticSpacer(project.id, context, effectiveSentence, undefined, frictionMode)
           intervention = res.intervention
         }
 
@@ -175,7 +182,7 @@ export default function Editor() {
         setEngineLoading(engine, false)
       }
     },
-    [project, pushIntervention, setEngineLoading, bumpAnalytics],
+    [project, pushIntervention, setEngineLoading, bumpAnalytics, frictionMode],
   )
 
   // Idle detector — fires Socratic Spacer after 2s of no input

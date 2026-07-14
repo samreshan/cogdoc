@@ -11,22 +11,27 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireUserId, authed } from '@/lib/auth-supabase'
 import { getAIService } from '@/lib/ai-service'
+import { applyGenerationGuard } from '@/lib/engine-guard'
+import type { FrictionMode } from '@/lib/friction'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const { projectId, paragraphId, prompt, context } = body as {
+  const { projectId, paragraphId, prompt, context, friction_mode } = body as {
     projectId: string
     paragraphId?: string
     prompt: string
     context?: string
+    friction_mode?: FrictionMode
   }
 
   if (!projectId || !prompt) {
     return NextResponse.json({ error: 'projectId and prompt are required' }, { status: 400 })
   }
+
+  const mode: FrictionMode = friction_mode ?? 'socratic'
 
   // authed handles the 401 (no session) → 401 JSON mapping automatically.
   return authed(req, async (userId) => {
@@ -53,6 +58,10 @@ export async function POST(req: NextRequest) {
       prompt,
     )
 
+    // Friction §9: enforce the non-generation invariant on the assembled
+    // response before persisting. Over-generating prose → Spark Gap fallback.
+    const guarded = applyGenerationGuard(socratic.question, mode)
+
     const intervention = await db.intervention.create({
       data: {
         userId,
@@ -61,7 +70,7 @@ export async function POST(req: NextRequest) {
         promptTemplateTag: 'The Spark Gap',
         engineType: 'interceptor',
         promptText: prompt,
-        responseText: socratic.question,
+        responseText: guarded.text,
         status: 'active',
       },
     })
@@ -70,7 +79,7 @@ export async function POST(req: NextRequest) {
       action: 'reframe',
       isDelegative: true,
       confidence: classification.confidence,
-      socraticQuestion: socratic.question,
+      socraticQuestion: guarded.text,
       intervention,
     })
   })

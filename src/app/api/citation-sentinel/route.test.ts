@@ -37,6 +37,7 @@ import { retrieveTopK } from '@/lib/retrieval'
 import { retrieveVectorChunks, useVectorRetrieval } from '@/lib/ai-gateway'
 import { makeReq, fakeAI, DEFAULT_USER, DEFAULT_PROJECT } from '@/app/api/_test-helpers'
 import type { RetrievedChunk } from '@/lib/retrieval'
+import { SPARK_GAP_FALLBACK } from '@/lib/engine-guard'
 
 const findProject = db.project.findUnique as ReturnType<typeof vi.fn>
 const createIntervention = db.intervention.create as ReturnType<typeof vi.fn>
@@ -186,5 +187,50 @@ describe('POST /api/citation-sentinel — vector retrieval flag (USE_VECTOR_RETR
     await POST(makeReq({ projectId: 'proj-1', claim: 'a keyword claim' }))
     expect(retrieve).toHaveBeenCalled()
     expect(retrieveVector).not.toHaveBeenCalled()
+  })
+})
+
+describe('POST /api/citation-sentinel — friction calibration (§9)', () => {
+  it('persists a guard-allowed explanation verbatim', async () => {
+    retrieve.mockResolvedValue(CHUNKS)
+    const explanation = 'Source [1] directly supports this.'
+    getService.mockReturnValue(
+      fakeAI({
+        verifyClaim: async () => ({
+          verdict: 'supported' as const,
+          explanation,
+          supported_claims: [],
+          unsupported_claims: [],
+        }),
+      }),
+    )
+    createIntervention.mockResolvedValue({ id: 'iv-1', evidences: [] })
+
+    await POST(makeReq({ projectId: 'proj-1', claim: 'a claim', friction_mode: 'coach' }))
+    expect(createIntervention.mock.calls[0][0].data.responseText).toBe(explanation)
+  })
+
+  it('replaces a multi-paragraph explanation with the Spark Gap in every mode', async () => {
+    retrieve.mockResolvedValue(CHUNKS)
+    const blob =
+      'The source supports the claim with strong data. The methodology was robust and well-controlled. ' +
+      'Multiple replications confirm the finding. This is a reliable result overall.'
+    getService.mockReturnValue(
+      fakeAI({
+        verifyClaim: async () => ({
+          verdict: 'supported' as const,
+          explanation: blob,
+          supported_claims: [],
+          unsupported_claims: [],
+        }),
+      }),
+    )
+    createIntervention.mockResolvedValue({ id: 'iv-1', evidences: [] })
+
+    for (const mode of ['socratic', 'coach', 'assistant'] as const) {
+      createIntervention.mockClear()
+      await POST(makeReq({ projectId: 'proj-1', claim: 'a claim', friction_mode: mode }))
+      expect(createIntervention.mock.calls[0][0].data.responseText).toBe(SPARK_GAP_FALLBACK)
+    }
   })
 })

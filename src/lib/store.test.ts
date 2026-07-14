@@ -57,6 +57,7 @@ beforeEach(() => {
     analyticsVersion: 0,
     engineLoading: { socratic: false, interceptor: false, citation: false, scaffold: false },
     focusMode: false,
+    frictionMode: 'socratic',
   })
 })
 
@@ -140,6 +141,27 @@ describe('focus mode', () => {
     expect(useCogdoc.getState().focusMode).toBe(false)
     useCogdoc.getState().toggleFocusMode()
     expect(useCogdoc.getState().focusMode).toBe(true)
+  })
+})
+
+describe('friction mode', () => {
+  it('defaults to socratic', () => {
+    expect(useCogdoc.getState().frictionMode).toBe('socratic')
+  })
+
+  it('transitions socratic → coach → assistant', () => {
+    useCogdoc.getState().setFrictionMode('coach')
+    expect(useCogdoc.getState().frictionMode).toBe('coach')
+    useCogdoc.getState().setFrictionMode('assistant')
+    expect(useCogdoc.getState().frictionMode).toBe('assistant')
+    useCogdoc.getState().setFrictionMode('socratic')
+    expect(useCogdoc.getState().frictionMode).toBe('socratic')
+  })
+
+  it('survives a project switch (persists in the store)', () => {
+    useCogdoc.getState().setFrictionMode('assistant')
+    useCogdoc.getState().setActiveProject(makeProject({ id: 'p2' }))
+    expect(useCogdoc.getState().frictionMode).toBe('assistant')
   })
 })
 

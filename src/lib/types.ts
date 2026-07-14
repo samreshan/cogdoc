@@ -4,6 +4,10 @@
 
 export type EngineType = 'interceptor' | 'socratic' | 'citation' | 'scaffold'
 
+// Re-exported from friction.ts so the whole app imports FrictionMode from the
+// single shared types barrel. friction.ts stays the source of truth.
+export type { FrictionMode } from '@/lib/friction'
+
 export type PetState = 'idle' | 'alert' | 'active' | 'react' | 'sleep'
 
 export type Verdict =

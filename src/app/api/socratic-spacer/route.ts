@@ -9,29 +9,36 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 import { getAIService } from '@/lib/ai-service'
+import { applyGenerationGuard } from '@/lib/engine-guard'
+import type { FrictionMode } from '@/lib/friction'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const { projectId, paragraphId, context, stub } = body as {
+  const { projectId, paragraphId, context, stub, friction_mode } = body as {
     projectId: string
     paragraphId?: string
     context: string
     stub?: string
+    friction_mode?: FrictionMode
   }
 
   if (!projectId) {
     return NextResponse.json({ error: 'projectId is required' }, { status: 400 })
   }
 
+  const mode: FrictionMode = friction_mode ?? 'socratic'
   const userId = await requireUserId(req)
   const project = await db.project.findUnique({ where: { id: projectId } })
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
   const ai = getAIService()
   const socratic = await ai.generateSocratic('Provocation', context, stub)
+
+  // Friction §9: enforce the non-generation invariant before persisting.
+  const guarded = applyGenerationGuard(socratic.question, mode)
 
   const intervention = await db.intervention.create({
     data: {
@@ -41,13 +48,13 @@ export async function POST(req: NextRequest) {
       promptTemplateTag: 'Provocation',
       engineType: 'socratic',
       promptText: stub ?? '',
-      responseText: socratic.question,
+      responseText: guarded.text,
       status: 'active',
     },
   })
 
   return NextResponse.json({
-    ghostQuestion: socratic.question,
+    ghostQuestion: guarded.text,
     intervention,
   })
 }

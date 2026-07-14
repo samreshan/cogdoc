@@ -12,6 +12,7 @@ import { BookOpen, BarChart3, History, ArrowLeft, Focus, Eye, EyeOff, Download, 
 import Editor from './editor'
 import ResearchLibrary from './research-library'
 import AnalyticsPanel from './analytics-panel'
+import FrictionModeSelector from './friction-mode-selector'
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api-client'
 import type { Intervention } from '@/lib/types'
@@ -41,6 +42,7 @@ export default function EditorShell() {
   const focusMode = useCogdoc((s) => s.focusMode)
   const toggleFocusMode = useCogdoc((s) => s.toggleFocusMode)
   const analyticsVersion = useCogdoc((s) => s.analyticsVersion)
+  const setFrictionMode = useCogdoc((s) => s.setFrictionMode)
 
   const [history, setHistory] = useState<Intervention[]>([])
 
@@ -60,6 +62,14 @@ export default function EditorShell() {
       api.listInterventions(project.id).then(({ interventions }) => setHistory(interventions)).catch(() => {})
     }
   }, [activeModal, project, analyticsVersion])
+
+  // Hydrate the friction mode from persisted user settings on first mount, so
+  // the user's chosen calibration survives a reload (PRODUCT.md §9).
+  useEffect(() => {
+    api.getSettings().then((s) => setFrictionMode(s.frictionMode)).catch(() => {})
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   if (!project) return null
 
@@ -82,6 +92,7 @@ export default function EditorShell() {
         </div>
 
         <div className="flex items-center gap-1">
+          <FrictionModeSelector />
           <Button
             variant="ghost" size="sm"
             onClick={toggleFocusMode}

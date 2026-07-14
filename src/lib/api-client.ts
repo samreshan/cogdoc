@@ -53,7 +53,10 @@ export const api = {
   deletePdf: (id: string) => jsonFetch<{ ok: boolean }>(`/api/pdfs/${id}`, { method: 'DELETE' }),
 
   // AI engines
-  interceptor: (projectId: string, prompt: string, context: string, paragraphId?: string) =>
+  interceptor: (
+    projectId: string, prompt: string, context: string,
+    paragraphId?: string, frictionMode?: 'socratic' | 'coach' | 'assistant',
+  ) =>
     jsonFetch<{
       action: 'pass' | 'reframe'
       isDelegative: boolean
@@ -62,16 +65,22 @@ export const api = {
       intervention?: Intervention
     }>('/api/interceptor', {
       method: 'POST',
-      body: JSON.stringify({ projectId, prompt, context, paragraphId }),
+      body: JSON.stringify({ projectId, prompt, context, paragraphId, friction_mode: frictionMode }),
     }),
 
-  socraticSpacer: (projectId: string, context: string, stub?: string, paragraphId?: string) =>
+  socraticSpacer: (
+    projectId: string, context: string, stub?: string,
+    paragraphId?: string, frictionMode?: 'socratic' | 'coach' | 'assistant',
+  ) =>
     jsonFetch<{ ghostQuestion: string; intervention: Intervention }>('/api/socratic-spacer', {
       method: 'POST',
-      body: JSON.stringify({ projectId, context, stub, paragraphId }),
+      body: JSON.stringify({ projectId, context, stub, paragraphId, friction_mode: frictionMode }),
     }),
 
-  citationSentinel: (projectId: string, claim: string, paragraphId?: string) =>
+  citationSentinel: (
+    projectId: string, claim: string,
+    paragraphId?: string, frictionMode?: 'socratic' | 'coach' | 'assistant',
+  ) =>
     jsonFetch<{
       verdict: string
       explanation: string
@@ -89,13 +98,16 @@ export const api = {
       intervention: Intervention
     }>('/api/citation-sentinel', {
       method: 'POST',
-      body: JSON.stringify({ projectId, claim, paragraphId }),
+      body: JSON.stringify({ projectId, claim, paragraphId, friction_mode: frictionMode }),
     }),
 
-  scaffold: (projectId: string, prompt: string, context: string, paragraphId?: string) =>
+  scaffold: (
+    projectId: string, prompt: string, context: string,
+    paragraphId?: string, frictionMode?: 'socratic' | 'coach' | 'assistant',
+  ) =>
     jsonFetch<{ scaffold: string; intervention: Intervention }>('/api/scaffold', {
       method: 'POST',
-      body: JSON.stringify({ projectId, prompt, context, paragraphId }),
+      body: JSON.stringify({ projectId, prompt, context, paragraphId, friction_mode: frictionMode }),
     }),
 
   // Interventions
@@ -137,8 +149,21 @@ export const api = {
       source?: { id: string; filename: string; url: string; chunkCount: number; sizeBytes: number }
       error?: string
       detail?: string
-    }>(`/api/projects/${projectId}/add-source`, {
+    }>('/api/projects/${projectId}/add-source', {
       method: 'POST',
       body: JSON.stringify({ url, title }),
+    }),
+
+  // Settings + friction calibration (PRODUCT.md §9)
+  getSettings: () =>
+    jsonFetch<{
+      idleThresholdSeconds: number
+      dailyTokenBudget: number
+      frictionMode: 'socratic' | 'coach' | 'assistant'
+    }>('/api/settings'),
+  setFrictionMode: (frictionMode: 'socratic' | 'coach' | 'assistant') =>
+    jsonFetch<{ frictionMode: string }>('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ frictionMode }),
     }),
 }

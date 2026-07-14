@@ -4,7 +4,7 @@
  * sentences, not positioned), and hovered-sentence state for the popover.
  */
 import { create } from 'zustand'
-import type { Project, Intervention, EngineType } from '@/lib/types'
+import type { Project, Intervention, EngineType, FrictionMode } from '@/lib/types'
 
 export type View = 'dashboard' | 'editor'
 export type ModalName = 'none' | 'library' | 'stats' | 'history'
@@ -48,6 +48,10 @@ interface CogdocState {
   // Focus mode
   focusMode: boolean
   toggleFocusMode: () => void
+
+  // Friction calibration (PRODUCT.md §9): socratic | coach | assistant
+  frictionMode: FrictionMode
+  setFrictionMode: (m: FrictionMode) => void
 }
 
 export const useCogdoc = create<CogdocState>((set) => ({
@@ -109,4 +113,7 @@ export const useCogdoc = create<CogdocState>((set) => ({
 
   focusMode: false,
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
+
+  frictionMode: 'socratic',
+  setFrictionMode: (m) => set({ frictionMode: m }),
 }))

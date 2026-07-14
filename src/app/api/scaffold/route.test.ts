@@ -19,6 +19,7 @@ import { db } from '@/lib/db'
 import { getDefaultUser } from '@/lib/auth'
 import { getAIService } from '@/lib/ai-service'
 import { makeReq, fakeAI, DEFAULT_USER, DEFAULT_PROJECT } from '@/app/api/_test-helpers'
+import { SPARK_GAP_FALLBACK } from '@/lib/engine-guard'
 
 const findProject = db.project.findUnique as ReturnType<typeof vi.fn>
 const createIntervention = db.intervention.create as ReturnType<typeof vi.fn>
@@ -58,5 +59,36 @@ describe('POST /api/scaffold', () => {
     const created = createIntervention.mock.calls[0][0].data
     expect(created.engineType).toBe('scaffold')
     expect(created.promptTemplateTag).toBe('Structural Scaffold')
+  })
+})
+
+describe('POST /api/scaffold — friction calibration (§9)', () => {
+  it('passes a placeholder scaffold through in every mode', async () => {
+    const scaffold = 'Claim: __ Evidence: __ Limitation: __'
+    getService.mockReturnValue(
+      fakeAI({ generateScaffold: async () => ({ scaffold, raw: scaffold }) }),
+    )
+    createIntervention.mockResolvedValue({ id: 'iv-1' })
+    for (const mode of ['socratic', 'coach', 'assistant'] as const) {
+      createIntervention.mockClear()
+      const res = await POST(makeReq({ projectId: 'proj-1', prompt: 'build', friction_mode: mode }))
+      expect((await res.json()).scaffold).toBe(scaffold)
+      expect(createIntervention.mock.calls[0][0].data.responseText).toBe(scaffold)
+    }
+  })
+
+  it('replaces a multi-paragraph scaffold response with the Spark Gap in every mode', async () => {
+    const blob =
+      'The argument begins with a clear claim. Evidence supports the claim from sources. ' +
+      'A limitation is acknowledged. An implication follows for future work.'
+    getService.mockReturnValue(
+      fakeAI({ generateScaffold: async () => ({ scaffold: blob, raw: blob }) }),
+    )
+    createIntervention.mockResolvedValue({ id: 'iv-1' })
+    for (const mode of ['socratic', 'coach', 'assistant'] as const) {
+      createIntervention.mockClear()
+      await POST(makeReq({ projectId: 'proj-1', prompt: 'build', friction_mode: mode }))
+      expect(createIntervention.mock.calls[0][0].data.responseText).toBe(SPARK_GAP_FALLBACK)
+    }
   })
 })

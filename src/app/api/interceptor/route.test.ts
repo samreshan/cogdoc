@@ -27,6 +27,7 @@ import { db } from '@/lib/db'
 import { getDefaultUser } from '@/lib/auth'
 import { getAIService } from '@/lib/ai-service'
 import { makeReq, fakeAI, DEFAULT_USER, DEFAULT_PROJECT } from '@/app/api/_test-helpers'
+import { SPARK_GAP_FALLBACK } from '@/lib/engine-guard'
 
 const findProject = db.project.findUnique as ReturnType<typeof vi.fn>
 const createIntervention = db.intervention.create as ReturnType<typeof vi.fn>
@@ -109,6 +110,44 @@ describe('POST /api/interceptor — project lookup', () => {
     getService.mockReturnValue(fakeAI())
     const res = await POST(makeReq({ projectId: 'nope', prompt: 'hello there' }))
     expect(res.status).toBe(404)
+  })
+})
+
+describe('POST /api/interceptor — friction calibration (§9)', () => {
+  it('reads friction_mode from the body (defaults to socratic) and persists a guard-allowed question', async () => {
+    const question = 'What must the reader accept?'
+    getService.mockReturnValue(
+      fakeAI({
+        classifyPrompt: async () => ({ isDelegative: true, confidence: 0.95, raw: 'x' }),
+        generateSocratic: async () => ({ question, raw: question }),
+      }),
+    )
+    createIntervention.mockResolvedValue({ id: 'iv-1' })
+
+    await POST(makeReq({ projectId: 'proj-1', prompt: 'write about cats', friction_mode: 'assistant' }))
+    const created = createIntervention.mock.calls[0][0].data
+    expect(created.responseText).toBe(question) // allowed → persisted verbatim
+  })
+
+  it('replaces a multi-paragraph response with the Spark Gap in EVERY mode (non-generation invariant)', async () => {
+    const blob =
+      'Cats are mammals with retractable claws. They hunt small prey at night. ' +
+      'Their whiskers sense nearby movement. This makes them effective predators.'
+    getService.mockReturnValue(
+      fakeAI({
+        classifyPrompt: async () => ({ isDelegative: true, confidence: 0.95, raw: 'x' }),
+        generateSocratic: async () => ({ question: blob, raw: blob }),
+      }),
+    )
+    createIntervention.mockResolvedValue({ id: 'iv-1' })
+
+    for (const mode of ['socratic', 'coach', 'assistant'] as const) {
+      createIntervention.mockClear()
+      await POST(makeReq({ projectId: 'proj-1', prompt: 'write about cats', friction_mode: mode }))
+      const created = createIntervention.mock.calls[0][0].data
+      expect(created.responseText).toBe(SPARK_GAP_FALLBACK)
+      expect(created.responseText).not.toBe(blob)
+    }
   })
 })
 

@@ -16,6 +16,7 @@ model User {
   email           String   @unique
   displayName     String?
   dailyTokenBudget Int    @default(100000)
+  frictionMode    String   @default("socratic") // socratic | coach | assistant (PRODUCT.md §9)
   createdAt       DateTime @default(now())
   lastLogin       DateTime?
   projects        Project[]

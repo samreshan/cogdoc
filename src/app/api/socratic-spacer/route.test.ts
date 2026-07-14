@@ -19,6 +19,7 @@ import { db } from '@/lib/db'
 import { getDefaultUser } from '@/lib/auth'
 import { getAIService } from '@/lib/ai-service'
 import { makeReq, fakeAI, DEFAULT_USER, DEFAULT_PROJECT } from '@/app/api/_test-helpers'
+import { SPARK_GAP_FALLBACK } from '@/lib/engine-guard'
 
 const findProject = db.project.findUnique as ReturnType<typeof vi.fn>
 const createIntervention = db.intervention.create as ReturnType<typeof vi.fn>
@@ -69,5 +70,32 @@ describe('POST /api/socratic-spacer', () => {
     createIntervention.mockResolvedValue({ id: 'iv-1' })
     await POST(makeReq({ projectId: 'proj-1', context: 'ctx' }))
     expect(createIntervention.mock.calls[0][0].data.promptText).toBe('')
+  })
+})
+
+describe('POST /api/socratic-spacer — friction calibration (§9)', () => {
+  it('persists a guard-allowed question verbatim', async () => {
+    const question = 'What evidence would change this?'
+    getService.mockReturnValue(
+      fakeAI({ generateSocratic: async () => ({ question, raw: question }) }),
+    )
+    createIntervention.mockResolvedValue({ id: 'iv-1' })
+    await POST(makeReq({ projectId: 'proj-1', context: 'ctx', friction_mode: 'coach' }))
+    expect(createIntervention.mock.calls[0][0].data.responseText).toBe(question)
+  })
+
+  it('replaces multi-paragraph prose with the Spark Gap in every mode', async () => {
+    const blob =
+      'Memory is limited in capacity. Extraneous load reduces retention. ' +
+      'Designers must minimise it. Worked examples help.'
+    getService.mockReturnValue(
+      fakeAI({ generateSocratic: async () => ({ question: blob, raw: blob }) }),
+    )
+    createIntervention.mockResolvedValue({ id: 'iv-1' })
+    for (const mode of ['socratic', 'coach', 'assistant'] as const) {
+      createIntervention.mockClear()
+      await POST(makeReq({ projectId: 'proj-1', context: 'ctx', friction_mode: mode }))
+      expect(createIntervention.mock.calls[0][0].data.responseText).toBe(SPARK_GAP_FALLBACK)
+    }
   })
 })

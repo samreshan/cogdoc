@@ -14,22 +14,26 @@ import { requireUserId } from '@/lib/auth-supabase'
 import { getAIService } from '@/lib/ai-service'
 import { retrieveTopK } from '@/lib/retrieval'
 import { retrieveVectorChunks, useVectorRetrieval } from '@/lib/ai-gateway'
+import { applyGenerationGuard } from '@/lib/engine-guard'
+import type { FrictionMode } from '@/lib/friction'
 
 export const runtime = 'nodejs'
 export const maxDuration = 45
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const { projectId, paragraphId, claim } = body as {
+  const { projectId, paragraphId, claim, friction_mode } = body as {
     projectId: string
     paragraphId?: string
     claim: string
+    friction_mode?: FrictionMode
   }
 
   if (!projectId || !claim) {
     return NextResponse.json({ error: 'projectId and claim are required' }, { status: 400 })
   }
 
+  const mode: FrictionMode = friction_mode ?? 'socratic'
   const userId = await requireUserId(req)
   const project = await db.project.findUnique({ where: { id: projectId } })
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
@@ -48,6 +52,11 @@ export async function POST(req: NextRequest) {
     retrieved.map((r) => ({ chunkId: r.chunkId, content: r.content })),
   )
 
+  // Friction §9: enforce the non-generation invariant on the explanation before
+  // persisting. An over-explaining model → Spark Gap fallback (keeps the verdict,
+  // trims the prose).
+  const guarded = applyGenerationGuard(verdict.explanation, mode)
+
   // Step 3: Persist intervention + evidence junction
   const intervention = await db.intervention.create({
     data: {
@@ -57,7 +66,7 @@ export async function POST(req: NextRequest) {
       promptTemplateTag: 'Lens',
       engineType: 'citation',
       promptText: claim,
-      responseText: verdict.explanation,
+      responseText: guarded.text,
       verdict: verdict.verdict,
       status: 'active',
       evidences: {
@@ -74,7 +83,7 @@ export async function POST(req: NextRequest) {
   // Step 4: Return payload for margin UI
   return NextResponse.json({
     verdict: verdict.verdict,
-    explanation: verdict.explanation,
+    explanation: guarded.text,
     supportedClaims: verdict.supported_claims,
     unsupportedClaims: verdict.unsupported_claims,
     evidence: retrieved.map((r, i) => ({
