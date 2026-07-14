@@ -70,6 +70,75 @@ export function useVectorRetrieval(): boolean {
 }
 
 /**
+ * A pre-chunked passage pushed into the FastAPI vector store on ingest.
+ * The BFF owns BOTH the content and the chunk_id (a SQLite PdfChunk.id cuid),
+ * so FastAPI stores them verbatim and never re-chunks.
+ */
+export interface IngestChunk {
+  content: string
+  chunk_id: string
+  page_approx: number
+}
+
+/** Result of a successful ingest push to FastAPI. */
+export interface VectorIngestResult {
+  /** The chunk ids FastAPI stored, verbatim — must match the input ids. */
+  chunkIds: string[]
+  /** Number of chunks ingested. */
+  count: number
+}
+
+/**
+ * Push freshly-created PDF chunks into the FastAPI vector store.
+ *
+ * DESIGN DECISION — chunk_id alignment (task spec option A):
+ * We send explicit `chunks: [{content, chunk_id, page_approx}]` rather than
+ * raw `{text}`. The BFF has already chunked the text and persisted PdfChunk rows
+ * in SQLite (each with a cuid id). By handing those exact ids to FastAPI, the
+ * vector store's chunk ids == SQLite PdfChunk.id. That way, when the Citation
+ * Sentinel later retrieves evidence and persists `InterventionEvidence.chunkId`,
+ * those ids are real foreign keys into SQLite and evidence deep-links resolve.
+ * (Sending raw `{text}` would make FastAPI re-chunk and emit `chunk-N` ids that
+ * point at non-existent SQLite rows — broken deep-links / FK violations.)
+ *
+ * The FastAPI endpoint is backwards-compatible: callers that still send only
+ * `{text}` get the auto-chunk path.
+ *
+ * THROWS on non-2xx or network error. The upload route wraps this in a
+ * try/catch so a FastAPI outage degrades gracefully (SQLite chunks are the
+ * source of truth; the app stays usable on the keyword path).
+ *
+ * NOTE: the in-memory VectorStore is ephemeral — a FastAPI restart loses all
+ * ingested chunks. Re-ingestion on restart is needed when pgvector lands.
+ * // TODO(sprint-pgvector): re-ingest existing PdfChunk rows on FastAPI boot.
+ */
+export async function ingestToVectorStore(
+  projectId: string,
+  pdfId: string,
+  chunks: IngestChunk[],
+): Promise<VectorIngestResult> {
+  const res = await fetch(`${fastApiUrl()}/api/rag/ingest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      project_id: projectId,
+      pdf_id: pdfId,
+      chunks,
+    }),
+  })
+  if (!res.ok) {
+    throw new Error(`FastAPI ingest failed: ${res.status}`)
+  }
+  const data = (await res.json()) as {
+    chunks: Array<{ chunk_id: string; chunk_index: number; page_approx: number }>
+  }
+  return {
+    chunkIds: data.chunks.map((c) => c.chunk_id),
+    count: data.chunks.length,
+  }
+}
+
+/**
  * Stream an engine intervention from the FastAPI service as an async iterator
  * of typed SSE events (PRODUCT.md §12.3).
  *

@@ -13,7 +13,7 @@
  * citation route uses; the gateway is only invoked when the flag is on.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { retrieveVectorChunks } from '@/lib/ai-gateway'
+import { retrieveVectorChunks, ingestToVectorStore, type IngestChunk } from '@/lib/ai-gateway'
 import type { RetrievedChunk } from '@/lib/retrieval'
 
 function mockJsonResponse(body: unknown, ok = true, status = 200) {
@@ -90,6 +90,67 @@ describe('retrieveVectorChunks', () => {
     fetchMock.mockResolvedValue(mockJsonResponse({ passages: [] }))
     await retrieveVectorChunks('p1', 'claim')
     expect(fetchMock.mock.calls[0][0]).toBe('http://rag.svc.internal:9000/api/rag/retrieve')
+  })
+})
+
+describe('ingestToVectorStore', () => {
+  const chunks: IngestChunk[] = [
+    { content: 'first passage', chunk_id: 'cuid-aaa', page_approx: 1 },
+    { content: 'second passage', chunk_id: 'cuid-bbb', page_approx: 1 },
+  ]
+
+  it('POSTs explicit chunks to /api/rag/ingest with aligned chunk ids', async () => {
+    fetchMock.mockResolvedValue(
+      mockJsonResponse({
+        chunks: [
+          { chunk_id: 'cuid-aaa', chunk_index: 0, page_approx: 1 },
+          { chunk_id: 'cuid-bbb', chunk_index: 1, page_approx: 1 },
+        ],
+      }),
+    )
+    const res = await ingestToVectorStore('p1', 'pdf-1', chunks)
+
+    expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:8000/api/rag/ingest')
+    const init = fetchMock.mock.calls[0][1]
+    expect(init.method).toBe('POST')
+    // Option A: the BFF owns content + ids; FastAPI stores them verbatim.
+    expect(JSON.parse(init.body)).toEqual({
+      project_id: 'p1',
+      pdf_id: 'pdf-1',
+      chunks: [
+        { content: 'first passage', chunk_id: 'cuid-aaa', page_approx: 1 },
+        { content: 'second passage', chunk_id: 'cuid-bbb', page_approx: 1 },
+      ],
+    })
+    // The returned ids must round-trip verbatim (SQLite-alignment contract).
+    expect(res.chunkIds).toEqual(['cuid-aaa', 'cuid-bbb'])
+    expect(res.count).toBe(2)
+  })
+
+  it('parses the response into a typed { chunkIds, count } result', async () => {
+    fetchMock.mockResolvedValue(
+      mockJsonResponse({
+        chunks: [
+          { chunk_id: 'x1', chunk_index: 0, page_approx: 2 },
+          { chunk_id: 'x2', chunk_index: 1, page_approx: 4 },
+          { chunk_id: 'x3', chunk_index: 2, page_approx: 6 },
+        ],
+      }),
+    )
+    const res = await ingestToVectorStore('p1', 'pdf-1', chunks)
+    expect(res).toEqual({ chunkIds: ['x1', 'x2', 'x3'], count: 3 })
+  })
+
+  it('throws on non-2xx so the route layer can catch and degrade gracefully', async () => {
+    fetchMock.mockResolvedValue(mockJsonResponse({ detail: 'boom' }, false, 500))
+    await expect(ingestToVectorStore('p1', 'pdf-1', chunks)).rejects.toThrow(/ingest/i)
+  })
+
+  it('uses FASTAPI_URL from env', async () => {
+    process.env.FASTAPI_URL = 'http://rag.svc.internal:9000'
+    fetchMock.mockResolvedValue(mockJsonResponse({ chunks: [] }))
+    await ingestToVectorStore('p1', 'pdf-1', [])
+    expect(fetchMock.mock.calls[0][0]).toBe('http://rag.svc.internal:9000/api/rag/ingest')
   })
 })
 

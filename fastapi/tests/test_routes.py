@@ -75,6 +75,64 @@ class TestRagIngest:
         r = client.post("/api/rag/ingest", json={"pdf_id": "pdf-1"})
         assert r.status_code == 422
 
+    def test_explicit_chunks_stored_verbatim(self, client: TestClient):
+        """When `chunks` is sent, those ids + contents are stored verbatim —
+        the BFF is the source of truth so FastAPI does NOT re-chunk. This keeps
+        FastAPI chunk ids == SQLite PdfChunk.id (cuids)."""
+        r = client.post(
+            "/api/rag/ingest",
+            json={
+                "pdf_id": "pdf-1",
+                "project_id": "p1",
+                "chunks": [
+                    {"content": "First passage about neural nets.", "chunk_id": "cuid-aaa"},
+                    {"content": "Second passage about gradient descent.", "chunk_id": "cuid-bbb"},
+                ],
+            },
+        )
+        assert r.status_code == 200
+        out = r.json()["chunks"]
+        assert [c["chunk_id"] for c in out] == ["cuid-aaa", "cuid-bbb"]
+
+    def test_explicit_chunk_ids_round_trip_through_retrieve(self, client: TestClient):
+        """The stored cuid-style ids must come back verbatim on retrieve, so
+        the Citation Sentinel's evidence deep-links resolve to SQLite rows."""
+        client.post(
+            "/api/rag/ingest",
+            json={
+                "pdf_id": "pdf-1",
+                "project_id": "p1",
+                "chunks": [
+                    {"content": "Neural networks learn via backpropagation.", "chunk_id": "cuid-neural"},
+                    {"content": "Totally unrelated filler about pasta.", "chunk_id": "cuid-other"},
+                ],
+            },
+        )
+        r = client.post(
+            "/api/rag/retrieve",
+            json={"claim": "neural networks", "project_id": "p1", "top_k": 5},
+        )
+        ids = {p["chunk_id"] for p in r.json()["passages"]}
+        assert "cuid-neural" in ids
+
+    def test_text_only_call_still_autogenerates_ids_back_compat(self, client: TestClient):
+        """Existing callers that send only {text} must keep working: the
+        endpoint chunks the text and auto-generates chunk-<n> ids."""
+        r = client.post(
+            "/api/rag/ingest",
+            json={"pdf_id": "pdf-1", "project_id": "p1", "text": "Some paragraph.\n\nAnother."},
+        )
+        assert r.status_code == 200
+        for c in r.json()["chunks"]:
+            assert c["chunk_id"].startswith("chunk-")
+
+    def test_neither_text_nor_chunks_is_422(self, client: TestClient):
+        """At least one of text/chunks must be supplied."""
+        r = client.post(
+            "/api/rag/ingest", json={"pdf_id": "pdf-1", "project_id": "p1"},
+        )
+        assert r.status_code == 422
+
 
 class TestRagRetrieve:
     def test_retrieves_relevant_passages(self, ingested_client: TestClient):

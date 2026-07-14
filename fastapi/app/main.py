@@ -15,7 +15,7 @@ from dataclasses import asdict
 from typing import Optional
 
 from fastapi import FastAPI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.chunker import chunk_text
 from app.embedder import HashingEmbedder, Embedder
@@ -23,10 +23,31 @@ from app.verdict import Verdict, classify_verdict
 from app.vector_store import VectorStore, VectorStoreBase
 
 
+class IngestChunkIn(BaseModel):
+    """A pre-chunked passage supplied by the BFF.
+
+    When the BFF sends explicit `chunks`, it owns both the content and the
+    chunk_id — so FastAPI does NOT re-chunk and the stored ids are verbatim
+    the SQLite PdfChunk.id (cuids). This keeps the Citation Sentinel's evidence
+    deep-links (InterventionEvidence.chunkId) resolvable back to SQLite rows.
+    """
+
+    content: str
+    chunk_id: str
+    page_approx: int | None = None
+
+
 class IngestRequest(BaseModel):
     pdf_id: str
     project_id: str
-    text: str
+    text: str | None = None
+    chunks: list[IngestChunkIn] | None = None
+
+    @model_validator(mode="after")
+    def _require_text_or_chunks(self) -> "IngestRequest":
+        if self.text is None and self.chunks is None:
+            raise ValueError("either text or chunks must be provided")
+        return self
 
 
 class IngestChunkOut(BaseModel):
@@ -112,6 +133,31 @@ def create_app(
 
     @app.post("/api/rag/ingest", response_model=IngestResponse)
     def rag_ingest(req: IngestRequest):
+        if req.chunks is not None:
+            # The BFF is the source of truth: it chunked the PDF itself and
+            # owns the SQLite PdfChunk.id (cuids). Store them verbatim so the
+            # vector-store chunk ids match SQLite exactly — evidence deep-links
+            # (InterventionEvidence.chunkId) resolve back to real rows.
+            page_approxs = [c.page_approx for c in req.chunks]
+            stored = store.ingest(
+                project_id=req.project_id,
+                pdf_id=req.pdf_id,
+                chunks_text=[c.content for c in req.chunks],
+                chunk_ids=[c.chunk_id for c in req.chunks],
+            )
+            return IngestResponse(
+                chunks=[
+                    IngestChunkOut(
+                        chunk_id=s.chunk_id,
+                        chunk_index=i,
+                        page_approx=pp if pp is not None else s.page_approx,
+                    )
+                    for i, (s, pp) in enumerate(zip(stored, page_approxs))
+                ]
+            )
+        # Back-compat path: a caller that sends only {text} gets FastAPI's own
+        # chunker. Auto-generated chunk-<n> ids (NOT aligned to SQLite).
+        assert req.text is not None  # the model validator guarantees text or chunks
         chunks = chunk_text(req.text)
         stored = store.ingest(
             project_id=req.project_id,

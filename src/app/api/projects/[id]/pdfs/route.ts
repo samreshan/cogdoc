@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 import { chunkText } from '@/lib/retrieval'
+import { ingestToVectorStore } from '@/lib/ai-gateway'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -109,6 +110,44 @@ export async function POST(
 
   await db.pdf.update({ where: { id: pdf.id }, data: { parseStatus: 'ready' } })
 
+  // Push the new chunks into the FastAPI vector store so vector retrieval has
+  // something to retrieve against when USE_VECTOR_RETRIEVAL is on. SQLite is
+  // the source of truth; this push is best-effort and MUST NOT fail the upload
+  // — if FastAPI is down the keyword retrieval path keeps the app usable.
+  //
+  // We always push (not only when useVectorRetrieval() is true) so the store is
+  // warm the moment the flag flips — consistent with how retrieveVectorChunks
+  // is gated (the retrieve side only reads the flag, never the ingest side).
+  let vectorIngest: 'ok' | 'skipped' | 'failed' = 'ok'
+  try {
+    // createMany doesn't return inserted rows, so read the ids back to align
+    // FastAPI's vector-store chunk ids with the SQLite PdfChunk.id (cuids).
+    // DESIGN DECISION (task spec option A): FastAPI stores these ids verbatim,
+    // so retrieved evidence chunk_ids are real FKs into SQLite and deep-links
+    // resolve. See ingestToVectorStore() in ai-gateway.ts for the full rationale.
+    const inserted = await db.pdfChunk.findMany({
+      where: { pdfId: pdf.id },
+      select: { id: true, chunkIndex: true, content: true, pageApprox: true },
+      orderBy: { chunkIndex: 'asc' },
+    })
+    if (inserted.length > 0) {
+      await ingestToVectorStore(
+        projectId,
+        pdf.id,
+        inserted.map((c) => ({ content: c.content, chunk_id: c.id, page_approx: c.pageApprox })),
+      )
+    } else {
+      vectorIngest = 'skipped'
+    }
+  } catch (err) {
+    // FastAPI unreachable or non-2xx — log with context, keep going.
+    console.warn(
+      `[pdfs] vector ingest failed for pdf=${pdf.id} project=${projectId}:`,
+      (err as Error).message,
+    )
+    vectorIngest = 'failed'
+  }
+
   return NextResponse.json({
     pdf: {
       id: pdf.id,
@@ -117,6 +156,7 @@ export async function POST(
       parseStatus: 'ready',
       chunkCount: chunks.length,
     },
+    vectorIngest,
   }, { status: 201 })
 }
 

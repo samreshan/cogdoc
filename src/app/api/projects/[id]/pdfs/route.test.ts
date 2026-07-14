@@ -12,7 +12,7 @@ vi.mock('@/lib/db', () => ({
   db: {
     project: { findUnique: vi.fn() },
     pdf: { create: vi.fn(), update: vi.fn(), findMany: vi.fn() },
-    pdfChunk: { createMany: vi.fn() },
+    pdfChunk: { createMany: vi.fn(), findMany: vi.fn() },
   },
 }))
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn() }))
@@ -25,13 +25,29 @@ const findUnique = db.project.findUnique as ReturnType<typeof vi.fn>
 const pdfCreate = db.pdf.create as ReturnType<typeof vi.fn>
 const pdfUpdate = db.pdf.update as ReturnType<typeof vi.fn>
 const chunkCreateMany = db.pdfChunk.createMany as ReturnType<typeof vi.fn>
+const chunkFindMany = db.pdfChunk.findMany as ReturnType<typeof vi.fn>
 const pdfFindMany = db.pdf.findMany as ReturnType<typeof vi.fn>
 const getUser = getDefaultUser as ReturnType<typeof vi.fn>
 
+let fetchMock: ReturnType<typeof vi.fn>
+
 beforeEach(() => {
   findUnique.mockReset(); pdfCreate.mockReset(); pdfUpdate.mockReset()
-  chunkCreateMany.mockReset(); pdfFindMany.mockReset(); getUser.mockReset()
+  chunkCreateMany.mockReset(); chunkFindMany.mockReset(); pdfFindMany.mockReset()
+  getUser.mockReset()
   getUser.mockResolvedValue({ id: 'u1' })
+  // Default: no inserted chunks read back → ingest skipped cleanly. Tests that
+  // exercise the ingest path override this with real chunk rows.
+  chunkFindMany.mockResolvedValue([])
+
+  // Default FastAPI ingest mock: succeed and round-trip the ids we sent.
+  // Per-call tests override this. Set globally so NO test makes a real call.
+  fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ chunks: [] }),
+  } as unknown as Response)
+  globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch
 })
 
 function ctx(id: string) {
@@ -71,6 +87,74 @@ describe('POST /api/projects/[id]/pdfs (text paste via JSON)', () => {
     expect(chunkCreateMany).toHaveBeenCalled()
     // final status update to ready
     expect(pdfUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { parseStatus: 'ready' } }))
+  })
+})
+
+describe('POST /api/projects/[id]/pdfs — FastAPI vector ingest', () => {
+  function jsonReq(id: string, body: unknown) {
+    return new NextRequest(`http://localhost/api/projects/${id}/pdfs`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    })
+  }
+
+  it('pushes newly-created chunks to FastAPI with aligned SQLite chunk ids', async () => {
+    findUnique.mockResolvedValue({ id: 'p1' })
+    pdfCreate.mockResolvedValue({ id: 'pdf-1', filename: 't.txt', sizeBytes: 100 })
+    // The route reads back the freshly-inserted PdfChunk rows to get their ids.
+    chunkFindMany.mockResolvedValue([
+      { id: 'cuid-aaa', chunkIndex: 0, content: 'first', pageApprox: 1 },
+      { id: 'cuid-bbb', chunkIndex: 1, content: 'second', pageApprox: 1 },
+    ])
+    fetchMock.mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ chunks: [
+        { chunk_id: 'cuid-aaa', chunk_index: 0, page_approx: 1 },
+        { chunk_id: 'cuid-bbb', chunk_index: 1, page_approx: 1 },
+      ] }),
+    } as unknown as Response)
+
+    const res = await POST(jsonReq('p1', { text: 'A'.repeat(100), filename: 'n.txt' }), ctx('p1'))
+    expect(res.status).toBe(201)
+
+    // The ingest call hit FastAPI ingest with explicit chunks carrying the
+    // SQLite PdfChunk.id values (NOT chunk-N auto-ids) — the alignment contract.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('http://localhost:8000/api/rag/ingest')
+    const sentBody = JSON.parse(init.body)
+    expect(sentBody.project_id).toBe('p1')
+    expect(sentBody.pdf_id).toBe('pdf-1')
+    expect(sentBody.chunks.map((c: { chunk_id: string }) => c.chunk_id)).toEqual(['cuid-aaa', 'cuid-bbb'])
+
+    const body = await res.json()
+    expect(body.vectorIngest).toBe('ok')
+  })
+
+  it('returns 201 with vectorIngest:"failed" when FastAPI is unreachable, SQLite intact', async () => {
+    findUnique.mockResolvedValue({ id: 'p1' })
+    pdfCreate.mockResolvedValue({ id: 'pdf-1', filename: 't.txt', sizeBytes: 100 })
+    chunkFindMany.mockResolvedValue([{ id: 'cuid-x', chunkIndex: 0, content: 'first', pageApprox: 1 }])
+    // FastAPI rejects — must degrade gracefully, upload still succeeds.
+    fetchMock.mockResolvedValue({ ok: false, status: 503, json: async () => ({}) } as unknown as Response)
+
+    const res = await POST(jsonReq('p1', { text: 'A'.repeat(100), filename: 'n.txt' }), ctx('p1'))
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.pdf.parseStatus).toBe('ready')
+    expect(body.vectorIngest).toBe('failed')
+    // SQLite chunks were still created.
+    expect(chunkCreateMany).toHaveBeenCalled()
+  })
+
+  it('returns 201 with vectorIngest:"failed" when fetch throws (network down)', async () => {
+    findUnique.mockResolvedValue({ id: 'p1' })
+    pdfCreate.mockResolvedValue({ id: 'pdf-1', filename: 't.txt', sizeBytes: 100 })
+    chunkFindMany.mockResolvedValue([{ id: 'cuid-x', chunkIndex: 0, content: 'first', pageApprox: 1 }])
+    fetchMock.mockRejectedValue(new Error('ECONNREFUSED'))
+
+    const res = await POST(jsonReq('p1', { text: 'A'.repeat(100), filename: 'n.txt' }), ctx('p1'))
+    expect(res.status).toBe(201)
+    expect((await res.json()).vectorIngest).toBe('failed')
   })
 })
 
