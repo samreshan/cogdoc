@@ -52,6 +52,10 @@ interface CogdocState {
   // Friction calibration (PRODUCT.md §9): socratic | coach | assistant
   frictionMode: FrictionMode
   setFrictionMode: (m: FrictionMode) => void
+
+  // Blindspot Monitor anti-fatigue: max one [Lens] per session (§7.2)
+  blindspotShownThisSession: boolean
+  markBlindspotShown: () => void
 }
 
 export const useCogdoc = create<CogdocState>((set) => ({
@@ -64,6 +68,7 @@ export const useCogdoc = create<CogdocState>((set) => ({
       activeProject: p,
       activeInterventions: [],
       hoveredSentenceKey: null,
+      blindspotShownThisSession: false,
     }),
   updateActiveProjectContent: (content, lastSaved) =>
     set((s) => {
@@ -116,4 +121,7 @@ export const useCogdoc = create<CogdocState>((set) => ({
 
   frictionMode: 'socratic',
   setFrictionMode: (m) => set({ frictionMode: m }),
+
+  blindspotShownThisSession: false,
+  markBlindspotShown: () => set({ blindspotShownThisSession: true }),
 }))

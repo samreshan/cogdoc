@@ -30,6 +30,7 @@ export function fakeAI(overrides: Partial<AIService> = {}): AIService {
       unsupported_claims: [],
     }),
     generateScaffold: async () => ({ scaffold: 'Claim: __', raw: 'Claim: __' }),
+    generateSuggestion: async () => ({ suggestion: 'a short phrase', raw: 'a short phrase' }),
     ...overrides,
   }
 }

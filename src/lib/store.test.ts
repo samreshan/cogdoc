@@ -58,6 +58,7 @@ beforeEach(() => {
     engineLoading: { socratic: false, interceptor: false, citation: false, scaffold: false },
     focusMode: false,
     frictionMode: 'socratic',
+    blindspotShownThisSession: false,
   })
 })
 
@@ -162,6 +163,23 @@ describe('friction mode', () => {
     useCogdoc.getState().setFrictionMode('assistant')
     useCogdoc.getState().setActiveProject(makeProject({ id: 'p2' }))
     expect(useCogdoc.getState().frictionMode).toBe('assistant')
+  })
+})
+
+describe('blindspot session flag (§7.2 anti-fatigue)', () => {
+  it('defaults to not-shown', () => {
+    expect(useCogdoc.getState().blindspotShownThisSession).toBe(false)
+  })
+
+  it('marks shown and stays shown within the session', () => {
+    useCogdoc.getState().markBlindspotShown()
+    expect(useCogdoc.getState().blindspotShownThisSession).toBe(true)
+  })
+
+  it('resets to not-shown on project switch (one per session per project)', () => {
+    useCogdoc.getState().markBlindspotShown()
+    useCogdoc.getState().setActiveProject(makeProject({ id: 'p2' }))
+    expect(useCogdoc.getState().blindspotShownThisSession).toBe(false)
   })
 })
 

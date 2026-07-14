@@ -38,11 +38,17 @@ export interface ScaffoldResult {
   raw: string
 }
 
+export interface SuggestionResult {
+  suggestion: string
+  raw: string
+}
+
 export interface AIService {
   classifyPrompt(prompt: string, context: string): Promise<ClassifyResult>
   generateSocratic(tag: BehaviourTag, context: string, stub?: string, prompt?: string): Promise<SocraticResponse>
   verifyClaim(claim: string, evidence: { chunkId: string; content: string }[]): Promise<VerdictResult>
   generateScaffold(prompt: string, context: string): Promise<ScaffoldResult>
+  generateSuggestion(draft: string): Promise<SuggestionResult>
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -231,6 +237,20 @@ export class ZAIAdapter implements AIService {
     const filled = fillTemplate(template, { prompt, context, stub: '', evidence: '', claim: '' })
     const raw = await callLLM(filled)
     return { scaffold: raw, raw }
+  }
+
+  async generateSuggestion(draft: string): Promise<SuggestionResult> {
+    // Devil's Autocomplete (§7.1): a short continuation phrase shown as ghost
+    // text. The prompt is intentionally minimal — sanitizeSuggestion caps the
+    // output at ≤12 words and a single sentence, so the model can't generate
+    // prose here. No PromptTemplate row is needed for this lightweight call.
+    const systemPrompt =
+      'You are a Devil\'s Autocomplete. Continue the writer\'s draft with a ' +
+      'SHORT phrase (at most 8 words, no full sentence). Do not write prose. ' +
+      'Return ONLY the continuation words, nothing else.\n\nDraft: ' +
+      draft.slice(-400)
+    const raw = await callLLM(systemPrompt)
+    return { suggestion: raw.trim(), raw }
   }
 }
 

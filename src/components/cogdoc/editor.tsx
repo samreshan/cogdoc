@@ -5,6 +5,7 @@ import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
 import { analyzeSentence, extractLastSentence, ENGINE_COOLDOWNS } from '@/lib/content-analyzer'
 import { getCooldown } from '@/lib/friction'
+import { useDevilsAutocomplete } from '@/lib/use-devils-autocomplete'
 import { highlightSentences } from '@/lib/sentence-highlight'
 import type { EngineType, Intervention } from '@/lib/types'
 import { Button } from '@/components/ui/button'
@@ -50,6 +51,8 @@ export default function Editor() {
   const focusMode = useCogdoc((s) => s.focusMode)
   const setHovered = useCogdoc((s) => s.setHovered)
   const frictionMode = useCogdoc((s) => s.frictionMode)
+  const blindspotShown = useCogdoc((s) => s.blindspotShownThisSession)
+  const markBlindspotShown = useCogdoc((s) => s.markBlindspotShown)
 
   const editorRef = useRef<HTMLDivElement>(null)
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -66,6 +69,11 @@ export default function Editor() {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(
     project?.document?.lastSaved ?? null,
   )
+
+  // Devil's Autocomplete ghost-text state (§7.1). The hook is isolated so the
+  // Tiptap port (Phase 5) swaps only the rendering layer (a Decoration), not
+  // the commit-mechanic logic. Fetches a short continuation as the user writes.
+  const autocomplete = useDevilsAutocomplete(frictionMode)
 
   // Load initial content
   useEffect(() => {
@@ -185,6 +193,26 @@ export default function Editor() {
     [project, pushIntervention, setEngineLoading, bumpAnalytics, frictionMode],
   )
 
+  // ── Blindspot Monitor (§7.2) ───────────────────────────────────────────
+  // Surfaces ONE overlooked library passage per session (anti-fatigue). Fires
+  // after the user completes a substantial paragraph, once per project session.
+  const checkBlindspot = useCallback(
+    (draft: string) => {
+      if (!project || blindspotShown) return
+      if (draft.split(/\s+/).filter(Boolean).length < 30) return // need real draft
+      api.blindspot(project.id, draft)
+        .then((res) => {
+          if (res.blindspot && res.intervention) {
+            pushIntervention(res.intervention)
+            bumpAnalytics()
+            markBlindspotShown()
+          }
+        })
+        .catch(() => {})
+    },
+    [project, blindspotShown, pushIntervention, bumpAnalytics, markBlindspotShown],
+  )
+
   // Idle detector — fires Socratic Spacer after 2s of no input
   const resetIdleTimer = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
@@ -209,10 +237,21 @@ export default function Editor() {
     resetIdleTimer()
     scheduleHighlight()
 
-    // Sentence completion: `.`, `?`, `!` as the last typed character
     const text = htmlToText(html)
-    const lastChar = text.trim().slice(-1)
-    if (lastChar === '.' || lastChar === '?' || lastChar === '!') {
+
+    // Devil's Autocomplete (§7.1): if a ghost is showing, try to commit the
+    // typed char; otherwise debounce-load a new suggestion as the user writes.
+    const lastChar = text.slice(-1)
+    if (autocomplete.suggestion && lastChar) {
+      autocomplete.typeCommit(lastChar)
+    } else if (project && text.length > 0 && text.length % 8 === 0) {
+      // Lightweight debounce-by-growth: load a new suggestion periodically.
+      autocomplete.load(project.id, text).catch(() => {})
+    }
+
+    // Sentence completion: `.`, `?`, `!` as the last typed character
+    const endChar = text.trim().slice(-1)
+    if (endChar === '.' || endChar === '?' || endChar === '!') {
       const sentence = extractLastSentence(text)
       if (sentence.split(/\s+/).length >= 4) {
         const { context } = extractContext(html)
@@ -230,7 +269,7 @@ export default function Editor() {
 
   // Handle keyboard shortcuts
   function handleKeyDown(e: React.KeyboardEvent) {
-    // Enter → paragraph completion (Scaffold)
+    // Enter → paragraph completion (Scaffold) + Blindspot check (one per session)
     if (e.key === 'Enter' && !e.shiftKey) {
       setTimeout(() => {
         if (!editorRef.current) return
@@ -239,8 +278,17 @@ export default function Editor() {
         if (paras.length >= 2 && paras[paras.length - 1].length < 10 && paras[paras.length - 2].length > 50) {
           const { context } = extractContext(editorRef.current.innerHTML)
           fireEngine('scaffold', '', context, 'paragraph_complete')
+          // Blindspot: check the full draft for overlooked passages, once/session.
+          checkBlindspot(text)
         }
       }, 50)
+    }
+
+    // Tab → Devil's Autocomplete accept (mode-gated; socratic/coach reject)
+    if (e.key === 'Tab' && autocomplete.suggestion) {
+      e.preventDefault()
+      autocomplete.tabAccept()
+      return
     }
 
     // Cmd/Ctrl+B → bold, Cmd/Ctrl+I → italic, Cmd/Ctrl+U → underline
@@ -383,6 +431,24 @@ export default function Editor() {
             }}
             data-placeholder="Start writing here. Cogdoc analyzes every sentence — interventions appear as underlines you can hover to read."
           />
+          {/* Devil's Autocomplete ghost text (§7.1). Shown inline beneath the
+              caret line as greyed text. The commit mechanic is mode-gated:
+              socratic/coach must type each char (Tab is rejected); assistant
+              allows Tab-accept. Phase 5 ports this to a Tiptap Decoration. */}
+          {autocomplete.suggestion && (
+            <div
+              className="max-w-[680px] mx-auto -mt-2 pointer-events-none select-none"
+              style={{ fontFamily: 'var(--font-newsreader), Georgia, serif', fontSize: '18px', lineHeight: 1.8 }}
+              aria-label="autocomplete suggestion"
+            >
+              <span style={{ color: '#b8b0a4' }}>
+                {autocomplete.suggestion}
+              </span>
+              <span className="ml-2 text-[10px] text-stone-400 align-middle">
+                {frictionMode === 'assistant' ? 'Tab to accept' : 'type to continue'}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

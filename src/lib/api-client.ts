@@ -166,4 +166,22 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ frictionMode }),
     }),
+
+  // Experimental engines (§7)
+  autocomplete: (
+    projectId: string, draft: string,
+    paragraphId?: string, frictionMode?: 'socratic' | 'coach' | 'assistant',
+  ) =>
+    jsonFetch<{ suggestion: string; intervention?: Intervention }>('/api/autocomplete', {
+      method: 'POST',
+      body: JSON.stringify({ projectId, draft, paragraphId, friction_mode: frictionMode }),
+    }),
+  blindspot: (projectId: string, draft: string) =>
+    jsonFetch<{
+      blindspot: { chunkId: string; text: string; relevance: number } | null
+      intervention?: Intervention
+    }>('/api/blindspot', {
+      method: 'POST',
+      body: JSON.stringify({ projectId, draft }),
+    }),
 }
