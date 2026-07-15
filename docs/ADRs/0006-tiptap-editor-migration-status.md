@@ -1,6 +1,14 @@
 # ADR-0006: Tiptap editor migration — extensions built, surface swap deferred
 
-**Date:** 2026-07-10 · **Sprint:** 2 (Stream C) · **Status:** Accepted (partial)
+**Date:** 2026-07-10 · **Sprint:** 2 (Stream C) · **Status:** Closed (P5)
+
+> **P5 close-out (2026-07-15):** the surface swap landed. `editor-tiptap.tsx`
+> is the ProseMirror-based editor behind `NEXT_PUBLIC_USE_TIPTAP_EDITOR`; the
+> legacy contentEditable editor remains the default fallback. The idle threshold
+> is now the spec-correct 45s (friction-scaled via `idleThresholdForMode`),
+> `Document.content` migrates HTML→ProseMirror JSON (ADR-0009), and
+> `engine-characters.tsx` is re-included in coverage. All three follow-up items
+> below are complete. See ADR-0009 for the content-migration rationale.
 
 ## Context
 
