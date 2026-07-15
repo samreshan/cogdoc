@@ -9,8 +9,9 @@ that implements the same VectorStoreBase interface.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Optional, Protocol
 
 from app.embedder import Embedder, cosine_similarity
 
@@ -120,3 +121,138 @@ class VectorStore:
 
     def list_chunks(self, project_id: str) -> list[StoredChunk]:
         return list(self._store.get(project_id, []))
+
+
+class PgvectorStore:
+    """pgvector-backed VectorStoreBase (production adapter, ADR-0008).
+
+    Implements the SAME ingest/retrieve/list_chunks interface as the in-memory
+    VectorStore so the FastAPI endpoints are provider-blind. Vectors are stored
+    in a `pdf_chunks.embedding vector(<dim>)` column; retrieval uses pgvector's
+    cosine distance operator `<=>` with a project-scoped WHERE clause (retrieval
+    never leaks across users/projects).
+
+    psycopg is imported lazily (only when a real connection is needed) so the
+    hermetic test path (mocked connection) and the in-memory default don't pull
+    in the dependency. The migration adding the vector column + HNSW index is a
+    raw SQL migration (Prisma's vector support is limited — see ADR-0008).
+    """
+
+    def __init__(
+        self,
+        connection: Optional[Any] = None,
+        embedder: Optional[Embedder] = None,
+        autocommit: bool = False,
+    ):
+        if embedder is None:
+            raise ValueError("PgvectorStore requires an embedder")
+        self.embedder = embedder
+        self._autocommit = autocommit
+        if connection is None:
+            # Lazily connect using SUPABASE_DB_URL (lazy import so tests without
+            # psycopg + the in-memory default path never need the dependency).
+            import psycopg  # noqa: F401  (imported for the side effect / availability check)
+
+            db_url = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
+            if not db_url:
+                raise ValueError("PgvectorStore needs SUPABASE_DB_URL or DATABASE_URL")
+            connection = psycopg.connect(db_url, autocommit=autocommit)
+        self._connection = connection
+
+    def ingest(
+        self,
+        project_id: str,
+        pdf_id: str,
+        chunks_text: list[str],
+        chunk_ids: Optional[list[str]] = None,
+    ) -> list[StoredChunk]:
+        if chunk_ids is not None and len(chunk_ids) != len(chunks_text):
+            raise ValueError("chunk_ids length must match chunks_text length")
+        stored: list[StoredChunk] = []
+        with self._connection.cursor() as cur:
+            for i, text in enumerate(chunks_text):
+                cid = chunk_ids[i] if chunk_ids else f"chunk-{i+1}"
+                vec = self.embedder.embed(text)
+                # store the vector as a string literal pgvector parses: '[v1,v2,...]'
+                vec_lit = "[" + ",".join(str(float(v)) for v in vec) + "]"
+                cur.execute(
+                    """
+                    INSERT INTO "PdfChunk" (id, "pdfId", content, "charCount",
+                                            "pageApprox", "projectId", embedding)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (cid, pdf_id, text, len(text), i + 1, project_id, vec_lit),
+                )
+                stored.append(
+                    StoredChunk(
+                        chunk_id=cid,
+                        pdf_id=pdf_id,
+                        content=text,
+                        page_approx=i + 1,
+                        embedding=vec,
+                    )
+                )
+        if self._autocommit is False:
+            self._connection.commit()
+        return stored
+
+    def retrieve(
+        self,
+        project_id: str,
+        query: str,
+        top_k: int = 5,
+        min_score: float = 0.05,
+    ) -> list[RetrievedChunk]:
+        query_vec = self.embedder.embed(query)
+        vec_lit = "[" + ",".join(str(float(v)) for v in query_vec) + "]"
+        with self._connection.cursor() as cur:
+            # cosine DISTANCE is 1 - cosine_similarity, so the score floor maps
+            # to a distance ceiling (1 - min_score). ORDER BY distance ASC.
+            cur.execute(
+                """
+                SELECT id, "pdfId", content, "pageApprox",
+                       1 - (embedding <=> %s::vector) AS score,
+                       "pdfFilename"
+                FROM "PdfChunk"
+                WHERE "projectId" = %s
+                  AND 1 - (embedding <=> %s::vector) >= %s
+                ORDER BY embedding <=> %s::vector
+                LIMIT %s
+                """,
+                (vec_lit, project_id, vec_lit, min_score, vec_lit, top_k),
+            )
+            rows = cur.fetchall()
+        return [
+            RetrievedChunk(
+                chunk_id=r[0],
+                pdf_id=r[1],
+                content=r[2],
+                page_approx=r[3],
+                similarity_score=float(r[4]),
+                pdf_filename=r[5] if r[5] else r[1],
+            )
+            for r in rows
+        ]
+
+    def list_chunks(self, project_id: str) -> list[StoredChunk]:
+        with self._connection.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, "pdfId", content, "pageApprox", embedding
+                FROM "PdfChunk"
+                WHERE "projectId" = %s
+                """,
+                (project_id,),
+            )
+            rows = cur.fetchall()
+        return [
+            StoredChunk(
+                chunk_id=r[0],
+                pdf_id=r[1],
+                content=r[2],
+                page_approx=r[3],
+                embedding=list(r[4]) if r[4] else [],
+            )
+            for r in rows
+        ]
+

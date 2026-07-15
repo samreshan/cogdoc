@@ -11,8 +11,11 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 import re
 from typing import Protocol, Sequence, runtime_checkable
+
+import httpx
 
 
 @runtime_checkable
@@ -75,4 +78,54 @@ class HashingEmbedder:
 
     def __call__(self, text: str) -> list[float]:
         # Allow use as a plain callable too
+        return self.embed(text)
+
+
+class GeminiEmbedder:
+    """Real-embedding adapter backed by Gemini (gemini-embedding-001, 3072-dim).
+
+    Implements the same Embedder Protocol as HashingEmbedder, so the retrieval
+    layer is provider-blind. Production injects this; tests/offline dev keep
+    HashingEmbedder. The dim MUST match the model output (gemini-embedding-001 =
+    3072); a mismatch raises in cosine_similarity (caught at retrieval time).
+
+    Uses the Generative Language API directly via httpx (no SDK dependency).
+    """
+
+    # gemini-embedding-001 is the generally-available embedding model (the older
+    # text-embedding-004 is deprecated/unavailable for many keys). It emits
+    # 3072-dim vectors.
+    MODEL = "gemini-embedding-001"
+    DEFAULT_DIM = 3072
+    ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
+
+    def __init__(
+        self, api_key: str | None = None, dim: int = DEFAULT_DIM, model: str | None = None, timeout: float = 30.0
+    ):
+        self.api_key = api_key or os.environ.get("GEMINI_API_KEY", "")
+        self.dim = dim
+        self.model = model or self.MODEL
+        self.timeout = timeout
+        if not self.api_key:
+            raise ValueError("GeminiEmbedder requires GEMINI_API_KEY")
+
+    def embed(self, text: str) -> list[float]:
+        url = f"{self.ENDPOINT}/{self.model}:embedContent?key={self.api_key}"
+        resp = httpx.post(
+            url,
+            json={
+                # The API expects a Content object, not a raw string.
+                "content": {"parts": [{"text": text}]},
+                # RETRIEVAL_DOCUMENT for ingest, RETRIEVAL_QUERY for search — the
+                # asymmetry improves retrieval quality. We use DOCUMENT here; the
+                # query side is handled by embed_query if needed.
+                "taskType": "RETRIEVAL_DOCUMENT",
+            },
+            timeout=self.timeout,
+        )
+        resp.raise_for_status()
+        values = resp.json()["embedding"]["values"]
+        return list(values)
+
+    def __call__(self, text: str) -> list[float]:
         return self.embed(text)

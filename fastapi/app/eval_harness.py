@@ -131,9 +131,17 @@ def evaluate_keyword(verdict_provider) -> AblationResult:
     )
 
 
-def run_ablation() -> dict:
-    """Run both retrievers over the ground-truth set and return a comparison."""
-    embedder = HashingEmbedder(dim=256)
+def run_ablation(embedder=None) -> dict:
+    """Run both retrievers over the ground-truth set and return a comparison.
+
+    Args:
+        embedder: an Embedder instance for the vector path. Defaults to
+            HashingEmbedder(dim=256) (the surrogate). Pass a real embedder
+            (e.g. GeminiEmbedder) to re-run the ablation on trained vectors —
+            this converts the headline result from surrogate to real.
+    """
+    if embedder is None:
+        embedder = HashingEmbedder(dim=256)
     store = VectorStore(embedder=embedder)
     # Ingest with explicit chunk_ids so they align with CLAIMS' relevant_ids.
     store.ingest(

@@ -344,3 +344,39 @@ def _heuristic_verdict_provider(claim: str, passages: list[dict]) -> str:
     if best_passage.get("similarity", 0.0) > 0.3:
         return Verdict.PARTIALLY_SUPPORTED.value
     return Verdict.UNSUPPORTED.value
+
+
+def create_app_from_env() -> FastAPI:
+    """Build the app picking embedder + store from environment (ADR-0008).
+
+    Resolution:
+      EMBEDDING_PROVIDER=gemini + GEMINI_API_KEY  → GeminiEmbedder (3072-dim)
+      else                                          → HashingEmbedder (hermetic)
+
+      SUPABASE_DB_URL present + EMBEDDING_PROVIDER=gemini → PgvectorStore
+      else                                                 → in-memory VectorStore
+
+    Production sets EMBEDDING_PROVIDER=gemini + SUPABASE_DB_URL; tests + offline
+    dev leave them unset for the hermetic HashingEmbedder + in-memory path. This
+    is the single env-reading seam in the FastAPI service.
+    """
+    import os
+
+    provider = os.environ.get("EMBEDDING_PROVIDER", "hashing").lower()
+    embedder: Embedder
+    if provider == "gemini" and os.environ.get("GEMINI_API_KEY"):
+        from app.embedder import GeminiEmbedder
+
+        embedder = GeminiEmbedder()
+    else:
+        embedder = HashingEmbedder(dim=768)
+
+    store: Optional[VectorStoreBase]
+    if provider == "gemini" and os.environ.get("SUPABASE_DB_URL"):
+        from app.vector_store import PgvectorStore
+
+        store = PgvectorStore(embedder=embedder, autocommit=True)
+    else:
+        store = VectorStore(embedder=embedder)
+
+    return create_app(embedder=embedder, store=store)

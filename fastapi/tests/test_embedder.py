@@ -5,8 +5,10 @@ The embedder must be provider-agnostic (Gemini/OpenAI/local) so the service
 is testable with a deterministic mock embedder and swappable in production.
 These tests fail until app.embedder is implemented.
 """
+from unittest.mock import patch, MagicMock
+
 import pytest
-from app.embedder import Embedder, cosine_similarity, HashingEmbedder
+from app.embedder import Embedder, cosine_similarity, HashingEmbedder, GeminiEmbedder
 
 
 class TestCosineSimilarity:
@@ -60,3 +62,57 @@ class TestHashingEmbedder:
     def test_implements_embedder_interface(self):
         emb = HashingEmbedder(dim=8)
         assert isinstance(emb, Embedder)
+
+
+class TestGeminiEmbedder:
+    """The real-embedding adapter (text-embedding-004, 768-dim).
+
+    Tests mock the HTTP call so they're hermetic. The adapter POSTs to the
+    Generative Language API, parses the embedding vector, and matches the
+    Embedder Protocol (configurable dim, deterministic on identical input).
+    """
+
+    def _mock_response(self, values):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"embedding": {"values": values}}
+        resp.raise_for_status = MagicMock()
+        return resp
+
+    def test_returns_a_vector_of_the_configured_dimension(self):
+        emb = GeminiEmbedder(api_key="fake-key", dim=3072)
+        with patch("app.embedder.httpx.post", return_value=self._mock_response([0.1] * 3072)) as m:
+            vec = emb.embed("neural networks")
+        assert len(vec) == 3072
+        # the request hit the gemini-embedding model with the key
+        call_url = str(m.call_args[0][0])
+        assert "gemini-embedding" in call_url
+        assert "fake-key" in call_url
+
+    def test_same_text_produces_same_vector_when_api_is_deterministic(self):
+        emb = GeminiEmbedder(api_key="k", dim=8)
+        fixed = self._mock_response([0.5] * 8)
+        with patch("app.embedder.httpx.post", return_value=fixed):
+            assert emb.embed("hello") == emb.embed("hello")
+
+    def test_raises_on_non_200_response(self):
+        emb = GeminiEmbedder(api_key="k", dim=8)
+        bad = MagicMock()
+        bad.status_code = 403
+        bad.raise_for_status.side_effect = Exception("403 Forbidden")
+        with patch("app.embedder.httpx.post", return_value=bad):
+            with pytest.raises(Exception):
+                emb.embed("x")
+
+    def test_implements_embedder_interface(self):
+        emb = GeminiEmbedder(api_key="k", dim=8)
+        assert isinstance(emb, Embedder)
+
+    def test_embed_call_is_passed_the_text_as_content(self):
+        emb = GeminiEmbedder(api_key="k", dim=8)
+        with patch("app.embedder.httpx.post", return_value=self._mock_response([0.0] * 8)) as m:
+            emb.embed("a claim about cats")
+        sent_body = m.call_args[1]["json"]
+        # content is a Content object {parts:[{text}]}, per the API schema
+        assert sent_body["content"]["parts"][0]["text"] == "a claim about cats"
+        assert sent_body["taskType"] == "RETRIEVAL_DOCUMENT"
