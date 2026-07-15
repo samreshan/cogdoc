@@ -162,6 +162,31 @@ describe('requireUserId', () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = savedUrl
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = savedKey
   })
+
+  it('falls back to getDefaultUser when COGDOC_DEV_FALLBACK is set (even if Supabase configured)', async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://x.supabase.co'
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'key'
+    process.env.COGDOC_DEV_FALLBACK = '1'
+    getDefaultUserMock.mockResolvedValue({ id: 'default-user' })
+    const id = await requireUserId(makeReq())
+    expect(id).toBe('default-user')
+    expect(getSessionMock).not.toHaveBeenCalled()
+    delete process.env.COGDOC_DEV_FALLBACK
+  })
+
+  it('IGNORES COGDOC_DEV_FALLBACK in production so prod never silently bypasses auth', async () => {
+    // The dev fallback is local-dev only — it must not work in production even
+    // if the env var is accidentally set. Supabase + production = real auth.
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://x.supabase.co'
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'key'
+    process.env.COGDOC_DEV_FALLBACK = '1'
+    process.env.NODE_ENV = 'production'
+    getSessionMock.mockResolvedValue({ data: { session: null }, error: null })
+    await expect(requireUserId(makeReq())).rejects.toThrow(AuthError)
+    expect(getDefaultUserMock).not.toHaveBeenCalled()
+    delete process.env.COGDOC_DEV_FALLBACK
+    delete process.env.NODE_ENV
+  })
 })
 
 describe('authed (route handler wrapper)', () => {

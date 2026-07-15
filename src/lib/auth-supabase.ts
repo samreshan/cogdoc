@@ -108,16 +108,29 @@ export async function authed(
 /**
  * Resolve the acting user id for a route.
  *
- * - When Supabase auth is configured: requires a valid session (throws 401).
- * - When unconfigured (local dev / tests without env): falls back to the
- *   default user so the gate stays green during the migration and the
- *   characterization tests (which mock getDefaultUser) keep working.
+ * - When Supabase auth is configured AND COGDOC_DEV_FALLBACK is unset (or
+ *   ignored in production): requires a valid session (throws 401).
+ * - When Supabase is unconfigured, OR COGDOC_DEV_FALLBACK is set in NON-
+ *   PRODUCTION local dev: falls back to the default user.
+ *
+ * COGDOC_DEV_FALLBACK is LOCAL-DEV ONLY. It is hard-ignored when NODE_ENV is
+ * 'production' so a stray env var can never silently bypass auth in prod.
+ * It exists because in local dev you set the Supabase env vars (so the login
+ * UI is wired) but aren't logged in yet — without the fallback every route
+ * would 401/500 before you can reach the app. Set it to "1" or "true" in
+ * .env.local to use the default user locally; leave it unset in production.
  *
  * Routes call this instead of getDefaultUser directly. Once the data store
  * moves to Supabase Postgres + RLS, the fallback is removed.
  */
 export async function requireUserId(req: NextRequest): Promise<string> {
-  if (isSupabaseAuthConfigured()) {
+  // The dev fallback is LOCAL-DEV ONLY. It is hard-ignored in production so a
+  // stray COGDOC_DEV_FALLBACK env var can never silently bypass auth there.
+  const isProduction = process.env.NODE_ENV === 'production'
+  const devFallback =
+    !isProduction &&
+    (process.env.COGDOC_DEV_FALLBACK === 'true' || process.env.COGDOC_DEV_FALLBACK === '1')
+  if (isSupabaseAuthConfigured() && !devFallback) {
     return getAuthenticatedUserId(req)
   }
   const user = await getDefaultUser()
