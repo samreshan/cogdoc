@@ -41,12 +41,22 @@ services:
     stdin_open: true   # so the wizard can prompt
     tty: true          # allocate a TTY
     restart: unless-stopped
+    networks:
+      - cogdoc_net
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
+
+networks:
+  cogdoc_net:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+        - subnet: 2001:db8:2::/64
 
 volumes:
   cogdoc_data:

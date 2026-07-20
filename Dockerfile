@@ -65,14 +65,10 @@ COPY --from=builder /app/public ./public
 # Copy Prisma schemas + migrations + seed script
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
-# Copy pdf-parse and its deps (needed at runtime for PDF uploads)
-COPY --from=builder /app/node_modules/pdf-parse ./node_modules/pdf-parse
-COPY --from=builder /app/node_modules/debug ./node_modules/debug
-COPY --from=builder /app/node_modules/ms ./node_modules/ms
+# Full node_modules (standalone output only bundles Next.js server deps;
+# the Prisma CLI and its transitive deps like `effect`/`c12` need the rest).
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy entrypoint + wizard
 COPY entrypoint.sh setup-wizard.sh ./

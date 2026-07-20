@@ -128,17 +128,18 @@ export DATABASE_URL="$DB_URL"
 # ── Step 4: Generate Prisma client for the chosen schema ─────────────────────
 say "${CYAN}Generating Prisma client...${RESET}"
 cd "$APP_DIR"
-npx prisma generate --schema="$SCHEMA_FILE" 2>&1 | tail -5
+PRISMA_BIN="$APP_DIR/node_modules/prisma/build/index.js"
+node "$PRISMA_BIN" generate --schema="$SCHEMA_FILE" 2>&1 | tail -5
 
 # ── Step 5: Push schema to the database ──────────────────────────────────────
 say "${CYAN}Applying schema to database (db push)...${RESET}"
 if [[ "$DB_URL" == file:* ]]; then
   # SQLite — fast, local
-  npx prisma db push --schema="$SCHEMA_FILE" --skip-generate --accept-data-loss 2>&1 | tail -5
+  node "$PRISMA_BIN" db push --schema="$SCHEMA_FILE" --skip-generate --accept-data-loss 2>&1 | tail -5
 else
   # Postgres — may need to wait for it to be ready
   for i in 1 2 3 4 5; do
-    if npx prisma db push --schema="$SCHEMA_FILE" --skip-generate --accept-data-loss 2>&1 | tail -10; then
+    if node "$PRISMA_BIN" db push --schema="$SCHEMA_FILE" --skip-generate --accept-data-loss 2>&1 | tail -10; then
       break
     fi
     say "${YELLOW}Database not ready, retrying in 3s... (${i}/5)${RESET}"
