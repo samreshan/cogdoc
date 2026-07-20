@@ -1,28 +1,27 @@
-// Cogdoc MVP - Prisma schema (SQLite)
-// Mirrors the 3NF data model from the architecture design document.
-// Note: SQLite has no native vector type; the MVP uses keyword-overlap retrieval
-// over PdfChunk.content, simulating the RAG pattern without pgvector.
+// Cogdoc MVP - Prisma schema (PostgreSQL / Supabase)
+// Same data model as schema.prisma (SQLite), but for Postgres-compatible databases.
+// Used by the Docker image when DATABASE_URL points to a Postgres connection string.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  displayName  String?
-  dailyTokenBudget Int @default(100000)
-  frictionMode String   @default("socratic") // socratic | coach | assistant (PRODUCT.md §9)
-  createdAt    DateTime @default(now())
-  lastLogin    DateTime?
-  projects     Project[]
-  interventions Intervention[]
-  pdfs         Pdf[]
+  id              String   @id @default(cuid())
+  email           String   @unique
+  displayName     String?
+  dailyTokenBudget Int    @default(100000)
+  frictionMode    String   @default("socratic") // socratic | coach | assistant (PRODUCT.md §9)
+  createdAt       DateTime @default(now())
+  lastLogin       DateTime?
+  projects        Project[]
+  interventions   Intervention[]
+  pdfs            Pdf[]
 }
 
 model Project {
@@ -37,6 +36,8 @@ model Project {
   document    Document?
   pdfs        Pdf[]
   interventions Intervention[]
+
+  @@index([userId])
 }
 
 model Document {
@@ -59,6 +60,9 @@ model Pdf {
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   chunks       PdfChunk[]
+
+  @@index([projectId])
+  @@index([userId])
 }
 
 model PdfChunk {
@@ -71,6 +75,12 @@ model PdfChunk {
   createdAt    DateTime @default(now())
   pdf          Pdf      @relation(fields: [pdfId], references: [id], onDelete: Cascade)
   evidences    InterventionEvidence[]
+
+  @@index([pdfId])
+  // pgvector column (ADR-0008). Declared Unsupported so `prisma db push`
+  // preserves it; the Prisma client ignores it (reads/writes go through the
+  // FastAPI PgvectorStore). Populated by fastapi/migrations/0001.
+  embedding    Unsupported("vector(3072)")?
 }
 
 model Intervention {
@@ -90,6 +100,10 @@ model Intervention {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   evidences       InterventionEvidence[]
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([createdAt])
 }
 
 model InterventionEvidence {
@@ -100,6 +114,9 @@ model InterventionEvidence {
   citedExcerpt    String
   intervention    Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
   chunk           PdfChunk     @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@index([interventionId])
+  @@index([chunkId])
 }
 
 model PromptTemplate {

@@ -77,7 +77,10 @@ model PdfChunk {
   evidences    InterventionEvidence[]
 
   @@index([pdfId])
-  // For future pgvector: would add `embedding Unsupported("vector")?` here
+  // pgvector column (ADR-0008). Declared Unsupported so `prisma db push`
+  // preserves it; the Prisma client ignores it (reads/writes go through the
+  // FastAPI PgvectorStore). Populated by fastapi/migrations/0001.
+  embedding    Unsupported("vector(3072)")?
 }
 
 model Intervention {
