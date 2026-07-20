@@ -1,20 +1,19 @@
 'use client'
 
 /**
- * Tiptap editor (ADR-0006 close-out) — the ProseMirror-based writing surface.
+ * The Cogdoc writing surface — Tiptap/ProseMirror (ADR-0006 close-out).
  *
- * Ports the orchestration from the legacy contentEditable editor onto the
- * Tiptap transaction model:
+ * This is THE editor (the legacy contentEditable surface is gone; ADR-0006):
  *  - autosave (debounced 1.5s) serialises via editor.getJSON() → Document.content
+ *    (ADR-0009: stored JSON is parsed back on load; legacy HTML still parses)
  *  - engine-firing on sentence-end (. ? !) and on paragraph completion (Enter)
- *  - idle trigger via the IdleDetector at the friction-scaled 45s (was 2s debug)
- *  - intervention highlights via the WavyUnderline Mark (replaces DOM marks)
- *  - Devil's Autocomplete ghost-text (Phase 2) + Blindspot (Phase 2)
- *  - friction-aware cooldowns (Phase 1)
+ *  - idle trigger via the IdleDetector at the friction-scaled 45s (IR §2.3.6)
+ *  - intervention highlights + hover popovers over the marked sentences
+ *  - Devil's Autocomplete ghost-text (§7.1) + Blindspot Monitor (§7.2)
+ *  - friction-aware cooldowns (§9) via the shared useEngineFiring hook
  *
- * Activated behind USE_TIPTAP_EDITOR (editor-shell swaps on the flag). The old
- * contentEditable editor remains the fallback. Both read/write Document.content
- * (ADR-0009: HTML and ProseMirror JSON both load via setContent).
+ * Orchestration policy lives in src/lib/use-engine-firing.ts and
+ * src/lib/editor-orchestration.ts; this component is wiring + presentation.
  */
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -22,27 +21,26 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
 import { extractLastSentence } from '@/lib/content-analyzer'
-import { getCooldown } from '@/lib/friction'
 import {
   idleThresholdForMode,
   pickEnginesForSentence,
   serializeForSave,
+  parseStoredContent,
+  extractContext,
   isParagraphComplete,
 } from '@/lib/editor-orchestration'
 import { WavyUnderline } from '@/lib/extensions/wavy-underline'
 import { IdleDetector } from '@/lib/extensions/idle-detector'
 import { highlightSentences } from '@/lib/sentence-highlight'
 import { useDevilsAutocomplete } from '@/lib/use-devils-autocomplete'
-import { consumeInterceptorStream } from '@/lib/ai-gateway'
-import type { EngineType, Intervention } from '@/lib/types'
+import { useEngineFiring } from '@/lib/use-engine-firing'
+import type { EngineType } from '@/lib/types'
+import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Send, Loader2, Sparkles } from 'lucide-react'
+import { Send, Loader2, Clock, Check, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
-
-function docToText(editor: ReturnType<typeof useEditor>): string {
-  if (!editor) return ''
-  return editor.getText()
-}
+import SentencePopover from './sentence-popover'
+import RunningPets, { IdlePetBadge } from './running-pets'
 
 export default function EditorTiptap() {
   const project = useCogdoc((s) => s.activeProject)
@@ -52,34 +50,38 @@ export default function EditorTiptap() {
   const setEngineLoading = useCogdoc((s) => s.setEngineLoading)
   const engineLoading = useCogdoc((s) => s.engineLoading)
   const bumpAnalytics = useCogdoc((s) => s.bumpAnalytics)
+  const focusMode = useCogdoc((s) => s.focusMode)
+  const setHovered = useCogdoc((s) => s.setHovered)
   const frictionMode = useCogdoc((s) => s.frictionMode)
-  const blindspotShown = useCogdoc((s) => s.blindspotShownThisSession)
-  const markBlindspotShown = useCogdoc((s) => s.markBlindspotShown)
 
   const [promptInput, setPromptInput] = useState('')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(
+    project?.document?.lastSaved ?? null,
+  )
 
   const autocomplete = useDevilsAutocomplete(frictionMode)
 
-  // Refs that need to survive re-renders without re-creating the editor.
-  const lastFireRef = useRef<Record<EngineType, number>>({
-    socratic: 0, interceptor: 0, citation: 0, scaffold: 0,
-  })
   const idleRef = useRef<IdleDetector | null>(null)
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const editor = useEditor({
     extensions: [StarterKit, WavyUnderline],
-    content: project?.document?.content ?? '',
+    content: parseStoredContent(project?.document?.content),
     editorProps: {
       attributes: {
         class: 'tiptap-editor outline-none',
         style:
-          "fontFamily: var(--font-newsreader), Georgia, serif; fontSize: 18px; lineHeight: 1.8; color: #2a2520; maxWidth: 680px; margin: 0 auto; minHeight: 50vh;",
-        'data-placeholder': 'Start writing here. Cogdoc analyzes every sentence.',
+          'font-family: var(--font-newsreader), Georgia, serif; font-size: 18px; line-height: 1.8; color: #2a2520; max-width: 680px; margin: 0 auto; min-height: 50vh;',
+        'data-placeholder':
+          'Start writing here. Cogdoc analyzes every sentence — interventions appear as underlines you can hover to read.',
       },
     },
   })
+
+  const { fireEngine, checkBlindspot } = useEngineFiring(
+    useCallback(() => editor?.getText() ?? '', [editor]),
+  )
 
   // ── Autosave (debounced 1.5s) — serialise ProseMirror JSON (ADR-0009) ────
   const scheduleSave = useCallback(() => {
@@ -91,83 +93,14 @@ export default function EditorTiptap() {
       try {
         const res = await api.saveDocument(project.id, json)
         updateActiveProjectContent(json, res.lastSaved)
+        setLastSavedAt(res.lastSaved)
         setSaveState('saved')
+        setTimeout(() => setSaveState('idle'), 1500)
       } catch {
         setSaveState('idle')
       }
     }, 1500)
   }, [editor, project, updateActiveProjectContent])
-
-  // ── Unified engine fire (friction-aware cooldowns, Phase 1) ─────────────
-  const fireEngine = useCallback(
-    async (engine: EngineType, sentence: string, context: string) => {
-      if (!project) return
-      const now = Date.now()
-      if (now - lastFireRef.current[engine] < getCooldown(engine, frictionMode)) return
-      lastFireRef.current[engine] = now
-
-      let effective = sentence
-      if (engine === 'socratic' && !effective) {
-        effective = extractLastSentence(docToText(editor))
-        if (!effective) return
-      }
-
-      setEngineLoading(engine, true)
-      try {
-        let intervention: Intervention | null = null
-        if (engine === 'citation') {
-          const res = await api.citationSentinel(project.id, effective, undefined, frictionMode)
-          intervention = res.intervention
-        } else if (engine === 'interceptor') {
-          // Phase 3: stream token-by-token, fall back to blocking on error.
-          try {
-            await consumeInterceptorStream(
-              { project_id: project.id, prompt: effective, context, friction_mode: frictionMode },
-              (partial) => toast(`✦ ${partial}`, { id: 'interceptor-stream', duration: 1200 }),
-            )
-            const res = await api.interceptor(project.id, effective, context, undefined, frictionMode)
-            if (res.action === 'pass') return
-            intervention = res.intervention
-          } catch {
-            const res = await api.interceptor(project.id, effective, context, undefined, frictionMode)
-            if (res.action === 'pass') return
-            intervention = res.intervention
-          }
-        } else if (engine === 'scaffold') {
-          const res = await api.scaffold(project.id, 'Provide a structural scaffold for my next paragraph.', context, undefined, frictionMode)
-          intervention = res.intervention
-        } else {
-          const res = await api.socraticSpacer(project.id, context, effective, undefined, frictionMode)
-          intervention = res.intervention
-        }
-        if (intervention) {
-          pushIntervention(intervention)
-          bumpAnalytics()
-        }
-      } catch (e) {
-        console.error(`${engine} failed:`, e)
-      } finally {
-        setEngineLoading(engine, false)
-      }
-    },
-    [project, editor, pushIntervention, setEngineLoading, bumpAnalytics, frictionMode],
-  )
-
-  // ── Blindspot (Phase 2, one per session) ────────────────────────────────
-  const checkBlindspot = useCallback(
-    (draft: string) => {
-      if (!project || blindspotShown) return
-      if (draft.split(/\s+/).filter(Boolean).length < 30) return
-      api.blindspot(project.id, draft).then((res) => {
-        if (res.blindspot && res.intervention) {
-          pushIntervention(res.intervention)
-          bumpAnalytics()
-          markBlindspotShown()
-        }
-      }).catch(() => {})
-    },
-    [project, blindspotShown, pushIntervention, bumpAnalytics, markBlindspotShown],
-  )
 
   // ── Wire editor events ──────────────────────────────────────────────────
   useEffect(() => {
@@ -183,14 +116,16 @@ export default function EditorTiptap() {
       } else if (project && text.length > 0 && text.length % 8 === 0) {
         autocomplete.load(project.id, text).catch(() => {})
       }
-      // Sentence completion → fire matching engines
+      // Sentence completion → fire matching engines, staggered 500ms so
+      // several engines on one sentence don't trip LLM rate limits (429).
       const endChar = text.trim().slice(-1)
       if (endChar === '.' || endChar === '?' || endChar === '!') {
         const sentence = extractLastSentence(text)
         if (sentence.split(/\s+/).length >= 4) {
+          const { context } = extractContext(text)
           const engines = pickEnginesForSentence(sentence)
           engines.forEach((eng, idx) => {
-            setTimeout(() => fireEngine(eng, sentence, ''), idx * 500)
+            setTimeout(() => fireEngine(eng, sentence, context), idx * 500)
           })
         }
       }
@@ -199,7 +134,7 @@ export default function EditorTiptap() {
     return () => { editor.off('update', handleUpdate) }
   }, [editor, scheduleSave, fireEngine, autocomplete, project])
 
-  // ── Idle detector at the friction-scaled 45s (was 2s debug) ─────────────
+  // ── Idle detector at the friction-scaled 45s (IR §2.3.6) ────────────────
   useEffect(() => {
     idleRef.current = new IdleDetector({
       thresholdMs: idleThresholdForMode(frictionMode),
@@ -209,7 +144,7 @@ export default function EditorTiptap() {
     return () => idleRef.current?.stop()
   }, [frictionMode, fireEngine])
 
-  // ── Highlight interventions via WavyUnderline (re-applied on change) ─────
+  // ── Highlight interventions (re-applied on change) ──────────────────────
   // Tiptap manages marks via transactions; for the MVP we mirror the DOM-based
   // highlight (the WavyUnderline mark is wired but applying it per-sentence via
   // a decoration plugin is Phase 6 polish). The legacy highlightSentences keeps
@@ -228,12 +163,24 @@ export default function EditorTiptap() {
     }
   }, [])
 
+  // ── Hover handling for sentence marks (popovers over underlines) ────────
+  function handleMouseOver(e: React.MouseEvent) {
+    const target = e.target as HTMLElement
+    if (target.classList?.contains('cogdoc-mark')) {
+      const key = target.dataset.sentenceKey
+      if (!key) return
+      const rect = target.getBoundingClientRect()
+      setHovered(key, { top: rect.bottom, left: rect.left })
+    }
+  }
+
   // Submit a prompt to the Interceptor
   async function handlePromptSubmit() {
     if (!project || !promptInput.trim() || !editor) return
+    const { context } = extractContext(editor.getText())
     setEngineLoading('interceptor', true)
     try {
-      const res = await api.interceptor(project.id, promptInput, editor.getText(), undefined, frictionMode)
+      const res = await api.interceptor(project.id, promptInput, context)
       if (res.action === 'pass') {
         toast('Prompt was not delegative — passed through')
       } else if (res.intervention) {
@@ -256,15 +203,20 @@ export default function EditorTiptap() {
         const text = editor.getText()
         const paras = text.split(/\n\s*\n/).filter((p) => p.trim())
         if (isParagraphComplete(paras)) {
-          fireEngine('scaffold', '', '')
+          const { context } = extractContext(text)
+          fireEngine('scaffold', '', context)
           checkBlindspot(text)
         }
       }, 50)
     }
-    // Tab → autocomplete accept (mode-gated)
+    // Tab → autocomplete accept (mode-gated; socratic/coach reject)
     if (e.key === 'Tab' && autocomplete.suggestion) {
       e.preventDefault()
       autocomplete.tabAccept()
+    }
+    // Esc → clear selection (closes any open popover via the hover state)
+    if (e.key === 'Escape') {
+      window.getSelection()?.removeAllRanges()
     }
   }
 
@@ -275,30 +227,69 @@ export default function EditorTiptap() {
 
   return (
     <div className="flex flex-col h-full" onKeyDown={handleKeyDown} style={{ background: '#faf7f0' }}>
+      {/* Subtle toolbar */}
       <div className="px-6 py-1.5 flex items-center justify-between gap-4 border-b border-stone-200/50">
         <div className="flex items-center gap-3 text-xs text-stone-500">
           {saveState === 'saving' ? (
-            <span className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Saving…</span>
+            <span className="flex items-center gap-1.5">
+              <Loader2 className="w-3 h-3 animate-spin" /> Saving…
+            </span>
           ) : saveState === 'saved' ? (
-            <span className="flex items-center gap-1.5 text-emerald-600">Saved</span>
-          ) : (
-            <span>{wordCount} words · idle {idleThresholdForMode(frictionMode) / 1000}s · Tiptap</span>
+            <span className="flex items-center gap-1.5 text-emerald-600">
+              <Check className="w-3 h-3" /> Saved
+            </span>
+          ) : lastSavedAt ? (
+            <span className="flex items-center gap-1.5">
+              <Clock className="w-3 h-3" /> {new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          ) : <span>Not saved</span>}
+          <span className="text-stone-300">·</span>
+          <span>{wordCount} words</span>
+          {activeEngines.length > 0 && (
+            <>
+              <span className="text-stone-300">·</span>
+              <span className="flex items-center gap-1.5">
+                <Loader2 className="w-3 h-3 animate-spin text-stone-400" />
+                {activeEngines.map((e) => (
+                  <IdlePetBadge key={e} engine={e} />
+                ))}
+                <span className="text-stone-500 text-xs">checking…</span>
+              </span>
+            </>
           )}
         </div>
-        {activeEngines.length > 0 && (
-          <span className="flex items-center gap-1.5 text-xs text-stone-400">
-            <Loader2 className="w-3 h-3 animate-spin" /> checking…
-          </span>
-        )}
+        <div className="text-[11px] text-stone-400">
+          Sentences with interventions are <span style={{ textDecoration: 'underline wavy #78716c', textUnderlineOffset: '3px' }}>underlined</span> — hover to see them
+        </div>
       </div>
 
+      {/* Scrollable writing surface */}
       <div className="flex-1 overflow-y-auto">
         <div className="relative w-full max-w-[1000px] mx-auto px-8 py-16">
-          <EditorContent editor={editor} />
+          {/* Title */}
+          <h1
+            contentEditable
+            suppressContentEditableWarning
+            className="text-4xl font-bold text-stone-900 mb-8 outline-none focus:outline-none text-center"
+            style={{ fontFamily: 'var(--font-newsreader), Georgia, serif' }}
+            data-placeholder="Untitled"
+          />
+          {/* Writing surface — focus mode dims all but the last paragraph */}
+          <div
+            onMouseOver={handleMouseOver}
+            className={`transition-opacity ${focusMode ? 'focus-within:[&_p:not(:last-child)]:opacity-40' : ''}`}
+          >
+            <EditorContent editor={editor} />
+          </div>
+          {/* Devil's Autocomplete ghost text (§7.1). Shown inline beneath the
+              caret line as greyed text. The commit mechanic is mode-gated:
+              socratic/coach must type each char (Tab is rejected); assistant
+              allows Tab-accept. */}
           {autocomplete.suggestion && (
             <div
               className="max-w-[680px] mx-auto -mt-2 pointer-events-none select-none"
               style={{ fontFamily: 'var(--font-newsreader), Georgia, serif', fontSize: '18px', lineHeight: 1.8 }}
+              aria-label="autocomplete suggestion"
             >
               <span style={{ color: '#b8b0a4' }}>{autocomplete.suggestion}</span>
               <span className="ml-2 text-[10px] text-stone-400 align-middle">
@@ -309,19 +300,42 @@ export default function EditorTiptap() {
         </div>
       </div>
 
+      {/* Discreet prompt bar */}
       <div className="border-t border-stone-200/50 px-6 py-2.5" style={{ background: '#fffefb' }}>
         <div className="max-w-[680px] mx-auto flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
           <Textarea
             value={promptInput}
             onChange={(e) => setPromptInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePromptSubmit() } }}
-            placeholder="Ask the Interceptor to check a prompt…"
-            className="min-h-[36px] max-h-[120px] resize-none border-0 bg-transparent text-sm focus-visible:ring-0 p-1"
+            placeholder="Ask Cogdoc… (it intercepts delegative prompts and reframes them as questions)"
             rows={1}
+            className="resize-none min-h-[32px] max-h-[100px] border-none bg-transparent focus-visible:ring-0 text-sm placeholder:text-stone-400"
+            style={{ fontFamily: 'var(--font-geist-sans), sans-serif' }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                handlePromptSubmit()
+              }
+            }}
           />
+          <Button
+            size="icon"
+            onClick={handlePromptSubmit}
+            disabled={!promptInput.trim() || engineLoading.interceptor}
+            className="bg-stone-800 hover:bg-stone-700 shrink-0 h-7 w-7"
+          >
+            {engineLoading.interceptor ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+          </Button>
         </div>
       </div>
+
+      {/* Hover popover (renders outside the scrollable area) */}
+      <div data-sentence-popover>
+        <SentencePopover />
+      </div>
+
+      {/* Running pixelated pets — animate across the screen when engines fire */}
+      <RunningPets />
     </div>
   )
 }

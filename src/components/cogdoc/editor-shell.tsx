@@ -9,7 +9,6 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { BookOpen, BarChart3, History, ArrowLeft, Focus, Eye, EyeOff, Download, FileText, FileType, FileCode } from 'lucide-react'
-import Editor from './editor'
 import EditorTiptap from './editor-tiptap'
 import ResearchLibrary from './research-library'
 import AnalyticsPanel from './analytics-panel'
@@ -148,10 +147,10 @@ export default function EditorShell() {
         </div>
       </header>
 
-      {/* Editor fills the rest — Tiptap (ProseMirror) when USE_TIPTAP_EDITOR is
-          set, otherwise the legacy contentEditable surface (ADR-0006). */}
+      {/* Editor fills the rest — the Tiptap/ProseMirror surface (ADR-0006
+          close-out; the legacy contentEditable editor is deleted). */}
       <div className="flex-1 min-h-0">
-        {process.env.NEXT_PUBLIC_USE_TIPTAP_EDITOR === 'true' ? <EditorTiptap /> : <Editor />}
+        <EditorTiptap />
       </div>
 
       {/* Library modal */}

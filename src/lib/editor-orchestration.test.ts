@@ -12,6 +12,8 @@ import {
   pickEnginesForSentence,
   idleThresholdForMode,
   serializeForSave,
+  parseStoredContent,
+  extractContext,
   isParagraphComplete,
 } from '@/lib/editor-orchestration'
 
@@ -64,6 +66,55 @@ describe('serializeForSave', () => {
   it('serialises null/undefined to an empty string', () => {
     expect(serializeForSave(null)).toBe('')
     expect(serializeForSave(undefined)).toBe('')
+  })
+})
+
+describe('parseStoredContent', () => {
+  it('parses a stringified ProseMirror doc back to an object (ADR-0009 round-trip)', () => {
+    const doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hi' }] }] }
+    const parsed = parseStoredContent(JSON.stringify(doc))
+    expect(parsed).toEqual(doc)
+    expect(typeof parsed).toBe('object')
+  })
+
+  it('returns legacy HTML strings verbatim', () => {
+    const html = '<p>legacy <b>content</b></p>'
+    expect(parseStoredContent(html)).toBe(html)
+  })
+
+  it('returns non-doc JSON strings verbatim (not a ProseMirror doc)', () => {
+    const notADoc = '{"foo": "bar"}'
+    expect(parseStoredContent(notADoc)).toBe(notADoc)
+  })
+
+  it('returns empty string for null/undefined/empty', () => {
+    expect(parseStoredContent(null)).toBe('')
+    expect(parseStoredContent(undefined)).toBe('')
+    expect(parseStoredContent('')).toBe('')
+  })
+
+  it('treats malformed JSON-looking text as HTML', () => {
+    const broken = '{not json at all'
+    expect(parseStoredContent(broken)).toBe(broken)
+  })
+})
+
+describe('extractContext', () => {
+  it('returns the last 3 paragraphs as context and the trailing one as stub', () => {
+    const text = ['p1 first', 'p2 second', 'p3 third', 'p4 fourth'].join('\n\n')
+    const { context, stub } = extractContext(text)
+    expect(context).toBe('p2 second\n\np3 third\n\np4 fourth')
+    expect(stub).toBe('p4 fourth')
+  })
+
+  it('handles fewer than 3 paragraphs', () => {
+    const { context, stub } = extractContext('only one paragraph')
+    expect(context).toBe('only one paragraph')
+    expect(stub).toBe('only one paragraph')
+  })
+
+  it('returns empty context for empty text', () => {
+    expect(extractContext('')).toEqual({ context: '', stub: '' })
   })
 })
 

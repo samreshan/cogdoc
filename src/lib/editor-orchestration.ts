@@ -33,6 +33,40 @@ export function serializeForSave(doc: unknown): string {
 }
 
 /**
+ * Parse a stored Document.content string for the editor (ADR-0009).
+ *
+ * The column holds either legacy HTML or `JSON.stringify(prosemirrorDoc)`.
+ * Tiptap's setContent treats any string as HTML, so a stringified JSON doc
+ * must be parsed back to an object first — otherwise the raw JSON renders as
+ * text. Returns the parsed doc object for JSON payloads, the string verbatim
+ * for HTML/plain-text ones.
+ */
+export function parseStoredContent(value: string | null | undefined): string | object {
+  if (!value) return ''
+  const trimmed = value.trim()
+  if (trimmed.startsWith('{')) {
+    try {
+      const doc = JSON.parse(trimmed) as { type?: string }
+      if (doc && typeof doc === 'object' && doc.type === 'doc') return doc
+    } catch {
+      // fall through — not JSON, treat as HTML
+    }
+  }
+  return value
+}
+
+/**
+ * The engine-call context: the last 3 paragraphs of the draft, plus the
+ * trailing paragraph as the stub. Mirrors what the legacy editor derived from
+ * innerHTML, but over plain text so it works with editor.getText().
+ */
+export function extractContext(text: string): { context: string; stub: string } {
+  const paras = text.split(/\n\s*\n/).filter((p) => p.trim())
+  if (paras.length === 0) return { context: '', stub: text.trim() }
+  return { context: paras.slice(-3).join('\n\n'), stub: paras[paras.length - 1] }
+}
+
+/**
  * Detect paragraph completion for the Scaffold trigger:
  * ≥2 paragraphs, the last is short (<10 chars), the previous is substantial (>50).
  */

@@ -9,6 +9,13 @@
 > `Document.content` migrates HTML→ProseMirror JSON (ADR-0009), and
 > `engine-characters.tsx` is re-included in coverage. All three follow-up items
 > below are complete. See ADR-0009 for the content-migration rationale.
+>
+> **Final close-out (2026-07-20):** the legacy contentEditable editor and the
+> `NEXT_PUBLIC_USE_TIPTAP_EDITOR` flag are deleted. `editor-tiptap.tsx` is the
+> only writing surface; engine-firing policy is shared via
+> `src/lib/use-engine-firing.ts` so orchestration logic lives once. The full
+> legacy UX (sentence hover popovers, running pets, focus mode, save-state
+> toolbar, prompt-bar submit) is ported.
 
 ## Context
 
