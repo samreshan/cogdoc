@@ -36,11 +36,17 @@ class TestPgvectorStoreSQLShape:
         # one INSERT per chunk
         assert cur.execute.call_count == 2
         first_sql, first_params = cur.execute.call_args_list[0][0]
-        # the SQL targets the pdf_chunks table with project_id + pdf_id scope
-        assert "pdf_chunks" in first_sql.lower() or "PdfChunk".lower() in first_sql.lower()
+        assert "PdfChunk".lower() in first_sql.lower()
         assert "embedding" in first_sql.lower()
-        # project_id is bound as a param
-        assert "p1" in first_params
+        # chunkIndex is required (NOT NULL in the Prisma schema)
+        assert "chunkIndex".lower() in first_sql.lower()
+        # the chunk id + parent pdf id are bound; projectId is NOT a PdfChunk
+        # column (scope derives from the Pdf row), so it is not a param here
+        assert "c1" in first_params
+        assert "pdf-1" in first_params
+        assert "p1" not in first_params
+        # re-ingest of an id the BFF already wrote upserts the embedding
+        assert "on conflict" in first_sql.lower()
 
     def test_retrieve_filters_by_project_id_and_uses_cosine_operator(self):
         store = self._make_store()
@@ -55,7 +61,9 @@ class TestPgvectorStoreSQLShape:
         sql, params = cur.execute.call_args[0]
         # the cosine distance operator <=> is present (pgvector)
         assert "<=>" in sql
-        # projectId is scoped in the WHERE clause (Prisma camelCase column)
+        # project scope comes from the JOINed Pdf row (PdfChunk has no
+        # projectId column in the Prisma schema)
+        assert 'join "pdf"' in sql.lower()
         assert "projectId".lower() in sql.lower()
         assert "p1" in params
         # results map into RetrievedChunk
@@ -88,23 +96,55 @@ class TestPgvectorStoreSQLShape:
 
 
 @pytest.mark.skipif(
-    not os.environ.get("SUPABASE_DB_URL"),
-    reason="needs a live Postgres with pgvector (SUPABASE_DB_URL)",
+    not (os.environ.get("SUPABASE_DB_URL") and os.environ.get("GEMINI_API_KEY")),
+    reason="needs a live Postgres with pgvector (SUPABASE_DB_URL) + GEMINI_API_KEY",
 )
 class TestPgvectorStoreLive:
     """Round-trip against the real Supabase Postgres. Requires the vector
-    column + HNSW index migration (see ADR-0008) to be applied first."""
+    column migration (see ADR-0008) to be applied first.
+
+    PdfChunk.pdfId is a real FK (Pdf → Project → User, all cascade-delete), so
+    the test creates its own parent chain and removes it by deleting the User.
+    """
 
     def test_ingest_then_retrieve_round_trips(self):
+        import psycopg
+
         from app.embedder import GeminiEmbedder
         from app.vector_store import PgvectorStore
 
-        store = PgvectorStore(connection=None, embedder=GeminiEmbedder(), autocommit=True)
-        store.ingest(
-            project_id="p-test",
-            pdf_id="pdf-test",
-            chunks_text=["Neural networks learn via backpropagation."],
-            chunk_ids=["ctest-1"],
-        )
-        results = store.retrieve(project_id="p-test", query="how do neural networks learn", top_k=5)
-        assert any(r.chunk_id == "ctest-1" for r in results)
+        conn = psycopg.connect(os.environ["SUPABASE_DB_URL"], autocommit=True)
+        uid, pid, pdfid = "u-pgvtest", "p-pgvtest", "pdf-pgvtest"
+        with conn.cursor() as cur:
+            # idempotent setup: clear any residue from an aborted prior run
+            cur.execute('DELETE FROM "User" WHERE id = %s', (uid,))
+            cur.execute(
+                'INSERT INTO "User" (id, email) VALUES (%s, %s)',
+                (uid, "pgvtest@example.invalid"),
+            )
+            cur.execute(
+                'INSERT INTO "Project" (id, "userId", title, "updatedAt") VALUES (%s, %s, %s, now())',
+                (pid, uid, "pgvector live test"),
+            )
+            cur.execute(
+                'INSERT INTO "Pdf" (id, "projectId", "userId", filename) VALUES (%s, %s, %s, %s)',
+                (pdfid, pid, uid, "backprop-notes.pdf"),
+            )
+        try:
+            store = PgvectorStore(connection=conn, embedder=GeminiEmbedder(), autocommit=True)
+            store.ingest(
+                project_id=pid,
+                pdf_id=pdfid,
+                chunks_text=["Neural networks learn via backpropagation."],
+                chunk_ids=["ctest-1"],
+            )
+            results = store.retrieve(project_id=pid, query="how do neural networks learn", top_k=5)
+            assert any(r.chunk_id == "ctest-1" for r in results)
+            # the filename deep-link resolves via the Pdf JOIN
+            assert results[0].pdf_filename == "backprop-notes.pdf"
+            # retrieval is project-scoped: another project sees nothing
+            assert store.retrieve(project_id="p-other", query="backpropagation", top_k=5) == []
+        finally:
+            with conn.cursor() as cur:
+                cur.execute('DELETE FROM "User" WHERE id = %s', (uid,))
+            conn.close()

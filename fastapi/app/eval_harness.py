@@ -7,17 +7,33 @@ This is the keyword-vs-vector ablation that justifies the Sprint 1 migration
 keyword overlap on Recall@k.
 
 Runnable:  python -m app.eval_harness
+
+The vector path's embedder resolves from the environment exactly like the
+service (ADR-0008): EMBEDDING_PROVIDER=gemini + GEMINI_API_KEY → GeminiEmbedder
+(real embeddings — the headline result); otherwise HashingEmbedder (the
+hermetic surrogate for tests/offline dev).
 """
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 
 from app.chunker import chunk_text
-from app.embedder import HashingEmbedder
+from app.embedder import Embedder, HashingEmbedder
 from app.eval_data import SOURCE_PASSAGES, CLAIMS, VERDICT_LABELS
 from app.metrics import classification_report, recall_at_k
 from app.vector_store import VectorStore
+
+
+def embedder_from_env() -> Embedder:
+    """Resolve the ablation embedder from env, mirroring create_app_from_env."""
+    provider = os.environ.get("EMBEDDING_PROVIDER", "hashing").lower()
+    if provider == "gemini" and os.environ.get("GEMINI_API_KEY"):
+        from app.embedder import GeminiEmbedder
+
+        return GeminiEmbedder()
+    return HashingEmbedder(dim=256)
 
 
 @dataclass
@@ -101,7 +117,7 @@ def evaluate_vector(store: VectorStore, verdict_provider) -> AblationResult:
         else 0.0
     )
     return AblationResult(
-        retriever_name="vector (HashingEmbedder)",
+        retriever_name=f"vector ({type(store.embedder).__name__})",
         verdict_report=report,
         macro_f1=macro_f1,
         recall_at_5_supported=r5,
@@ -135,13 +151,14 @@ def run_ablation(embedder=None) -> dict:
     """Run both retrievers over the ground-truth set and return a comparison.
 
     Args:
-        embedder: an Embedder instance for the vector path. Defaults to
-            HashingEmbedder(dim=256) (the surrogate). Pass a real embedder
-            (e.g. GeminiEmbedder) to re-run the ablation on trained vectors —
-            this converts the headline result from surrogate to real.
+        embedder: an Embedder instance for the vector path. Defaults to the
+            env-resolved embedder (embedder_from_env): GeminiEmbedder when
+            EMBEDDING_PROVIDER=gemini + GEMINI_API_KEY are set (real
+            embeddings — the headline result), else HashingEmbedder (the
+            hermetic surrogate).
     """
     if embedder is None:
-        embedder = HashingEmbedder(dim=256)
+        embedder = embedder_from_env()
     store = VectorStore(embedder=embedder)
     # Ingest with explicit chunk_ids so they align with CLAIMS' relevant_ids.
     store.ingest(

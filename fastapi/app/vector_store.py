@@ -127,15 +127,19 @@ class PgvectorStore:
     """pgvector-backed VectorStoreBase (production adapter, ADR-0008).
 
     Implements the SAME ingest/retrieve/list_chunks interface as the in-memory
-    VectorStore so the FastAPI endpoints are provider-blind. Vectors are stored
-    in a `pdf_chunks.embedding vector(<dim>)` column; retrieval uses pgvector's
-    cosine distance operator `<=>` with a project-scoped WHERE clause (retrieval
-    never leaks across users/projects).
+    VectorStore so the FastAPI endpoints are provider-blind. Vectors live in
+    the Prisma `"PdfChunk".embedding vector(3072)` column (raw SQL migration —
+    Prisma's vector support is limited, see ADR-0008); retrieval uses
+    pgvector's cosine distance operator `<=>`.
+
+    Schema note: `PdfChunk` has NO projectId column — project scoping goes
+    through the parent `Pdf` row (`Pdf.projectId`), so retrieval JOINs "Pdf"
+    and filters there (never leaks across users/projects). The join also
+    supplies the real `Pdf.filename` for evidence deep-links.
 
     psycopg is imported lazily (only when a real connection is needed) so the
     hermetic test path (mocked connection) and the in-memory default don't pull
-    in the dependency. The migration adding the vector column + HNSW index is a
-    raw SQL migration (Prisma's vector support is limited — see ADR-0008).
+    in the dependency.
     """
 
     def __init__(
@@ -175,13 +179,17 @@ class PgvectorStore:
                 vec = self.embedder.embed(text)
                 # store the vector as a string literal pgvector parses: '[v1,v2,...]'
                 vec_lit = "[" + ",".join(str(float(v)) for v in vec) + "]"
+                # No projectId column on PdfChunk — scope derives from the
+                # parent Pdf row. Upsert so re-ingesting a chunk the BFF
+                # already wrote (same cuid) fills in its embedding.
                 cur.execute(
                     """
-                    INSERT INTO "PdfChunk" (id, "pdfId", content, "charCount",
-                                            "pageApprox", "projectId", embedding)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO "PdfChunk" (id, "pdfId", "chunkIndex", content,
+                                            "charCount", "pageApprox", embedding)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s::vector)
+                    ON CONFLICT (id) DO UPDATE SET embedding = EXCLUDED.embedding
                     """,
-                    (cid, pdf_id, text, len(text), i + 1, project_id, vec_lit),
+                    (cid, pdf_id, i, text, len(text), i + 1, vec_lit),
                 )
                 stored.append(
                     StoredChunk(
@@ -208,15 +216,19 @@ class PgvectorStore:
         with self._connection.cursor() as cur:
             # cosine DISTANCE is 1 - cosine_similarity, so the score floor maps
             # to a distance ceiling (1 - min_score). ORDER BY distance ASC.
+            # Project scope + filename come from the parent Pdf row (see class
+            # docstring); rows without an embedding (BFF-only writes) are skipped.
             cur.execute(
                 """
-                SELECT id, "pdfId", content, "pageApprox",
-                       1 - (embedding <=> %s::vector) AS score,
-                       "pdfFilename"
-                FROM "PdfChunk"
-                WHERE "projectId" = %s
-                  AND 1 - (embedding <=> %s::vector) >= %s
-                ORDER BY embedding <=> %s::vector
+                SELECT c.id, c."pdfId", c.content, c."pageApprox",
+                       1 - (c.embedding <=> %s::vector) AS score,
+                       p.filename
+                FROM "PdfChunk" c
+                JOIN "Pdf" p ON p.id = c."pdfId"
+                WHERE p."projectId" = %s
+                  AND c.embedding IS NOT NULL
+                  AND 1 - (c.embedding <=> %s::vector) >= %s
+                ORDER BY c.embedding <=> %s::vector
                 LIMIT %s
                 """,
                 (vec_lit, project_id, vec_lit, min_score, vec_lit, top_k),
@@ -238,9 +250,10 @@ class PgvectorStore:
         with self._connection.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, "pdfId", content, "pageApprox", embedding
-                FROM "PdfChunk"
-                WHERE "projectId" = %s
+                SELECT c.id, c."pdfId", c.content, c."pageApprox", c.embedding
+                FROM "PdfChunk" c
+                JOIN "Pdf" p ON p.id = c."pdfId"
+                WHERE p."projectId" = %s
                 """,
                 (project_id,),
             )
@@ -251,8 +264,22 @@ class PgvectorStore:
                 pdf_id=r[1],
                 content=r[2],
                 page_approx=r[3],
-                embedding=list(r[4]) if r[4] else [],
+                embedding=_parse_pgvector(r[4]),
             )
             for r in rows
         ]
+
+
+def _parse_pgvector(value: Any) -> list[float]:
+    """Normalise a pgvector column value to list[float].
+
+    Without the pgvector-python type adapter registered, psycopg returns the
+    column as its text literal '[v1,v2,...]'; with it, a sequence. Handle both.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        inner = value.strip().strip("[]")
+        return [float(x) for x in inner.split(",") if x.strip()] if inner else []
+    return [float(v) for v in value]
 

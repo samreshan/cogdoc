@@ -16,4 +16,7 @@ COPY pytest.ini .
 EXPOSE 8000
 
 # Run uvicorn; in production the host is overridden by the orchestrator.
-CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+# create_app_from_env resolves the embedder + store from EMBEDDING_PROVIDER /
+# GEMINI_API_KEY / SUPABASE_DB_URL (ADR-0008); unset env falls back to the
+# hermetic HashingEmbedder + in-memory store.
+CMD ["uvicorn", "app.main:create_app_from_env", "--factory", "--host", "0.0.0.0", "--port", "8000"]

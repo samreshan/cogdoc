@@ -1,11 +1,11 @@
 -- ADR Phase 6 (gap #7): Row-Level Security for multi-user isolation.
 --
--- Enables RLS + per-table USING (userId = auth.uid()) policies on every
+-- Enables RLS + per-table USING (userId = auth.uid()::text) policies on every
 -- user-scoped table so cross-user access is blocked at the database layer.
 -- Applies to Supabase Postgres only (RLS doesn't exist on SQLite). Run in the
 -- Supabase Dashboard SQL editor.
 --
--- Prerequisite: users sign in via @supabase/ssr (the Login UI). auth.uid()
+-- Prerequisite: users sign in via @supabase/ssr (the Login UI). auth.uid()::text
 -- resolves to the authenticated user's id, which matches the userId columns.
 --
 -- Idempotent: safe to re-run.
@@ -21,21 +21,21 @@ ALTER TABLE "InterventionEvidence" ENABLE ROW LEVEL SECURITY;
 -- 2. Project — a user sees only their own projects.
 DROP POLICY IF EXISTS "projects_owner_all" ON "Project";
 CREATE POLICY "projects_owner_all" ON "Project"
-  FOR ALL USING ("userId" = auth.uid()) WITH CHECK ("userId" = auth.uid());
+  FOR ALL USING ("userId" = auth.uid()::text) WITH CHECK ("userId" = auth.uid()::text);
 
 -- 3. Document — one per project, scoped via the project's userId.
 DROP POLICY IF EXISTS "documents_owner_all" ON "Document";
 CREATE POLICY "documents_owner_all" ON "Document"
   FOR ALL
-  USING (EXISTS (SELECT 1 FROM "Project" p WHERE p.id = "Document"."projectId" AND p."userId" = auth.uid()))
-  WITH CHECK (EXISTS (SELECT 1 FROM "Project" p WHERE p.id = "Document"."projectId" AND p."userId" = auth.uid()));
+  USING (EXISTS (SELECT 1 FROM "Project" p WHERE p.id = "Document"."projectId" AND p."userId" = auth.uid()::text))
+  WITH CHECK (EXISTS (SELECT 1 FROM "Project" p WHERE p.id = "Document"."projectId" AND p."userId" = auth.uid()::text));
 
 -- 4. Pdf — scoped via the project's userId.
 DROP POLICY IF EXISTS "pdfs_owner_all" ON "Pdf";
 CREATE POLICY "pdfs_owner_all" ON "Pdf"
   FOR ALL
-  USING (EXISTS (SELECT 1 FROM "Project" p WHERE p.id = "Pdf"."projectId" AND p."userId" = auth.uid()))
-  WITH CHECK (EXISTS (SELECT 1 FROM "Project" p WHERE p.id = "Pdf"."projectId" AND p."userId" = auth.uid()));
+  USING (EXISTS (SELECT 1 FROM "Project" p WHERE p.id = "Pdf"."projectId" AND p."userId" = auth.uid()::text))
+  WITH CHECK (EXISTS (SELECT 1 FROM "Project" p WHERE p.id = "Pdf"."projectId" AND p."userId" = auth.uid()::text));
 
 -- 5. PdfChunk — scoped via Pdf → Project's userId. Includes the embedding
 --    column (ADR-0008): retrieval is project-scoped AND user-scoped.
@@ -45,28 +45,28 @@ CREATE POLICY "pdfchunks_owner_all" ON "PdfChunk"
   USING (EXISTS (
     SELECT 1 FROM "Pdf" f
     JOIN "Project" p ON p.id = f."projectId"
-    WHERE f.id = "PdfChunk"."pdfId" AND p."userId" = auth.uid()
+    WHERE f.id = "PdfChunk"."pdfId" AND p."userId" = auth.uid()::text
   ))
   WITH CHECK (EXISTS (
     SELECT 1 FROM "Pdf" f
     JOIN "Project" p ON p.id = f."projectId"
-    WHERE f.id = "PdfChunk"."pdfId" AND p."userId" = auth.uid()
+    WHERE f.id = "PdfChunk"."pdfId" AND p."userId" = auth.uid()::text
   ));
 
 -- 6. Intervention — a user sees only their own interventions.
 DROP POLICY IF EXISTS "interventions_owner_all" ON "Intervention";
 CREATE POLICY "interventions_owner_all" ON "Intervention"
-  FOR ALL USING ("userId" = auth.uid()) WITH CHECK ("userId" = auth.uid());
+  FOR ALL USING ("userId" = auth.uid()::text) WITH CHECK ("userId" = auth.uid()::text);
 
 -- 7. InterventionEvidence — scoped via Intervention's userId.
 DROP POLICY IF EXISTS "intervention_evidence_owner_all" ON "InterventionEvidence";
 CREATE POLICY "intervention_evidence_owner_all" ON "InterventionEvidence"
   FOR ALL
   USING (EXISTS (
-    SELECT 1 FROM "Intervention" i WHERE i.id = "InterventionEvidence"."interventionId" AND i."userId" = auth.uid()
+    SELECT 1 FROM "Intervention" i WHERE i.id = "InterventionEvidence"."interventionId" AND i."userId" = auth.uid()::text
   ))
   WITH CHECK (EXISTS (
-    SELECT 1 FROM "Intervention" i WHERE i.id = "InterventionEvidence"."interventionId" AND i."userId" = auth.uid()
+    SELECT 1 FROM "Intervention" i WHERE i.id = "InterventionEvidence"."interventionId" AND i."userId" = auth.uid()::text
   ));
 
 -- Note: when EMBEDDING_PROVIDER=gemini, the FastAPI service writes PdfChunk

@@ -108,9 +108,11 @@ export interface VectorIngestResult {
  * try/catch so a FastAPI outage degrades gracefully (SQLite chunks are the
  * source of truth; the app stays usable on the keyword path).
  *
- * NOTE: the in-memory VectorStore is ephemeral — a FastAPI restart loses all
- * ingested chunks. Re-ingestion on restart is needed when pgvector lands.
- * // TODO(sprint-pgvector): re-ingest existing PdfChunk rows on FastAPI boot.
+ * NOTE: persistence depends on the FastAPI store (ADR-0008). With
+ * EMBEDDING_PROVIDER=gemini + SUPABASE_DB_URL set, the service runs on
+ * PgvectorStore and ingested chunks survive restarts. The in-memory fallback
+ * (offline dev / tests) is ephemeral — a restart there loses ingested chunks
+ * until the PDFs are re-uploaded.
  */
 export async function ingestToVectorStore(
   projectId: string,
