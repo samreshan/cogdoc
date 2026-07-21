@@ -5,19 +5,23 @@
  *  1. Pure helpers (fillTemplate, isHeuristicDelegative, parseVerdictJSON) —
  *     no mocks, fast. These encode the critical contracts: the delegation
  *     heuristic and the verdict fallback logic.
- *  2. ZAIAdapter methods — mocked DB + mocked ZAI SDK, asserting the adapter
- *     wires inputs/outputs correctly and persists the right shapes.
+ *  2. GeminiAdapter methods — mocked DB + stubbed fetch (Gemini REST shape),
+ *     asserting the adapter wires inputs/outputs correctly.
  *
  * Maps to PRODUCT.md §15.2 U-03, U-04, U-05, U-06, U-09.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest'
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
-// ZAI SDK mock — the chat completion returns whatever we set per-test.
-const mockCreate = vi.fn()
-vi.mock('z-ai-web-dev-sdk', () => ({
-  default: { create: async () => ({ chat: { completions: { create: mockCreate } } }) },
+// Gemini fetch stub — mockLLM resolves to the raw text the "model" returns.
+const mockLLM = vi.fn<() => Promise<string>>()
+const fetchMock = vi.fn(async () => ({
+  ok: true,
+  json: async () => ({
+    candidates: [{ content: { parts: [{ text: await mockLLM() }] } }],
+  }),
 }))
+vi.stubGlobal('fetch', fetchMock)
 
 vi.mock('@/lib/db', () => ({
   db: {
@@ -29,7 +33,7 @@ import {
   fillTemplate,
   isHeuristicDelegative,
   parseVerdictJSON,
-  ZAIAdapter,
+  GeminiAdapter,
   getAIService,
 } from '@/lib/ai-service'
 import { db } from '@/lib/db'
@@ -37,8 +41,14 @@ import { db } from '@/lib/db'
 const templateMock = db.promptTemplate.findUnique as ReturnType<typeof vi.fn>
 
 beforeEach(() => {
-  mockCreate.mockReset()
+  mockLLM.mockReset()
+  fetchMock.mockClear()
   templateMock.mockReset()
+  process.env.GEMINI_API_KEY = 'test-key'
+})
+
+afterAll(() => {
+  vi.unstubAllGlobals()
 })
 
 // ── Pure helpers ───────────────────────────────────────────────────────────
@@ -135,23 +145,21 @@ describe('parseVerdictJSON', () => {
   })
 })
 
-// ── ZAIAdapter (with mocks) ────────────────────────────────────────────────
+// ── GeminiAdapter (with mocks) ─────────────────────────────────────────────
 
-describe('ZAIAdapter.classifyPrompt', () => {
+describe('GeminiAdapter.classifyPrompt', () => {
   it('short-circuits on heuristic delegative prompt (no LLM call)', async () => {
-    const ai = new ZAIAdapter()
+    const ai = new GeminiAdapter()
     const result = await ai.classifyPrompt('write a paragraph about cats', '')
     expect(result.isDelegative).toBe(true)
     expect(result.confidence).toBe(0.95)
     expect(result.raw).toBe('heuristic_match')
-    expect(mockCreate).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('returns isDelegative=false when LLM responds with PASS', async () => {
-    mockCreate.mockResolvedValue({
-      choices: [{ message: { content: 'PASS — legitimate question.' } }],
-    })
-    const ai = new ZAIAdapter()
+    mockLLM.mockResolvedValue('PASS — legitimate question.')
+    const ai = new GeminiAdapter()
     templateMock.mockResolvedValue({ template: 'classify {prompt}' })
     const result = await ai.classifyPrompt('what is photosynthesis?', '')
     expect(result.isDelegative).toBe(false)
@@ -159,62 +167,50 @@ describe('ZAIAdapter.classifyPrompt', () => {
   })
 
   it('returns isDelegative=true when LLM does not PASS', async () => {
-    mockCreate.mockResolvedValue({
-      choices: [{ message: { content: 'This is delegative.' } }],
-    })
-    const ai = new ZAIAdapter()
+    mockLLM.mockResolvedValue('This is delegative.')
+    const ai = new GeminiAdapter()
     templateMock.mockResolvedValue({ template: 'classify {prompt}' })
     const result = await ai.classifyPrompt('help me with something', '')
     expect(result.isDelegative).toBe(true)
   })
 })
 
-describe('ZAIAdapter.generateSocratic', () => {
+describe('GeminiAdapter.generateSocratic', () => {
   it('strips QUESTION: prefix and surrounding quotes', async () => {
-    mockCreate.mockResolvedValue({
-      choices: [{ message: { content: 'QUESTION: "What evidence supports this?"' } }],
-    })
+    mockLLM.mockResolvedValue('QUESTION: "What evidence supports this?"')
     templateMock.mockResolvedValue({ template: 'ask a {context} question' })
-    const ai = new ZAIAdapter()
+    const ai = new GeminiAdapter()
     const result = await ai.generateSocratic('Provocation', 'some context')
     expect(result.question).toBe('What evidence supports this?')
   })
 
   it('throws if the template is missing from DB', async () => {
     templateMock.mockResolvedValue(null)
-    const ai = new ZAIAdapter()
+    const ai = new GeminiAdapter()
     await expect(ai.generateSocratic('Provocation', 'ctx')).rejects.toThrow(
       /No active prompt template/,
     )
   })
 })
 
-describe('ZAIAdapter.verifyClaim', () => {
+describe('GeminiAdapter.verifyClaim', () => {
   it('returns the parsed verdict', async () => {
-    mockCreate.mockResolvedValue({
-      choices: [
-        {
-          message: {
-            content: '{"verdict":"supported","explanation":"Found in source.","supported_claims":[],"unsupported_claims":[]}',
-          },
-        },
-      ],
-    })
+    mockLLM.mockResolvedValue(
+      '{"verdict":"supported","explanation":"Found in source.","supported_claims":[],"unsupported_claims":[]}',
+    )
     templateMock.mockResolvedValue({ template: 'verify {claim} against {evidence}' })
-    const ai = new ZAIAdapter()
+    const ai = new GeminiAdapter()
     const result = await ai.verifyClaim('some claim', [{ chunkId: 'c1', content: 'evidence text' }])
     expect(result.verdict).toBe('supported')
     expect(result.explanation).toBe('Found in source.')
   })
 })
 
-describe('ZAIAdapter.generateScaffold', () => {
+describe('GeminiAdapter.generateScaffold', () => {
   it('returns the raw LLM output as the scaffold', async () => {
-    mockCreate.mockResolvedValue({
-      choices: [{ message: { content: 'Claim: __ Evidence: __' } }],
-    })
+    mockLLM.mockResolvedValue('Claim: __ Evidence: __')
     templateMock.mockResolvedValue({ template: 'scaffold for {prompt}' })
-    const ai = new ZAIAdapter()
+    const ai = new GeminiAdapter()
     const result = await ai.generateScaffold('build an argument', 'ctx')
     expect(result.scaffold).toBe('Claim: __ Evidence: __')
   })

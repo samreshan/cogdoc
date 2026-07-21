@@ -1,16 +1,12 @@
 /**
  * Integration tests for POST /api/projects/[id]/add-source (web URL ingestion).
  *
- * Mocks the ZAI page_reader + the fetch fallback. Covers validation, the
- * page_reader happy path, the fetch fallback, and the too-short-content path.
+ * Mocks global fetch. Covers validation, the fetch+strip happy path (with
+ * <title> extraction), the too-short-content path, and the fetch-failure path.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
-const invokeMock = vi.fn()
-vi.mock('z-ai-web-dev-sdk', () => ({
-  default: { create: async () => ({ functions: { invoke: invokeMock } }) },
-}))
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn(async () => ({ id: 'u1' })) }))
 vi.mock('@/lib/db', () => ({
   db: {
@@ -31,8 +27,12 @@ function req(id: string, body: unknown) {
   })
 }
 
+function htmlResponse(html: string) {
+  return { text: async () => html } as Response
+}
+
 beforeEach(() => {
-  invokeMock.mockReset()
+  vi.restoreAllMocks()
 })
 
 describe('POST /api/projects/[id]/add-source — validation', () => {
@@ -42,43 +42,43 @@ describe('POST /api/projects/[id]/add-source — validation', () => {
   })
 })
 
-describe('POST /api/projects/[id]/add-source — page_reader path', () => {
-  it('ingests html content from page_reader and chunks it', async () => {
-    invokeMock.mockResolvedValue({
-      data: { html: '<p>' + 'A'.repeat(200) + '</p>', title: 'A Page' },
-    })
+describe('POST /api/projects/[id]/add-source — fetch path', () => {
+  it('ingests html content, extracts the <title>, and chunks it', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      htmlResponse('<html><head><title>A Page</title></head><body><p>' + 'A'.repeat(200) + '</p></body></html>'),
+    )
     const { db } = await import('@/lib/db')
     ;(db.pdf.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'pdf-1', sizeBytes: 200 })
 
-    const res = await POST(req('p1', { url: 'https://example.com/article', title: 'Orig' }), ctx('p1'))
+    const res = await POST(req('p1', { url: 'https://example.com/article' }), ctx('p1'))
     expect(res.status).toBe(201)
     const body = await res.json()
     expect(body.ok).toBe(true)
-    expect(body.source.filename).toBe('A Page') // page_reader title overrides
+    expect(body.source.filename).toBe('A Page') // page <title> used when no title given
     expect(body.source.chunkCount).toBeGreaterThan(0)
   })
 
-  it('ingests text content when only data.text is present', async () => {
-    invokeMock.mockResolvedValue({ data: { text: 'B'.repeat(200) } })
+  it('keeps the caller-provided title over the page <title>', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      htmlResponse('<title>Page Title</title><p>' + 'B'.repeat(200) + '</p>'),
+    )
     const { db } = await import('@/lib/db')
     ;(db.pdf.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'pdf-1', sizeBytes: 200 })
-    const res = await POST(req('p1', { url: 'https://example.com' }), ctx('p1'))
+    const res = await POST(req('p1', { url: 'https://example.com', title: 'Orig' }), ctx('p1'))
     expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.source.filename).toBe('Orig')
   })
 
   it('returns 422 when extracted content is too short', async () => {
-    invokeMock.mockResolvedValue({ data: { html: '<p>tiny</p>' } })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(htmlResponse('<p>tiny</p>'))
     const res = await POST(req('p1', { url: 'https://example.com' }), ctx('p1'))
     expect(res.status).toBe(422)
   })
-})
 
-describe('POST /api/projects/[id]/add-source — fetch fallback', () => {
-  it('falls back to direct fetch when page_reader throws, and 502s if fetch also fails', async () => {
-    invokeMock.mockRejectedValue(new Error('no page_reader'))
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network'))
+  it('returns 502 when the fetch fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network'))
     const res = await POST(req('p1', { url: 'https://example.com' }), ctx('p1'))
     expect(res.status).toBe(502)
-    fetchSpy.mockRestore()
   })
 })

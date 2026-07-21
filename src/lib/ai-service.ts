@@ -1,12 +1,12 @@
 /**
  * AI Service Layer — Provider Abstraction (ADR-03)
  *
- * Defines the AIService interface and a single concrete adapter (ZAIAdapter)
- * backed by z-ai-web-dev-sdk. The engines (Interceptor, Socratic Spacer,
- * Citation Sentinel, Scaffold) call this layer; they never touch the SDK
- * directly. Swapping to OpenAI or a local LLM is a single new adapter class.
+ * Defines the AIService interface and a single concrete adapter (GeminiAdapter)
+ * backed by the Gemini generateContent REST API (same GEMINI_API_KEY as the
+ * embedding path). The engines (Interceptor, Socratic Spacer, Citation
+ * Sentinel, Scaffold) call this layer; they never touch the API directly.
+ * Swapping to OpenAI or a local LLM is a single new adapter class.
  */
-import ZAI from 'z-ai-web-dev-sdk'
 import { db } from '@/lib/db'
 
 export type BehaviourTag =
@@ -130,37 +130,60 @@ export function parseVerdictJSON(
   }
 }
 
+const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models'
+
+/**
+ * The generation model. gemini-3.1-flash-lite is the tier with a workable
+ * free-quota on this key (see fastapi/app/eval_harness.py) — override with
+ * GEMINI_MODEL when running on a paid key.
+ */
+function geminiModel(): string {
+  return process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite'
+}
+
+async function geminiGenerate(prompt: string): Promise<string> {
+  const key = process.env.GEMINI_API_KEY
+  if (!key) throw new Error('GEMINI_API_KEY is not set')
+  const res = await fetch(`${GEMINI_ENDPOINT}/${geminiModel()}:generateContent?key=${key}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.4,
+        maxOutputTokens: 1024,
+        // Engine outputs are short (a question, a verdict JSON, a scaffold);
+        // thinking only burns latency + quota here.
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    }),
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`Gemini generateContent failed: ${res.status} ${detail.slice(0, 200)}`)
+  }
+  const data = (await res.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+  }
+  return data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+}
+
 async function callLLM(systemPrompt: string): Promise<string> {
-  const zai = await ZAI.create()
   try {
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'assistant', content: systemPrompt },
-        { role: 'user', content: 'Respond now.' },
-      ],
-      thinking: { type: 'disabled' },
-    })
-    return completion.choices[0]?.message?.content ?? ''
+    return await geminiGenerate(systemPrompt)
   } catch (e) {
     // If rate-limited (429), wait 2s and retry once
     if ((e as Error).message.includes('429')) {
       await new Promise((r) => setTimeout(r, 2000))
-      const completion = await zai.chat.completions.create({
-        messages: [
-          { role: 'assistant', content: systemPrompt },
-          { role: 'user', content: 'Respond now.' },
-        ],
-        thinking: { type: 'disabled' },
-      })
-      return completion.choices[0]?.message?.content ?? ''
+      return await geminiGenerate(systemPrompt)
     }
     throw e
   }
 }
 
-// ─── ZAIAdapter (concrete implementation) ─────────────────────────────────
+// ─── GeminiAdapter (concrete implementation) ──────────────────────────────
 
-export class ZAIAdapter implements AIService {
+export class GeminiAdapter implements AIService {
   async classifyPrompt(prompt: string, context: string): Promise<ClassifyResult> {
     // Heuristic pre-check: regex catches the obvious delegative patterns
     // without an LLM call, saving token budget.
@@ -259,6 +282,6 @@ export class ZAIAdapter implements AIService {
 let _instance: AIService | null = null
 
 export function getAIService(): AIService {
-  if (!_instance) _instance = new ZAIAdapter()
+  if (!_instance) _instance = new GeminiAdapter()
   return _instance
 }

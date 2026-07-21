@@ -2,16 +2,14 @@
  * POST /api/projects/[id]/add-source
  * Body: { url, title }
  *
- * Fetches the URL content via z-ai-web-dev-sdk page_reader, extracts the
- * text, chunks it, and adds it to the project's research library — same as
- * if the user had uploaded a PDF.
+ * Fetches the URL directly, strips the HTML to text, chunks it, and adds it
+ * to the project's research library — same as if the user had uploaded a PDF.
  *
  * This lets the user one-click add a web source found by "Find sources"
  * to their library, where the Citation Sentinel can then verify claims
  * against it.
  */
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
 import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 import { chunkText } from '@/lib/retrieval'
@@ -61,31 +59,21 @@ export async function POST(
   let sourceTitle = title || url
 
   try {
-    const zai = await ZAI.create()
-    const result = await zai.functions.invoke('page_reader', { url })
-
-    if (result?.data?.html) {
-      rawText = stripHtml(result.data.html)
-      if (result.data.title) sourceTitle = result.data.title
-    } else if (result?.data?.text) {
-      rawText = result.data.text
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Cogdoc/1.0 (research assistant)' },
+      signal: AbortSignal.timeout(10000),
+    })
+    const html = await res.text()
+    rawText = stripHtml(html)
+    if (!title) {
+      const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
+      if (m?.[1]?.trim()) sourceTitle = m[1].trim().slice(0, 200)
     }
-  } catch (e) {
-    console.error('page_reader failed, trying direct fetch:', e)
-    // Fallback: direct fetch with basic HTML stripping
-    try {
-      const res = await fetch(url, {
-        headers: { 'User-Agent': 'Cogdoc/1.0 (research assistant)' },
-        signal: AbortSignal.timeout(10000),
-      })
-      const html = await res.text()
-      rawText = stripHtml(html)
-    } catch (fetchErr) {
-      return NextResponse.json({
-        error: 'Could not fetch the page content',
-        detail: (fetchErr as Error).message,
-      }, { status: 502 })
-    }
+  } catch (fetchErr) {
+    return NextResponse.json({
+      error: 'Could not fetch the page content',
+      detail: (fetchErr as Error).message,
+    }, { status: 502 })
   }
 
   if (rawText.trim().length < 100) {

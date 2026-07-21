@@ -2,20 +2,23 @@
  * POST /api/find-sources
  * Body: { claim, projectId }
  *
- * Searches the internet for evidence related to the claim using the
- * z-ai-web-dev-sdk web_search function. Returns a list of sources with
- * title, URL, snippet, and relevance assessment.
+ * Searches the internet for evidence related to the claim using the Gemini
+ * generateContent API with the google_search grounding tool (same
+ * GEMINI_API_KEY as the engines and embeddings). Returns a list of sources
+ * with title, URL, snippet, and relevance assessment — search and relevance
+ * assessment happen in a single grounded call.
  *
  * This makes Cogdoc a SMART writing assistant — it proactively finds
  * evidence for your claims without you having to manually search.
  */
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
 import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 
 export const runtime = 'nodejs'
 export const maxDuration = 45
+
+const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 interface SearchResult {
   title: string
@@ -43,44 +46,30 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const zai = await ZAI.create()
-
-    // Step 1: Search the web for evidence related to the claim
-    // Construct a research-oriented query from the claim
     const searchQuery = buildSearchQuery(claim)
 
-    let searchResults: any[]
+    let sources: SearchResult[]
     try {
-      const results = await zai.functions.invoke('web_search', {
-        query: searchQuery,
-        num: 8,
-        recency_days: 365, // prefer recent sources
-      })
-      // The SDK returns results in a specific format — extract the list
-      searchResults = extractSearchResults(results)
+      sources = await geminiFindSources(claim, searchQuery)
     } catch (e) {
       console.error('Web search failed:', e)
       return NextResponse.json({
-        error: 'Web search failed. The AI provider may not support web_search.',
+        error: 'Web search failed. The AI provider may not support search grounding.',
         detail: (e as Error).message,
       }, { status: 502 })
     }
 
-    if (searchResults.length === 0) {
+    if (sources.length === 0) {
       return NextResponse.json({
         sources: [],
         message: 'No sources found for this claim.',
       })
     }
 
-    // Step 2: Use the LLM to assess relevance of each source to the claim
-    // and classify as supporting / refuting / contextual
-    const assessed = await assessRelevance(claim, searchResults)
-
     return NextResponse.json({
-      sources: assessed,
+      sources,
       query: searchQuery,
-      totalFound: searchResults.length,
+      totalFound: sources.length,
     })
   } catch (e) {
     console.error('Find-sources failed:', e)
@@ -105,37 +94,25 @@ function buildSearchQuery(claim: string): string {
   return `${q} research evidence study`
 }
 
-/**
- * Extract search results from the SDK response.
- * The format varies by provider — handle common shapes.
- */
-function extractSearchResults(results: any): any[] {
-  if (!results) return []
-  // Shape 1: { data: { results: [...] } }
-  if (results.data?.results) return results.data.results
-  // Shape 2: { data: [...] }
-  if (Array.isArray(results.data)) return results.data
-  // Shape 3: { results: [...] }
-  if (Array.isArray(results.results)) return results.results
-  // Shape 4: direct array
-  if (Array.isArray(results)) return results
-  // Shape 5: { data: { items: [...] } }
-  if (results.data?.items) return results.data.items
-  return []
+interface GeminiSearchResponse {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string }> }
+    groundingMetadata?: {
+      groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>
+    }
+  }>
 }
 
 /**
- * Use the LLM to assess the relevance of each search result to the claim.
- * Returns sources with a relevance classification and a one-line note.
+ * One grounded Gemini call: search the web for the claim, assess each hit's
+ * relevance, and return up to 8 assessed sources. Falls back to the raw
+ * grounding chunks (relevance "medium") when the model's JSON is unparseable,
+ * so a formatting hiccup degrades to unassessed sources instead of an error.
  */
-async function assessRelevance(claim: string, results: any[]): Promise<SearchResult[]> {
-  // Build a compact representation of the results for the LLM
-  const compact = results.slice(0, 8).map((r, i) => ({
-    i,
-    title: r.title ?? r.name ?? 'Untitled',
-    snippet: (r.snippet ?? r.description ?? r.summary ?? '').slice(0, 300),
-    url: r.url ?? r.link ?? r.href ?? '#',
-  }))
+async function geminiFindSources(claim: string, query: string): Promise<SearchResult[]> {
+  const key = process.env.GEMINI_API_KEY
+  if (!key) throw new Error('GEMINI_API_KEY is not set')
+  const model = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite'
 
   const prompt = `You are a research assistant. A writer made the following claim:
 
@@ -143,43 +120,53 @@ async function assessRelevance(claim: string, results: any[]): Promise<SearchRes
 ${claim}
 """
 
-Here are ${compact.length} web search results. For each one, classify its relevance to the claim as "high", "medium", or "low", and write a one-sentence note explaining what the source says about the claim.
+Search the web for evidence related to this claim (suggested query: "${query}").
 
-Search results:
-${JSON.stringify(compact, null, 2)}
+Then respond with ONLY a JSON array (no markdown, no code fences) of up to 8 sources you found. Each element must be:
+{"title": "<source title>", "url": "<source url>", "snippet": "<one sentence on what the source says about the claim>", "relevance": "high"|"medium"|"low"}`
 
-Respond with a JSON array (no markdown, no code fences) where each element is:
-{"i": <index>, "relevance": "high"|"medium"|"low", "note": "<one sentence>"}`
-
-  let assessment: Array<{ i: number; relevance: string; note: string }> = []
-  try {
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'assistant', content: prompt },
-        { role: 'user', content: 'Respond now.' },
-      ],
-      thinking: { type: 'disabled' },
-    })
-    const raw = completion.choices[0]?.message?.content ?? ''
-    // Extract JSON array from the response
-    const start = raw.indexOf('[')
-    const end = raw.lastIndexOf(']')
-    if (start !== -1 && end !== -1) {
-      assessment = JSON.parse(raw.slice(start, end + 1))
-    }
-  } catch (e) {
-    console.error('Relevance assessment failed, returning unassessed:', e)
+  const res = await fetch(`${GEMINI_ENDPOINT}/${model}:generateContent?key=${key}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      tools: [{ google_search: {} }],
+    }),
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`Gemini search failed: ${res.status} ${detail.slice(0, 200)}`)
   }
 
-  // Merge assessment back into results
-  return compact.map((r) => {
-    const a = assessment.find((x) => x.i === r.i)
-    return {
-      title: r.title,
-      url: r.url,
-      snippet: a?.note || r.snippet,
-      relevance: (a?.relevance as 'high' | 'medium' | 'low') || 'medium',
-    }
+  const data = (await res.json()) as GeminiSearchResponse
+  const cand = data.candidates?.[0]
+  const text = cand?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+  const chunks = cand?.groundingMetadata?.groundingChunks ?? []
+
+  const norm = (r: { title?: string; url?: string; snippet?: string; relevance?: string }): SearchResult => ({
+    title: r.title || 'Untitled',
+    url: r.url || '#',
+    snippet: (r.snippet ?? '').slice(0, 300),
+    relevance: r.relevance === 'high' || r.relevance === 'low' ? r.relevance : 'medium',
   })
+
+  // Prefer the model's assessed JSON list
+  const start = text.indexOf('[')
+  const end = text.lastIndexOf(']')
+  if (start !== -1 && end > start) {
+    try {
+      const parsed = JSON.parse(text.slice(start, end + 1)) as Array<Record<string, string>>
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.slice(0, 8).map(norm)
+      }
+    } catch (e) {
+      console.error('Relevance assessment unparseable, falling back to grounding chunks:', e)
+    }
+  }
+
+  // Fallback: raw grounding hits without assessment
+  return chunks
+    .filter((c) => c.web?.uri)
+    .slice(0, 8)
+    .map((c) => norm({ title: c.web?.title, url: c.web?.uri }))
 }

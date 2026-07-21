@@ -1,22 +1,13 @@
 /**
- * Integration tests for POST /api/find-sources (web search + relevance).
+ * Integration tests for POST /api/find-sources (grounded Gemini web search).
  *
- * Mocks the ZAI SDK's web_search + chat completions. Covers validation,
- * the search→assess pipeline, and the no-results path.
+ * Mocks global fetch with Gemini generateContent response shapes. Covers
+ * validation, the assessed-JSON path, the grounding-chunk fallback, the
+ * no-results path, and the API-failure path.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
-const invokeMock = vi.fn()
-const createChatMock = vi.fn()
-vi.mock('z-ai-web-dev-sdk', () => ({
-  default: {
-    create: async () => ({
-      functions: { invoke: invokeMock },
-      chat: { completions: { create: createChatMock } },
-    }),
-  },
-}))
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn(async () => ({ id: 'u1' })) }))
 vi.mock('@/lib/db', () => ({
   db: { project: { findFirst: vi.fn(async () => ({ id: 'p1' })) } },
@@ -30,8 +21,21 @@ function req(body: unknown) {
   })
 }
 
+function geminiResponse(text: string, groundingChunks?: Array<{ web: { uri: string; title: string } }>) {
+  return {
+    ok: true,
+    json: async () => ({
+      candidates: [{
+        content: { parts: [{ text }] },
+        ...(groundingChunks ? { groundingMetadata: { groundingChunks } } : {}),
+      }],
+    }),
+  } as Response
+}
+
 beforeEach(() => {
-  invokeMock.mockReset(); createChatMock.mockReset()
+  vi.restoreAllMocks()
+  process.env.GEMINI_API_KEY = 'test-key'
 })
 
 describe('POST /api/find-sources — validation', () => {
@@ -49,14 +53,11 @@ describe('POST /api/find-sources — validation', () => {
 })
 
 describe('POST /api/find-sources — pipeline', () => {
-  it('returns sources with assessed relevance', async () => {
-    invokeMock.mockResolvedValue({ data: { results: [
-      { title: 'Paper A', url: 'https://a', snippet: 'supports' },
-      { title: 'Paper B', url: 'https://b', snippet: 'refutes' },
-    ] } })
-    createChatMock.mockResolvedValue({
-      choices: [{ message: { content: '[{"i":0,"relevance":"high","note":"good"},{"i":1,"relevance":"low","note":"weak"}]' } }],
-    })
+  it('returns sources with assessed relevance from the model JSON', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(geminiResponse(
+      '[{"title":"Paper A","url":"https://a","snippet":"good","relevance":"high"},' +
+      '{"title":"Paper B","url":"https://b","snippet":"weak","relevance":"low"}]',
+    ))
 
     const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
     expect(res.status).toBe(200)
@@ -68,7 +69,7 @@ describe('POST /api/find-sources — pipeline', () => {
   })
 
   it('returns empty sources with a message when no results', async () => {
-    invokeMock.mockResolvedValue({ data: { results: [] } })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(geminiResponse('[]'))
     const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -76,17 +77,23 @@ describe('POST /api/find-sources — pipeline', () => {
     expect(body.message).toMatch(/No sources found/)
   })
 
-  it('returns 502 when web_search throws', async () => {
-    invokeMock.mockRejectedValue(new Error('unsupported'))
+  it('returns 502 when the Gemini call fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false, status: 429, text: async () => 'quota',
+    } as Response)
     const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
     expect(res.status).toBe(502)
   })
 
-  it('falls back to medium relevance when LLM assessment fails', async () => {
-    invokeMock.mockResolvedValue({ data: [{ title: 'X', url: 'https://x', snippet: 's' }] })
-    createChatMock.mockRejectedValue(new Error('llm down'))
+  it('falls back to grounding chunks at medium relevance when the JSON is unparseable', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(geminiResponse(
+      'I found some sources but forgot to format them.',
+      [{ web: { uri: 'https://x', title: 'X' } }],
+    ))
     const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
+    expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.sources[0].relevance).toBe('medium')
+    expect(body.sources[0].url).toBe('https://x')
   })
 })
