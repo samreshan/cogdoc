@@ -100,8 +100,9 @@ function escapeHtml(s: string): string {
  * Build a CSS style string for a highly-visible multi-colored underline.
  * Uses a thick solid underline (3px) + a subtle background tint matching the
  * engine color so the marked sentence is impossible to miss.
+ * Exported for the ProseMirror decoration plugin (intervention-highlight.ts).
  */
-function buildUnderlineStyle(engineTypes: EngineType[]): string {
+export function buildUnderlineStyle(engineTypes: EngineType[]): string {
   const colors = engineTypes.map((e) => ENGINE_COLORS[e])
 
   // Thick solid underline (3px) — much more visible than wavy 1.5px

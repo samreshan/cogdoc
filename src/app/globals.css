@@ -121,6 +121,28 @@
   }
 }
 
+/* ── Cogdoc editor ─────────────────────────────────────────────────── */
+/* Placeholder for the Tiptap surface. An empty ProseMirror doc renders as a
+   single <p> holding only a trailing <br>, which :has() can detect. */
+.tiptap-editor:has(> p:first-child:last-child > br.ProseMirror-trailingBreak:only-child)::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  color: #a8a29e;
+  pointer-events: none;
+}
+
+/* Placeholder for the contentEditable title */
+h1[data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: #d6d3d1;
+  pointer-events: none;
+}
+
+/* Marked sentences are hoverable — signal it (decoration spans + legacy marks) */
+.cogdoc-mark {
+  cursor: pointer;
+}
+
 /* ── Cogdoc pet animations ─────────────────────────────────────────── */
 @keyframes cogdoc-pet-bounce {
   0%   { transform: translateY(0) rotate(-2deg); }

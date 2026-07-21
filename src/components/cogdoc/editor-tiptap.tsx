@@ -31,7 +31,10 @@ import {
 } from '@/lib/editor-orchestration'
 import { WavyUnderline } from '@/lib/extensions/wavy-underline'
 import { IdleDetector } from '@/lib/extensions/idle-detector'
-import { highlightSentences } from '@/lib/sentence-highlight'
+import {
+  InterventionHighlight,
+  interventionHighlightKey,
+} from '@/lib/extensions/intervention-highlight'
 import { useDevilsAutocomplete } from '@/lib/use-devils-autocomplete'
 import { useEngineFiring } from '@/lib/use-engine-firing'
 import type { EngineType } from '@/lib/types'
@@ -55,6 +58,7 @@ export default function EditorTiptap() {
   const frictionMode = useCogdoc((s) => s.frictionMode)
 
   const [promptInput, setPromptInput] = useState('')
+  const [wordCount, setWordCount] = useState(0)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(
     project?.document?.lastSaved ?? null,
@@ -64,9 +68,10 @@ export default function EditorTiptap() {
 
   const idleRef = useRef<IdleDetector | null>(null)
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const autocompleteTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const editor = useEditor({
-    extensions: [StarterKit, WavyUnderline],
+    extensions: [StarterKit, WavyUnderline, InterventionHighlight],
     content: parseStoredContent(project?.document?.content),
     editorProps: {
       attributes: {
@@ -87,8 +92,8 @@ export default function EditorTiptap() {
   const scheduleSave = useCallback(() => {
     if (!editor || !project) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    setSaveState('saving')
     saveTimerRef.current = setTimeout(async () => {
+      setSaveState('saving')
       const json = serializeForSave(editor.getJSON())
       try {
         const res = await api.saveDocument(project.id, json)
@@ -110,11 +115,17 @@ export default function EditorTiptap() {
       idleRef.current?.ping()
       // Devil's Autocomplete: try commit or load
       const text = editor.getText()
+      setWordCount(text.split(/\s+/).filter(Boolean).length)
       const lastChar = text.slice(-1)
       if (autocomplete.suggestion && lastChar) {
         autocomplete.typeCommit(lastChar)
-      } else if (project && text.length > 0 && text.length % 8 === 0) {
-        autocomplete.load(project.id, text).catch(() => {})
+      } else if (project && text.length > 20) {
+        // Debounced: one LLM call after a typing pause, not one per 8th
+        // keystroke (the burst pattern exhausted the DB connection pool).
+        if (autocompleteTimerRef.current) clearTimeout(autocompleteTimerRef.current)
+        autocompleteTimerRef.current = setTimeout(() => {
+          autocomplete.load(project.id, editor.getText()).catch(() => {})
+        }, 800)
       }
       // Sentence completion → fire matching engines, staggered 500ms so
       // several engines on one sentence don't trip LLM rate limits (429).
@@ -144,22 +155,22 @@ export default function EditorTiptap() {
     return () => idleRef.current?.stop()
   }, [frictionMode, fireEngine])
 
-  // ── Highlight interventions (re-applied on change) ──────────────────────
-  // Tiptap manages marks via transactions; for the MVP we mirror the DOM-based
-  // highlight (the WavyUnderline mark is wired but applying it per-sentence via
-  // a decoration plugin is Phase 6 polish). The legacy highlightSentences keeps
-  // the contract green.
+  // ── Highlight interventions via ProseMirror decorations ─────────────────
+  // Push the active list into the InterventionHighlight plugin; it renders
+  // .cogdoc-mark spans and re-maps them on every doc change. (The legacy
+  // DOM-mutation highlight was reverted by ProseMirror's mutation observer.)
   useEffect(() => {
-    if (!editor || activeInterventions.length === 0) return
-    const el = editor.view.dom as HTMLElement
-    const t = setTimeout(() => highlightSentences(el, activeInterventions), 100)
-    return () => clearTimeout(t)
+    if (!editor) return
+    editor.view.dispatch(
+      editor.state.tr.setMeta(interventionHighlightKey, activeInterventions),
+    )
   }, [editor, activeInterventions])
 
   // Cleanup
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      if (autocompleteTimerRef.current) clearTimeout(autocompleteTimerRef.current)
     }
   }, [])
 
@@ -214,15 +225,20 @@ export default function EditorTiptap() {
       e.preventDefault()
       autocomplete.tabAccept()
     }
-    // Esc → clear selection (closes any open popover via the hover state)
+    // Esc → clear selection and close any open sentence popover
     if (e.key === 'Escape') {
       window.getSelection()?.removeAllRanges()
+      setHovered(null, null)
     }
   }
 
+  // Seed the word count from the loaded document (updates flow from handleUpdate)
+  useEffect(() => {
+    if (editor) setWordCount(editor.getText().split(/\s+/).filter(Boolean).length)
+  }, [editor])
+
   if (!project || !editor) return null
 
-  const wordCount = editor.getText().split(/\s+/).filter(Boolean).length
   const activeEngines = (Object.keys(engineLoading) as EngineType[]).filter((e) => engineLoading[e])
 
   return (
@@ -307,6 +323,7 @@ export default function EditorTiptap() {
           <Textarea
             value={promptInput}
             onChange={(e) => setPromptInput(e.target.value)}
+            aria-label="Ask Cogdoc"
             placeholder="Ask Cogdoc… (it intercepts delegative prompts and reframes them as questions)"
             rows={1}
             className="resize-none min-h-[32px] max-h-[100px] border-none bg-transparent focus-visible:ring-0 text-sm placeholder:text-stone-400"
@@ -320,6 +337,7 @@ export default function EditorTiptap() {
           />
           <Button
             size="icon"
+            aria-label="Send prompt"
             onClick={handlePromptSubmit}
             disabled={!promptInput.trim() || engineLoading.interceptor}
             className="bg-stone-800 hover:bg-stone-700 shrink-0 h-7 w-7"

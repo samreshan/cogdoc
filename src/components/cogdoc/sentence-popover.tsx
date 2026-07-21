@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
 import { getInterventionsForKey, ENGINE_COLORS } from '@/lib/sentence-highlight'
@@ -10,7 +10,7 @@ import {
   Quote, ChevronDown, ChevronUp, AlertTriangle,
   Search, Pencil, ListPlus, MessageCircle, Loader2, Check,
 } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import type { Intervention, EngineType, Verdict } from '@/lib/types'
 import SourcesResults from './sources-results'
 
@@ -74,15 +74,57 @@ export default function SentencePopover() {
   const bumpAnalytics = useCogdoc((s) => s.bumpAnalytics)
   const project = useCogdoc((s) => s.activeProject)
 
-  const [popoverHovered, setPopoverHovered] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null) // interventionId+actionId
   const [expandedEvidence, setExpandedEvidence] = useState<string | null>(null)
   const [sourcesDialog, setSourcesDialog] = useState<{ open: boolean; claim: string }>({
     open: false,
     claim: '',
   })
+  const closeTimer = useRef<number | null>(null)
+  const reduceMotion = useReducedMotion()
 
   const visible = hoveredKey !== null && hoveredPosition !== null
+
+  // Close behaviour: leaving both the underlined sentence and the popover
+  // schedules a close (with a grace period so the cursor can cross the gap);
+  // re-entering either cancels it. Escape and scrolling close immediately —
+  // the popover is position: fixed, so it goes stale as soon as the page moves.
+  useEffect(() => {
+    if (!visible) return
+    const cancelClose = () => {
+      if (closeTimer.current !== null) {
+        window.clearTimeout(closeTimer.current)
+        closeTimer.current = null
+      }
+    }
+    const close = () => setHovered(null, null)
+    const onMouseOver = (e: MouseEvent) => {
+      const t = e.target as HTMLElement
+      if (t.closest?.('[data-sentence-popover]') || t.closest?.('.cogdoc-mark')) {
+        cancelClose()
+      } else {
+        cancelClose()
+        closeTimer.current = window.setTimeout(close, 300)
+      }
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
+    }
+    const onScroll = (e: Event) => {
+      if (e.target instanceof HTMLElement && e.target.closest('[data-sentence-popover]')) return
+      close()
+    }
+    document.addEventListener('mouseover', onMouseOver)
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('scroll', onScroll, true)
+    return () => {
+      cancelClose()
+      document.removeEventListener('mouseover', onMouseOver)
+      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('scroll', onScroll, true)
+    }
+  }, [visible, setHovered])
+
   if (!visible) return null
 
   const sentenceInterventions = hoveredKey
@@ -143,21 +185,13 @@ export default function SentencePopover() {
   const left = Math.max(16, Math.min(hoveredPosition?.left ?? 16, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 360))
 
   return (
-    <div
-      className="fixed"
-      style={{ top, left, zIndex: 50, width: 340 }}
-      onMouseEnter={() => setPopoverHovered(true)}
-      onMouseLeave={() => {
-        setPopoverHovered(false)
-        setHovered(null, null)
-      }}
-    >
+    <div className="fixed" style={{ top, left, zIndex: 50, width: 340 }}>
       <AnimatePresence>
         <motion.div
-          initial={{ opacity: 0, y: -8, scale: 0.96 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -8, scale: 0.96 }}
-          transition={{ duration: 0.15 }}
+          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.96 }}
+          animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.96 }}
+          transition={{ duration: reduceMotion ? 0.05 : 0.15, ease: 'easeOut' }}
           className="bg-white/98 backdrop-blur-sm rounded-lg shadow-xl border border-stone-200 overflow-hidden"
         >
           {/* Header */}
@@ -189,7 +223,6 @@ export default function SentencePopover() {
                 <div
                   key={i.id}
                   className="px-3 py-2.5 border-b border-stone-100 last:border-b-0"
-                  style={{ borderLeft: `3px solid ${color}` }}
                 >
                   {/* Card header with pixelated pet (alert state — perked up) */}
                   <div className="flex items-center gap-1.5 mb-1.5">

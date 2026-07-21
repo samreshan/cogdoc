@@ -152,8 +152,9 @@ export default function Dashboard() {
               </DialogHeader>
               <div className="space-y-4 py-2">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-stone-700">Title</label>
+                  <label htmlFor="project-title" className="text-sm font-medium text-stone-700">Title</label>
                   <Input
+                    id="project-title"
                     autoFocus
                     placeholder="e.g. Literature Review — AI and Cognitive Offloading"
                     value={newTitle}
@@ -162,8 +163,9 @@ export default function Dashboard() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-stone-700">Description (optional)</label>
+                  <label htmlFor="project-desc" className="text-sm font-medium text-stone-700">Description (optional)</label>
                   <Textarea
+                    id="project-desc"
                     placeholder="What is this piece about?"
                     value={newDesc}
                     onChange={(e) => setNewDesc(e.target.value)}
@@ -205,7 +207,7 @@ export default function Dashboard() {
             return (
               <Card
                 key={engine}
-                className="border-2 hover:shadow-lg transition-all cursor-default group"
+                className="border-2 hover:shadow-lg transition-shadow cursor-default group"
                 style={{ borderColor: char.color + '40', backgroundColor: char.bgColor + '60' }}
               >
                 <CardHeader className="pb-2 pt-4 text-center">
@@ -277,8 +279,16 @@ export default function Dashboard() {
             {projects.map((p) => (
               <Card
                 key={p.id}
-                className="border-stone-200 bg-white/80 hover:bg-white hover:shadow-md transition-all cursor-pointer group"
+                role="button"
+                tabIndex={0}
+                className="border-stone-200 bg-white/80 hover:bg-white hover:shadow-md transition-[background-color,box-shadow] cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400 focus-visible:ring-offset-2"
                 onClick={() => handleOpen(p)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    handleOpen(p)
+                  }
+                }}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
@@ -290,7 +300,7 @@ export default function Dashboard() {
                         e.stopPropagation()
                         setDeleteId(p.id)
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-rose-50 rounded text-stone-400 hover:text-rose-600"
+                      className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 hover:bg-rose-50 rounded text-stone-400 hover:text-rose-600"
                       aria-label="Delete project"
                     >
                       <Trash2 className="w-4 h-4" />

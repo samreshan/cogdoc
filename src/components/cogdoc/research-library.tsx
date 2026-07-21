@@ -233,7 +233,7 @@ export default function ResearchLibrary() {
                   </div>
                   <button
                     onClick={() => setDeleteId(pdf.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-rose-50 rounded text-stone-400 hover:text-rose-600"
+                    className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 hover:bg-rose-50 rounded text-stone-400 hover:text-rose-600"
                     aria-label="Delete source"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
