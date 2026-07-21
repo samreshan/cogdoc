@@ -109,23 +109,39 @@ class GeminiEmbedder:
         if not self.api_key:
             raise ValueError("GeminiEmbedder requires GEMINI_API_KEY")
 
-    def embed(self, text: str) -> list[float]:
+    def _embed_with_task(self, text: str, task_type: str) -> list[float]:
+        import time
+
         url = f"{self.ENDPOINT}/{self.model}:embedContent?key={self.api_key}"
-        resp = httpx.post(
-            url,
-            json={
-                # The API expects a Content object, not a raw string.
-                "content": {"parts": [{"text": text}]},
-                # RETRIEVAL_DOCUMENT for ingest, RETRIEVAL_QUERY for search — the
-                # asymmetry improves retrieval quality. We use DOCUMENT here; the
-                # query side is handled by embed_query if needed.
-                "taskType": "RETRIEVAL_DOCUMENT",
-            },
-            timeout=self.timeout,
-        )
-        resp.raise_for_status()
-        values = resp.json()["embedding"]["values"]
-        return list(values)
+        body = {
+            # The API expects a Content object, not a raw string.
+            "content": {"parts": [{"text": text}]},
+            "taskType": task_type,
+        }
+        # Retry 429s with backoff — free-tier RPM limits are easy to hit
+        # during batch ingest; a transient 429 shouldn't fail the request.
+        for attempt in range(5):
+            resp = httpx.post(url, json=body, timeout=self.timeout)
+            if resp.status_code == 429 and attempt < 4:
+                time.sleep(10 * (attempt + 1))
+                continue
+            resp.raise_for_status()
+            return list(resp.json()["embedding"]["values"])
+        raise RuntimeError("unreachable")  # loop always returns or raises
+
+    def embed(self, text: str) -> list[float]:
+        """Embed a corpus passage (ingest side): taskType RETRIEVAL_DOCUMENT."""
+        return self._embed_with_task(text, "RETRIEVAL_DOCUMENT")
+
+    def embed_query(self, text: str) -> list[float]:
+        """Embed a search query: taskType RETRIEVAL_QUERY.
+
+        Gemini's retrieval embeddings are asymmetric — documents and queries
+        use different task types, and mixing them (embedding queries as
+        DOCUMENT) measurably degrades ranking. The vector stores call this
+        for the query side; stored document vectors are unaffected.
+        """
+        return self._embed_with_task(text, "RETRIEVAL_QUERY")
 
     def __call__(self, text: str) -> list[float]:
         return self.embed(text)

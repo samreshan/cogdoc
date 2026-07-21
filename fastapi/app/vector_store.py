@@ -99,7 +99,9 @@ class VectorStore:
         chunks = self._store.get(project_id, [])
         if not chunks:
             return []
-        query_vec = self.embedder.embed(query)
+        # Asymmetric retrieval: embedders that distinguish query embeddings
+        # (GeminiEmbedder.embed_query) use them here; others fall back to embed.
+        query_vec = getattr(self.embedder, "embed_query", self.embedder.embed)(query)
         scored = [
             (chunk, cosine_similarity(query_vec, chunk.embedding))
             for chunk in chunks
@@ -211,7 +213,8 @@ class PgvectorStore:
         top_k: int = 5,
         min_score: float = 0.05,
     ) -> list[RetrievedChunk]:
-        query_vec = self.embedder.embed(query)
+        # Asymmetric retrieval (see VectorStore.retrieve).
+        query_vec = getattr(self.embedder, "embed_query", self.embedder.embed)(query)
         vec_lit = "[" + ",".join(str(float(v)) for v in query_vec) + "]"
         with self._connection.cursor() as cur:
             # cosine DISTANCE is 1 - cosine_similarity, so the score floor maps
