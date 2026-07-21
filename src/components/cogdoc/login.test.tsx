@@ -23,9 +23,12 @@ import Login from './login'
 import { supabase } from '@/lib/supabase-browser'
 
 const signInMock = supabase.auth.signInWithPassword as ReturnType<typeof vi.fn>
+const signUpMock = supabase.auth.signUp as ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   signInMock.mockClear()
+  signUpMock.mockClear()
+  signUpMock.mockResolvedValue({ data: { session: null }, error: null })
 })
 afterEach(() => cleanup)
 
@@ -43,5 +46,38 @@ describe('Login', () => {
     fireEvent.change(screen.getByPlaceholderText(/password/i), { target: { value: 'secret' } })
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }))
     expect(signInMock).toHaveBeenCalledWith({ email: 'w@c.co', password: 'secret' })
+  })
+})
+
+describe('Login — signup mode', () => {
+  function toSignup() {
+    render(<Login />)
+    fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
+  }
+
+  it('shows a confirm-password field after switching to sign up', () => {
+    toSignup()
+    expect(screen.getByPlaceholderText(/confirm password/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /create account/i })).toBeTruthy()
+  })
+
+  it('rejects mismatched passwords without calling signUp', async () => {
+    toSignup()
+    fireEvent.change(screen.getByPlaceholderText(/email/i), { target: { value: 'w@c.co' } })
+    fireEvent.change(screen.getByPlaceholderText(/^password$/i), { target: { value: 'secret1' } })
+    fireEvent.change(screen.getByPlaceholderText(/confirm password/i), { target: { value: 'different' } })
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+    expect(await screen.findByText(/do not match/i)).toBeTruthy()
+    expect(signUpMock).not.toHaveBeenCalled()
+  })
+
+  it('calls signUp with matching credentials and shows the confirmation notice', async () => {
+    toSignup()
+    fireEvent.change(screen.getByPlaceholderText(/email/i), { target: { value: 'w@c.co' } })
+    fireEvent.change(screen.getByPlaceholderText(/^password$/i), { target: { value: 'secret1' } })
+    fireEvent.change(screen.getByPlaceholderText(/confirm password/i), { target: { value: 'secret1' } })
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+    expect(await screen.findByText(/confirmation link/i)).toBeTruthy()
+    expect(signUpMock).toHaveBeenCalledWith({ email: 'w@c.co', password: 'secret1' })
   })
 })
