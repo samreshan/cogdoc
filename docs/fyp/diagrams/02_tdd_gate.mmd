@@ -1,0 +1,16 @@
+flowchart TD
+    A[New requirement<br/>or change] --> B[Write failing test<br/>Red]
+    B --> C[Run test<br/>Fails as expected?]
+    C -->|No| B
+    C -->|Yes| D[Write minimum code<br/>to pass test]
+    D --> E[Run test<br/>Green?]
+    E -->|No| D
+    E -->|Yes| F[Refactor<br/>clean up code]
+    F --> G[Run full suite]
+    G --> H{Coverage Gate<br/>scripts/gate.sh<br/>≥ 80% TS & Python?}
+    H -->|Fails| I[Write more tests<br/>Do NOT soften gate]
+    I --> G
+    H -->|Passes| J[Commit<br/>Conventional Commit]
+    J --> K{Sprint goal<br/>reached?}
+    K -->|No| A
+    K -->|Yes| L[Tag release<br/>e.g. v1-sprint1]

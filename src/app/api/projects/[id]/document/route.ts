@@ -7,6 +7,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
+import { canonicalDocumentString } from '@/lib/document-content'
+import { sha256 } from '@/lib/crypto'
+import { appendAuditEvent } from '@/lib/workspace-server'
 
 export async function PUT(
   req: NextRequest,
@@ -16,6 +19,7 @@ export async function PUT(
   const userId = await requireUserId(req)
   const body = await req.json().catch(() => ({}))
   const content = typeof body.content === 'string' ? body.content : ''
+  const baseRevision = Number.isInteger(body.baseRevision) ? Number(body.baseRevision) : null
 
   // Verify the project belongs to the acting user (isolation, §8).
   const project = await db.project.findUnique({ where: { id }, select: { userId: true, document: true } })
@@ -23,14 +27,37 @@ export async function PUT(
     return NextResponse.json({ error: 'Project not found' }, { status: 404 })
   }
 
-  const document = await db.document.upsert({
-    where: { projectId: id },
-    update: { content, lastSaved: new Date() },
-    create: { projectId: id, content, lastSaved: new Date() },
+  if (baseRevision !== null && project.document && baseRevision !== project.document.revision) {
+    return NextResponse.json({
+      error: 'This document changed in another session.',
+      code: 'revision_conflict',
+      serverRevision: project.document.revision,
+      serverContent: project.document.content,
+    }, { status: 409 })
+  }
+
+  const canonical = canonicalDocumentString(content)
+  const contentHash = sha256(canonical)
+  const document = await db.$transaction(async (tx) => {
+    const saved = await tx.document.upsert({
+      where: { projectId: id },
+      update: { content: canonical, contentHash, revision: { increment: 1 }, lastSaved: new Date() },
+      create: { projectId: id, content: canonical, contentHash, revision: 1, lastSaved: new Date() },
+    })
+    await tx.project.update({ where: { id }, data: { updatedAt: new Date(), lifecycleState: 'draft' } })
+    await tx.certificate.updateMany({
+      where: { projectId: id, status: 'valid' },
+      data: { status: 'superseded', supersededAt: new Date() },
+    })
+    await appendAuditEvent(tx, {
+      projectId: id,
+      userId,
+      type: 'document_saved',
+      documentHash: contentHash,
+      payload: { revision: saved.revision },
+    })
+    return saved
   })
 
-  // Touch project.updatedAt
-  await db.project.update({ where: { id }, data: { updatedAt: new Date() } })
-
-  return NextResponse.json({ ok: true, lastSaved: document.lastSaved })
+  return NextResponse.json({ ok: true, lastSaved: document.lastSaved, revision: document.revision, contentHash })
 }

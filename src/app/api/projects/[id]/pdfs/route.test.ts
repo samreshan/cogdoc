@@ -16,6 +16,7 @@ vi.mock('@/lib/db', () => ({
   },
 }))
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn() }))
+vi.mock('@/lib/auth-supabase', () => ({ requireUserId: vi.fn().mockResolvedValue('u1') }))
 
 import { POST, GET } from '@/app/api/projects/[id]/pdfs/route'
 import { db } from '@/lib/db'
@@ -160,6 +161,7 @@ describe('POST /api/projects/[id]/pdfs — FastAPI vector ingest', () => {
 
 describe('GET /api/projects/[id]/pdfs', () => {
   it('lists PDFs with chunk counts', async () => {
+    findUnique.mockResolvedValue({ id: 'p1' })
     pdfFindMany.mockResolvedValue([{ id: 'pdf-1', filename: 'a.pdf', _count: { chunks: 7 } }])
     const res = await GET(new NextRequest('http://localhost/api/projects/p1/pdfs'), ctx('p1'))
     expect(res.status).toBe(200)

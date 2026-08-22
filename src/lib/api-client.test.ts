@@ -57,7 +57,7 @@ describe('project endpoints', () => {
   it('saveDocument PUTs content', async () => {
     fetchMock.mockResolvedValue(mockJsonResponse({ ok: true, lastSaved: 'now' }))
     await api.saveDocument('p1', 'content')
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/projects/p1/document')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/workspaces/p1/document')
     expect(fetchMock.mock.calls[0][1].method).toBe('PUT')
   })
 

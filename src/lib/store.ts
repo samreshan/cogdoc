@@ -4,10 +4,10 @@
  * sentences, not positioned), and hovered-sentence state for the popover.
  */
 import { create } from 'zustand'
-import type { Project, Intervention, EngineType, FrictionMode } from '@/lib/types'
+import type { Project, Intervention, PositionedIntervention, EngineType, FrictionMode } from '@/lib/types'
 
-export type View = 'dashboard' | 'editor'
-export type ModalName = 'none' | 'library' | 'stats' | 'history'
+export type View = 'dashboard' | 'workspace' | 'editor' | 'verification'
+export type ModalName = 'none' | 'library' | 'stats' | 'history' | 'review'
 
 interface CogdocState {
   // Navigation
@@ -17,14 +17,19 @@ interface CogdocState {
   // Active project
   activeProject: Project | null
   setActiveProject: (p: Project | null) => void
-  updateActiveProjectContent: (content: string, lastSaved?: string) => void
+  updateActiveProjectContent: (content: string, lastSaved?: string, revision?: number, contentHash?: string) => void
 
   // Active interventions (linked to sentences via promptText)
   activeInterventions: Intervention[]
   pushIntervention: (i: Intervention) => void
   markInterventionFading: (id: string) => void
   removeIntervention: (id: string) => void
+  updateIntervention: (id: string, patch: Partial<Intervention>) => void
   clearInterventions: () => void
+
+  // Legacy floating margin compatibility. New review work uses ActionQueue.
+  positionedInterventions: PositionedIntervention[]
+  removePositionedIntervention: (id: string) => void
 
   // Hovered sentence (for popover display)
   hoveredSentenceKey: string | null
@@ -70,15 +75,21 @@ export const useCogdoc = create<CogdocState>((set) => ({
       hoveredSentenceKey: null,
       blindspotShownThisSession: false,
     }),
-  updateActiveProjectContent: (content, lastSaved) =>
+  updateActiveProjectContent: (content, lastSaved, revision, contentHash) =>
     set((s) => {
       if (!s.activeProject) return {}
       return {
         activeProject: {
           ...s.activeProject,
           document: s.activeProject.document
-            ? { ...s.activeProject.document, content, lastSaved: lastSaved ?? s.activeProject.document.lastSaved }
-            : { id: '', content, lastSaved: lastSaved ?? new Date().toISOString() },
+            ? {
+                ...s.activeProject.document,
+                content,
+                lastSaved: lastSaved ?? s.activeProject.document.lastSaved,
+                revision: revision ?? s.activeProject.document.revision,
+                contentHash: contentHash ?? s.activeProject.document.contentHash,
+              }
+            : { id: '', content, lastSaved: lastSaved ?? new Date().toISOString(), revision: revision ?? 0, contentHash: contentHash ?? '' },
         },
       }
     }),
@@ -98,7 +109,13 @@ export const useCogdoc = create<CogdocState>((set) => ({
     set((s) => ({
       activeInterventions: s.activeInterventions.filter((i) => i.id !== id),
     })),
+  updateIntervention: (id, patch) =>
+    set((s) => ({ activeInterventions: s.activeInterventions.map((item) => item.id === id ? { ...item, ...patch } : item) })),
   clearInterventions: () => set({ activeInterventions: [] }),
+
+  positionedInterventions: [],
+  removePositionedIntervention: (id) =>
+    set((s) => ({ positionedInterventions: s.positionedInterventions.filter((item) => item.id !== id) })),
 
   hoveredSentenceKey: null,
   hoveredPosition: null,

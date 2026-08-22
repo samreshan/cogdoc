@@ -1,0 +1,33 @@
+flowchart LR
+    subgraph Corpus[Real Corpus - 5 PDFs]
+        P[(28 passages<br/>verbatim chunks)]
+    end
+    subgraph Claims[50 hand-labelled claims]
+        C1[20 supported]
+        C2[10 partially supported]
+        C3[10 unsupported]
+        C4[10 insufficient evidence<br/>incl. hard negatives]
+    end
+    subgraph Split[Deterministic split]
+        Cal[(Calibration ~1/3<br/>n = 19<br/>choose similarity floor)]
+        Test[(Held-out test ~2/3<br/>n = 31<br/>all reported metrics)]
+    end
+
+    subgraph Pipeline[Calibrated pipeline]
+        E[Embed claim<br/>RETRIEVAL_QUERY] --> R[Retrieve top-k<br/>cosine + HNSW]
+        R --> G{Verdict guard<br/>grounding weak?}
+        G -->|yes| IE[force insufficient_evidence]
+        G -->|no| LLM[Classify verdict<br/>evidence-only prompt]
+        LLM --> V[verdict label]
+        IE --> V
+    end
+
+    P --> R
+    Claims --> Split
+    Cal -.tunes floor.-> G
+    Test --> Pipeline
+    V --> M[macro-F1 + per-class<br/>Recall@5, delta vs keyword]
+    M -.api failures = 0<br/>never silently scored.-> Done([Reported results])
+
+    classDef store fill:#f3f3f3,stroke:#888
+    class P,Cal,Test store

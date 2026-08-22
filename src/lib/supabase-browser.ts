@@ -7,10 +7,28 @@
  */
 import { createBrowserClient } from '@supabase/ssr'
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-const key =
+const SUPABASE_URL = () => process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+const SUPABASE_KEY = () =>
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
   ''
 
-export const supabase = createBrowserClient(url, key)
+type BrowserClient = ReturnType<typeof createBrowserClient>
+
+let client: BrowserClient | null = null
+
+/**
+ * Constructed on first use, not at import time: createBrowserClient throws when
+ * the URL/key are empty, and this module is evaluated during `next build` when
+ * the page is prerendered — where Supabase env vars may not exist yet.
+ * Callers gate on NEXT_PUBLIC_SUPABASE_URL before touching the client.
+ */
+function getClient(): BrowserClient {
+  if (!client) client = createBrowserClient(SUPABASE_URL(), SUPABASE_KEY())
+  return client
+}
+
+export const supabase = new Proxy({} as BrowserClient, {
+  get: (_target, prop: string | symbol) =>
+    Reflect.get(getClient() as object, prop),
+})

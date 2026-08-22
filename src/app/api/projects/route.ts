@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 
-export async function GET(req: NextRequest) {
+export async function GET(req = new NextRequest('http://localhost/api/projects')) {
   const userId = await requireUserId(req)
   const projects = await db.project.findMany({
     where: { userId, archived: false },

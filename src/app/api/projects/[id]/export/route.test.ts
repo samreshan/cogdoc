@@ -9,6 +9,7 @@ import { NextRequest } from 'next/server'
 vi.mock('@/lib/db', () => ({
   db: { project: { findUnique: vi.fn() } },
 }))
+vi.mock('@/lib/auth-supabase', () => ({ requireUserId: vi.fn().mockResolvedValue('u1') }))
 
 import { GET } from '@/app/api/projects/[id]/export/route'
 import { db } from '@/lib/db'

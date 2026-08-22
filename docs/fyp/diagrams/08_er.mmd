@@ -1,0 +1,87 @@
+erDiagram
+    USER ||--o{ PROJECT : owns
+    USER ||--o{ INTERVENTION : raises
+    USER ||--o{ PDF : uploads
+    PROJECT ||--|| DOCUMENT : has
+    PROJECT ||--o{ PDF : contains
+    PROJECT ||--o{ INTERVENTION : produces
+    PDF ||--o{ PDF_CHUNK : "split into"
+    INTERVENTION ||--o{ INTERVENTION_EVIDENCE : cites
+    PDF_CHUNK ||--o{ INTERVENTION_EVIDENCE : "used as evidence"
+    PROMPT_TEMPLATE }o--|| INTERVENTION : "tags"
+
+    USER {
+        string id PK
+        string email UK
+        string displayName
+        int dailyTokenBudget
+        string frictionMode
+        datetime createdAt
+        datetime lastLogin
+    }
+    PROJECT {
+        string id PK
+        string userId FK
+        string title
+        string description
+        boolean archived
+        datetime createdAt
+        datetime updatedAt
+    }
+    DOCUMENT {
+        string id PK
+        string projectId FK
+        string content
+        datetime lastSaved
+    }
+    PDF {
+        string id PK
+        string projectId FK
+        string userId FK
+        string filename
+        string rawText
+        int sizeBytes
+        string parseStatus
+        datetime uploadedAt
+    }
+    PDF_CHUNK {
+        string id PK
+        string pdfId FK
+        int chunkIndex
+        string content
+        int charCount
+        int pageApprox
+        string embedding
+        datetime createdAt
+    }
+    INTERVENTION {
+        string id PK
+        string userId FK
+        string projectId FK
+        string paragraphId
+        string promptTemplateTag
+        string engineType
+        string promptText
+        string responseText
+        string verdict
+        string status
+        string userAction
+        datetime createdAt
+        datetime resolvedAt
+    }
+    INTERVENTION_EVIDENCE {
+        string id PK
+        string interventionId FK
+        string chunkId FK
+        float similarityScore
+        string citedExcerpt
+    }
+    PROMPT_TEMPLATE {
+        string id PK
+        string behaviorTag UK
+        string name
+        string template
+        string modelId
+        int version
+        boolean active
+    }

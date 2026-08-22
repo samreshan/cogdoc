@@ -4,6 +4,9 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireUserId } from '@/lib/auth-supabase'
+import { documentToHtml, documentToPlainText } from '@/lib/document-content'
+import { exportAcademicDocx } from '@/lib/docx'
 
 function htmlToText(html: string): string {
   return html
@@ -49,25 +52,38 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
+  const userId = await requireUserId(req)
   const { searchParams } = new URL(req.url)
   const format = (searchParams.get('format') ?? 'md').toLowerCase()
 
   const project = await db.project.findUnique({
-    where: { id },
+    where: { id, userId },
     include: { document: true },
   })
   if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const html = project.document?.content ?? ''
+  const storedContent = project.document?.content ?? ''
+  const html = documentToHtml(storedContent)
   const title = project.title
 
   let body: string
   let contentType: string
   let fileExt: string
 
+  if (format === 'docx') {
+    const body = await exportAcademicDocx(title, storedContent)
+    const safeTitle = title.replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 60)
+    return new NextResponse(new Uint8Array(body), {
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'Content-Disposition': `attachment; filename="${safeTitle || 'cogdoc-export'}.docx"`,
+      },
+    })
+  }
+
   switch (format) {
     case 'txt':
-      body = `${title}\n${'='.repeat(title.length)}\n\n${htmlToText(html)}`
+      body = `${title}\n${'='.repeat(title.length)}\n\n${documentToPlainText(storedContent)}`
       contentType = 'text/plain; charset=utf-8'
       fileExt = 'txt'
       break

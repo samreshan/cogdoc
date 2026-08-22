@@ -1,365 +1,194 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
 import type { Project } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Badge } from '@/components/ui/badge'
-import { FileText, Plus, Trash2, Sparkles, ArrowRight, BookOpen, ShieldCheck } from 'lucide-react'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { ArrowRight, BookOpen, CalendarClock, FileInput, FlaskConical, Loader2, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { ENGINE_CHARACTERS, EnginePet } from '@/lib/engine-characters'
-import type { EngineType } from '@/lib/types'
+
+type WorkspaceWithStatus = Project & {
+  reviewRuns?: Array<{ status: string; createdAt: string }>
+  certificates?: Array<{ status: string }>
+  _count: Project['_count'] & { reviewItems?: number; codeSnapshots?: number }
+}
 
 export default function Dashboard() {
-  const setView = useCogdoc((s) => s.setView)
-  const setActiveProject = useCogdoc((s) => s.setActiveProject)
-
-  const [projects, setProjects] = useState<Project[]>([])
+  const setView = useCogdoc((state) => state.setView)
+  const setActiveProject = useCogdoc((state) => state.setActiveProject)
+  const [workspaces, setWorkspaces] = useState<WorkspaceWithStatus[]>([])
   const [loading, setLoading] = useState(true)
-  const [createOpen, setCreateOpen] = useState(false)
-  const [newTitle, setNewTitle] = useState('')
-  const [newDesc, setNewDesc] = useState('')
+  const [createType, setCreateType] = useState<'assignment' | 'research' | null>(null)
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [dueAt, setDueAt] = useState('')
   const [creating, setCreating] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-
-  useEffect(() => {
-    refresh()
-  }, [])
+  const importRef = useRef<HTMLInputElement>(null)
 
   async function refresh() {
     setLoading(true)
     try {
-      const { projects } = await api.listProjects()
-      setProjects(projects)
-    } catch (e) {
-      toast.error('Failed to load projects', { description: (e as Error).message })
+      const { workspaces: rows } = await api.listWorkspaces()
+      setWorkspaces(rows as WorkspaceWithStatus[])
+    } catch (error) {
+      toast.error('Could not load your workspaces', { description: (error as Error).message })
     } finally {
       setLoading(false)
     }
   }
 
-  async function handleCreate() {
-    if (!newTitle.trim()) {
-      toast.error('Please enter a title')
-      return
+  useEffect(() => { refresh() }, [])
+
+  async function openWorkspace(id: string) {
+    try {
+      const { workspace } = await api.getWorkspace(id)
+      setActiveProject(workspace)
+      setView('workspace')
+    } catch (error) {
+      toast.error('Could not open this workspace', { description: (error as Error).message })
     }
+  }
+
+  async function createWorkspace() {
+    if (!createType || !title.trim()) return
     setCreating(true)
     try {
-      const { project } = await api.createProject(newTitle, newDesc)
-      // Fetch the full project (with all relations) before opening the editor
-      const { project: fullProject } = await api.getProject(project.id)
-      setCreateOpen(false)
-      setNewTitle('')
-      setNewDesc('')
-      setActiveProject(fullProject)
-      setView('editor')
-      toast.success('Project created', { description: project.title })
-    } catch (e) {
-      toast.error('Failed to create project', { description: (e as Error).message })
+      const { workspace } = await api.createWorkspace({
+        title: title.trim(), workspaceType: createType, description,
+        dueAt: createType === 'assignment' && dueAt ? new Date(dueAt).toISOString() : null,
+        reviewPace: createType === 'assignment' ? 'guided' : 'deep', citationStyle: 'harvard',
+      })
+      setCreateType(null)
+      setTitle('')
+      setDescription('')
+      setDueAt('')
+      setActiveProject(workspace)
+      setView('workspace')
+    } catch (error) {
+      toast.error('Could not create the workspace', { description: (error as Error).message })
     } finally {
       setCreating(false)
     }
   }
 
-  async function handleOpen(p: Project) {
+  async function importDocx(file: File) {
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      toast.error('Choose a DOCX file')
+      return
+    }
+    setImporting(true)
     try {
-      const { project } = await api.getProject(p.id)
-      setActiveProject(project)
-      setView('editor')
-    } catch (e) {
-      toast.error('Failed to open project', { description: (e as Error).message })
+      const { workspace } = await api.createWorkspace({
+        title: file.name.replace(/\.docx$/i, ''), workspaceType: 'assignment',
+        reviewPace: 'rapid', citationStyle: 'harvard',
+      })
+      const imported = await api.importWorkspaceFile(workspace.id, file, 'docx') as { compatibility?: { warnings?: string[] } }
+      const { workspace: hydrated } = await api.getWorkspace(workspace.id)
+      setActiveProject(hydrated)
+      setView('workspace')
+      toast.success('Document imported', { description: imported.compatibility?.warnings?.[0] ?? 'Review the compatibility notes before editing.' })
+    } catch (error) {
+      toast.error('DOCX import failed', { description: (error as Error).message })
+      refresh()
+    } finally {
+      setImporting(false)
+      if (importRef.current) importRef.current.value = ''
     }
   }
 
-  async function handleDelete() {
+  async function deleteWorkspace() {
     if (!deleteId) return
     try {
-      await api.deleteProject(deleteId)
-      toast.success('Project deleted')
+      await api.deleteWorkspace(deleteId)
+      setWorkspaces((rows) => rows.filter((workspace) => workspace.id !== deleteId))
       setDeleteId(null)
-      refresh()
-    } catch (e) {
-      toast.error('Failed to delete', { description: (e as Error).message })
+      toast.success('Workspace moved to 30-day recovery')
+    } catch (error) {
+      toast.error('Could not remove the workspace', { description: (error as Error).message })
     }
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-stone-50 via-stone-100 to-amber-50/30">
-      <header className="border-b border-stone-200 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+    <main id="main-content" className="min-h-screen bg-[#f4f1e9] text-stone-900">
+      <header className="border-b border-stone-300/70 bg-[#f8f6f0]/95 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            {/* Cogdoc logo — pixelated mark with all 4 pet colors */}
-            <div className="w-10 h-10 rounded-lg bg-stone-900 flex items-center justify-center overflow-hidden relative">
-              <div className="grid grid-cols-2 grid-rows-2 gap-px w-6 h-6">
-                <div style={{ background: ENGINE_CHARACTERS.interceptor.color }} />
-                <div style={{ background: ENGINE_CHARACTERS.socratic.color }} />
-                <div style={{ background: ENGINE_CHARACTERS.citation.color }} />
-                <div style={{ background: ENGINE_CHARACTERS.scaffold.color }} />
-              </div>
-            </div>
-            <div>
-              <h1
-                className="text-xl font-bold text-stone-900 tracking-tight"
-                style={{ fontFamily: 'var(--font-newsreader), Georgia, serif' }}
-              >
-                Cogdoc
-              </h1>
-              <p className="text-xs text-stone-500 -mt-0.5">A research-assisted writing IDE</p>
-            </div>
+            <div className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#173f35] font-mono text-xs font-semibold text-white">CD</div>
+            <div><p className="font-serif text-lg font-semibold tracking-tight">Cogdoc</p><p className="text-xs text-stone-500">Academic work you can account for</p></div>
           </div>
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-stone-900 hover:bg-stone-800">
-                <Plus className="w-4 h-4 mr-1.5" />
-                New Project
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create a new project</DialogTitle>
-                <DialogDescription>
-                  A project is one writing piece — a literature review chapter, an essay draft, a research proposal. Each project gets its own research library and intervention history.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <label htmlFor="project-title" className="text-sm font-medium text-stone-700">Title</label>
-                  <Input
-                    id="project-title"
-                    autoFocus
-                    placeholder="e.g. Literature Review — AI and Cognitive Offloading"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="project-desc" className="text-sm font-medium text-stone-700">Description (optional)</label>
-                  <Textarea
-                    id="project-desc"
-                    placeholder="What is this piece about?"
-                    value={newDesc}
-                    onChange={(e) => setNewDesc(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-                <Button onClick={handleCreate} disabled={creating} className="bg-stone-900 hover:bg-stone-800">
-                  {creating ? 'Creating...' : 'Create project'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <span className="text-sm text-stone-500">Private by default</span>
         </div>
       </header>
 
-      <section className="max-w-6xl w-full mx-auto px-6 pt-12 pb-8">
-        {/* Hero — branded pitch with the 4 pixelated pets */}
-        <div className="text-center mb-12">
-          <h2
-            className="text-4xl md:text-5xl font-bold text-stone-900 mb-4 leading-tight"
-            style={{ fontFamily: 'var(--font-newsreader), Georgia, serif' }}
-          >
-            Write better by thinking harder.
-          </h2>
-          <p className="text-lg text-stone-600 max-w-2xl mx-auto leading-relaxed">
-            Cogdoc never writes your prose. Four AI guardians read every sentence you type —
-            questioning, challenging, verifying, and scaffolding. They intervene in the margin.
-            You stay the author.
-          </p>
+      <section className="mx-auto max-w-7xl px-6 pb-12 pt-14">
+        <div className="grid items-end gap-10 border-b border-stone-300 pb-12 lg:grid-cols-[1.2fr_.8fr]">
+          <div>
+            <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.2em] text-[#386c5c]">Assignment and research workspace</p>
+            <h1 className="max-w-3xl text-balance font-serif text-5xl font-semibold leading-[1.02] tracking-[-0.035em] md:text-6xl">Bring the draft. Leave with evidence.</h1>
+            <p className="mt-6 max-w-2xl text-pretty text-lg leading-8 text-stone-600">Import an AI-assisted assignment or write from the beginning. Cogdoc checks the claims, citations, sources, and reasoning—without pretending to prove who wrote it.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <Button onClick={() => setCreateType('assignment')} className="h-12 justify-between rounded-[10px] bg-[#173f35] px-4 text-sm hover:bg-[#245548] active:translate-y-px"><span className="flex items-center"><Plus className="mr-2 h-4 w-4" />New assignment</span><ArrowRight className="h-4 w-4" /></Button>
+            <div className="grid grid-cols-2 gap-3">
+              <Button variant="outline" onClick={() => setCreateType('research')} className="h-11 rounded-[10px] border-stone-300 bg-transparent hover:bg-white/60 active:translate-y-px"><FlaskConical className="mr-2 h-4 w-4" />Research</Button>
+              <Button variant="outline" onClick={() => importRef.current?.click()} disabled={importing} className="h-11 rounded-[10px] border-stone-300 bg-transparent hover:bg-white/60 active:translate-y-px">{importing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileInput className="mr-2 h-4 w-4" />}Import DOCX</Button>
+              <input ref={importRef} type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={(event) => event.target.files?.[0] && importDocx(event.target.files[0])} />
+            </div>
+          </div>
         </div>
 
-        {/* The 4 pets — branded cards */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-          {(['interceptor', 'socratic', 'citation', 'scaffold'] as EngineType[]).map((engine) => {
-            const char = ENGINE_CHARACTERS[engine]
-            return (
-              <Card
-                key={engine}
-                className="border-2 hover:shadow-lg transition-shadow cursor-default group"
-                style={{ borderColor: char.color + '40', backgroundColor: char.bgColor + '60' }}
-              >
-                <CardHeader className="pb-2 pt-4 text-center">
-                  <div
-                    className="w-16 h-16 mx-auto rounded-xl flex items-center justify-center mb-2 group-hover:scale-110 transition-transform"
-                    style={{ backgroundColor: char.bgColor }}
-                    title={char.archetype}
-                  >
-                    <EnginePet engine={engine} size={40} state="idle" />
-                  </div>
-                  <CardTitle
-                    className="text-lg font-bold"
-                    style={{ color: char.color, fontFamily: 'var(--font-newsreader), Georgia, serif' }}
-                  >
-                    {char.name}
-                  </CardTitle>
-                  <p className="text-[10px] uppercase tracking-widest text-stone-500 font-medium">
-                    {char.role}
-                  </p>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="text-xs text-stone-600 text-center leading-relaxed mb-2">
-                    {char.personality}
-                  </p>
-                  <p className="text-[10px] text-stone-400 text-center italic leading-relaxed">
-                    {char.archetype}
-                  </p>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-
-        <div className="flex items-baseline justify-between mb-4">
-          <h2 className="text-lg font-semibold text-stone-900">Your projects</h2>
-          <p className="text-sm text-stone-500">{projects.length} {projects.length === 1 ? 'project' : 'projects'}</p>
+        <div className="mb-5 mt-10 flex items-end justify-between">
+          <div><p className="font-serif text-2xl font-semibold">Your workspaces</p><p className="mt-1 text-sm text-stone-500">Nothing is shared until you create a private verification link.</p></div>
+          <span className="font-mono text-xs tabular-nums text-stone-500">{workspaces.length} active</span>
         </div>
 
         {loading ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <Card key={i} className="border-stone-200 bg-white/70 overflow-hidden">
-                <CardHeader className="pb-3">
-                  <div className="h-4 w-2/3 bg-stone-200 rounded animate-pulse" />
-                  <div className="h-3 w-full bg-stone-100 rounded animate-pulse mt-2" />
-                </CardHeader>
-                <CardContent>
-                  <div className="h-3 w-1/3 bg-stone-100 rounded animate-pulse" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : projects.length === 0 ? (
-          <Card className="border-dashed border-stone-300 bg-white/50">
-            <CardContent className="py-16 text-center">
-              <FileText className="w-12 h-12 mx-auto text-stone-400 mb-4" />
-              <p className="text-stone-700 font-medium mb-1">No projects yet</p>
-              <p className="text-sm text-stone-500 mb-6 max-w-md mx-auto">
-                Create your first project to start writing with productive friction. Each project gets its own editor, research library, and intervention history.
-              </p>
-              <Button onClick={() => setCreateOpen(true)} className="bg-stone-900 hover:bg-stone-800">
-                <Plus className="w-4 h-4 mr-1.5" />
-                Create your first project
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="grid gap-px overflow-hidden rounded-xl border border-stone-300 bg-stone-300 md:grid-cols-2">{[0, 1, 2, 3].map((index) => <div key={index} className="h-40 animate-pulse bg-[#f8f6f0] p-5"><div className="h-4 w-1/2 rounded bg-stone-200" /><div className="mt-4 h-3 w-4/5 rounded bg-stone-200" /></div>)}</div>
+        ) : workspaces.length === 0 ? (
+          <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-stone-400 bg-[#f8f6f0]/50 p-8 text-center"><div><BookOpen className="mx-auto mb-4 h-8 w-8 text-[#386c5c]" /><p className="font-serif text-xl font-semibold">Start with what you already have</p><p className="mt-2 max-w-md text-sm leading-6 text-stone-500">A rough draft, an AI-assisted DOCX, or a blank page all work. Setup details can wait.</p></div></div>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {projects.map((p) => (
-              <Card
-                key={p.id}
-                role="button"
-                tabIndex={0}
-                className="border-stone-200 bg-white/80 hover:bg-white hover:shadow-md transition-[background-color,box-shadow] cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400 focus-visible:ring-offset-2"
-                onClick={() => handleOpen(p)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    handleOpen(p)
-                  }
-                }}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-base group-hover:text-stone-900 line-clamp-2 leading-snug">
-                      {p.title}
-                    </CardTitle>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setDeleteId(p.id)
-                      }}
-                      className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 hover:bg-rose-50 rounded text-stone-400 hover:text-rose-600"
-                      aria-label="Delete project"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {p.description && (
-                    <CardDescription className="line-clamp-2">{p.description}</CardDescription>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2 flex-wrap mb-3">
-                    <Badge variant="secondary" className="bg-stone-100 text-stone-600">
-                      <FileText className="w-3 h-3 mr-1" />
-                      {p._count.pdfs} PDFs
-                    </Badge>
-                    <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200">
-                      <Sparkles className="w-3 h-3 mr-1" />
-                      {p._count.interventions} interventions
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-stone-500">
-                    <span>Updated {new Date(p.updatedAt).toLocaleDateString()}</span>
-                    <span className="flex items-center gap-1 group-hover:text-stone-900 transition-colors">
-                      Open <ArrowRight className="w-3 h-3" />
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="grid gap-px overflow-hidden rounded-xl border border-stone-300 bg-stone-300 md:grid-cols-2">
+            {workspaces.map((workspace) => {
+              const certified = workspace.certificates?.[0]?.status === 'valid'
+              return (
+                <article key={workspace.id} className="group relative bg-[#f8f6f0] p-5 transition-colors hover:bg-white">
+                  <button onClick={() => openWorkspace(workspace.id)} className="block w-full text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#386c5c]">
+                    <div className="mb-6 flex items-center justify-between gap-4"><span className="font-mono text-[10px] uppercase tracking-[0.18em] text-stone-500">{workspace.workspaceType === 'assignment' ? 'Assignment' : 'Research'}</span><span className={`text-xs ${certified ? 'text-[#28614f]' : 'text-stone-500'}`}>{certified ? 'Process verified' : workspace.lifecycleState === 'reviewing' ? 'Review in progress' : 'Draft'}</span></div>
+                    <h2 className="text-pretty font-serif text-2xl font-semibold leading-tight">{workspace.title}</h2>
+                    <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-stone-500">{workspace.dueAt && <span className="flex items-center"><CalendarClock className="mr-1.5 h-3.5 w-3.5" />Due {new Date(workspace.dueAt).toLocaleDateString()}</span>}<span>{workspace._count?.pdfs ?? 0} sources</span><span>{workspace._count?.reviewItems ?? 0} review actions</span></div>
+                  </button>
+                  <button onClick={() => setDeleteId(workspace.id)} className="absolute bottom-4 right-4 rounded-md p-2 text-stone-400 opacity-0 transition hover:bg-rose-50 hover:text-rose-700 focus:opacity-100 group-hover:opacity-100" aria-label={`Remove ${workspace.title}`}><Trash2 className="h-4 w-4" /></button>
+                </article>
+              )
+            })}
           </div>
         )}
       </section>
 
-      <footer className="mt-auto border-t border-stone-200 bg-white/70">
-        <div className="max-w-6xl mx-auto px-6 py-4 text-xs text-stone-500 flex items-center justify-between">
-          <span>Cogdoc — Final Year Project · BSc (Hons) IT · 2026</span>
-          <span>SDG 4 · Quality Education</span>
-        </div>
-      </footer>
+      <footer className="mx-auto flex max-w-7xl justify-between border-t border-stone-300 px-6 py-6 text-xs text-stone-500"><span>Cogdoc verifies a process, not authorship.</span><span>Private by default</span></footer>
 
-      <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this project?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the project, its document, all uploaded PDFs, all chunks, and the full intervention history. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-rose-600 hover:bg-rose-700"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
+      <Dialog open={createType !== null} onOpenChange={(open) => !open && setCreateType(null)}>
+        <DialogContent className="rounded-xl sm:max-w-lg">
+          <DialogHeader><DialogTitle className="font-serif text-2xl">New {createType} workspace</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div><label className="mb-1.5 block text-sm font-medium" htmlFor="workspace-title">Title</label><Input id="workspace-title" autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder={createType === 'assignment' ? 'e.g. Software engineering assignment' : 'e.g. Cognitive offloading literature review'} /></div>
+            {createType === 'assignment' && <div><label className="mb-1.5 block text-sm font-medium" htmlFor="due-at">Deadline</label><Input id="due-at" type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /><p className="mt-1 text-xs text-stone-500">Optional. It changes prioritization, never verification standards.</p></div>}
+            <div><label className="mb-1.5 block text-sm font-medium" htmlFor="workspace-description">Context <span className="font-normal text-stone-400">optional</span></label><Textarea id="workspace-description" rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Brief, research question, or what you need to finish" /></div>
+          </div>
+          <DialogFooter><Button variant="ghost" onClick={() => setCreateType(null)}>Cancel</Button><Button onClick={createWorkspace} disabled={creating || !title.trim()} className="bg-[#173f35] hover:bg-[#245548]">{creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Create workspace</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Move this workspace to recovery?</AlertDialogTitle><AlertDialogDescription>It will be hidden immediately, private links will be revoked, and its content will remain recoverable for 30 days.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep workspace</AlertDialogCancel><AlertDialogAction onClick={deleteWorkspace} className="bg-rose-700 hover:bg-rose-800">Move to recovery</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
-    </div>
+    </main>
   )
 }

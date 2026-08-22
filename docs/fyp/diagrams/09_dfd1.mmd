@@ -1,0 +1,36 @@
+flowchart LR
+    W([Writer])
+
+    P1((1.0<br/>Manage Auth<br/>& Projects))
+    P2((2.0<br/>Edit &<br/>Auto-save Doc))
+    P3((3.0<br/>Detect<br/>Triggers))
+    P4((4.0<br/>Run AI<br/>Engines))
+    P5((5.0<br/>Ingest &<br/>Embed PDFs))
+    P6((6.0<br/>Retrieve &<br/>Verify Claims))
+    P7((7.0<br/>Render<br/>Interventions))
+    P8((8.0<br/>Export &<br/>Analytics))
+
+    D1[(D1 Document<br/>store)]
+    D2[(D2 PDF chunks<br/>+ vectors)]
+    D3[(D3 Interventions<br/>audit log)]
+    D4[(D4 Prompt<br/>templates)]
+
+    W -->|login, project cmds| P1
+    W -->|typed text| P2
+    P2 -->|save JSON| D1
+    D1 -->|load| P2
+    P2 -->|sentence ends / idle / enter| P3
+    P3 -->|trigger events| P4
+    D4 -->|templates| P4
+    P4 -->|classify + prompt| P6
+    W -->|upload PDF| P5
+    P5 -->|chunks + vectors| D2
+    P6 -->|retrieve top-k| D2
+    P6 -->|verdict + evidence| P4
+    P4 -->|persist| D3
+    P4 -->|intervention payload| P7
+    P7 -->|underlines + popovers| W
+    W -->|export / view stats| P8
+    D1 -->|content| P8
+    D3 -->|history / stats| P8
+    P8 -->|md / txt / html / charts| W

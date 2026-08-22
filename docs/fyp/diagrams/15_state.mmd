@@ -1,0 +1,14 @@
+stateDiagram-v2
+    [*] --> Active: engine fires,<br/>Intervention created
+    Active --> Faded: sentence edited<br/>or underline loses match
+    Active --> Resolved: user engages<br/>(answer / apply scaffold / accept verdict)
+    Active --> Ignored: cooldown passes,<br/>no user action
+    Faded --> Active: sentence re-completed<br/>re-trigger
+    Faded --> Resolved: user re-engages
+    Ignored --> [*]: stays in audit log<br/>status=ignored
+    Resolved --> [*]: status=resolved<br/>resolvedAt set
+
+    note right of Active
+        userAction = null initially
+        visible as wavy underline
+    end note

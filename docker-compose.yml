@@ -19,8 +19,8 @@ services:
       - "3000:3000"
     volumes:
       - cogdoc_data:/data
-      # Optional: pre-mount a .env to skip the wizard
-      # - ./.env:/data/.env:ro
+      # Pre-mounted .env — skips the interactive wizard
+      - ./.env.local:/data/.env:ro
       # Optional: pre-mount a .z-ai-config
       # - ./.z-ai-config:/data/.z-ai-config:ro
     environment:

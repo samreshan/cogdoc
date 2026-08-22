@@ -1,0 +1,30 @@
+sequenceDiagram
+    autonumber
+    participant U as Writer
+    participant E as Tiptap Editor
+    participant CA as Content Analyzer
+    participant AG as AI Gateway (BFF)
+    participant F as FastAPI RAG
+    participant L as Gemini LLM
+    participant DB as Database
+
+    U->>E: Types sentence ending . ? !
+    E->>CA: analyzeSentence(text)
+    CA->>CA: Match trigger rules<br/>vague / absolute / fact / long
+    CA->>AG: fire matched engines (staggered 500ms)
+    alt Interceptor / Socratic / Scaffold
+        AG->>L: prompt (template from DB)
+        L-->>AG: Socratic question / scaffold
+    else Interceptor via SSE
+        AG->>F: POST /api/ai/interceptor/stream
+        F->>L: streaming generate
+        L-->>F: tokens (SSE)
+        F-->>AG: token stream
+    end
+    AG->>DB: persist Intervention (active)
+    AG-->>E: intervention payload
+    E->>E: add wavy underline decoration (2.5s debounce)
+    U->>E: hover sentence
+    E->>U: show popover + actionable next-steps
+    U->>E: act (answer / dismiss / resolve)
+    E->>DB: update userAction / status

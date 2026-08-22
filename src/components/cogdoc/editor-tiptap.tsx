@@ -17,6 +17,12 @@
  */
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import { Table } from '@tiptap/extension-table'
+import TableRow from '@tiptap/extension-table-row'
+import TableHeader from '@tiptap/extension-table-header'
+import TableCell from '@tiptap/extension-table-cell'
+import Image from '@tiptap/extension-image'
+import Link from '@tiptap/extension-link'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
@@ -35,7 +41,6 @@ import {
   InterventionHighlight,
   interventionHighlightKey,
 } from '@/lib/extensions/intervention-highlight'
-import { useDevilsAutocomplete } from '@/lib/use-devils-autocomplete'
 import { useEngineFiring } from '@/lib/use-engine-firing'
 import type { EngineType } from '@/lib/types'
 import { Button } from '@/components/ui/button'
@@ -44,6 +49,8 @@ import { Send, Loader2, Clock, Check, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import SentencePopover from './sentence-popover'
 import RunningPets, { IdlePetBadge } from './running-pets'
+import { ApiError } from '@/lib/api-client'
+import { clearRecoveryDraft, loadRecoveryDraft, saveRecoveryDraft } from '@/lib/draft-recovery'
 
 export default function EditorTiptap() {
   const project = useCogdoc((s) => s.activeProject)
@@ -59,19 +66,24 @@ export default function EditorTiptap() {
 
   const [promptInput, setPromptInput] = useState('')
   const [wordCount, setWordCount] = useState(0)
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'offline' | 'recovering' | 'conflict'>('idle')
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(
     project?.document?.lastSaved ?? null,
   )
 
-  const autocomplete = useDevilsAutocomplete(frictionMode)
-
   const idleRef = useRef<IdleDetector | null>(null)
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const autocompleteTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const revisionRef = useRef(project?.document?.revision ?? 0)
+  const [conflict, setConflict] = useState<{ serverRevision: number; serverContent: string } | null>(null)
+  const reviewPace = project?.reviewPace ?? 'deep'
 
   const editor = useEditor({
-    extensions: [StarterKit, WavyUnderline, InterventionHighlight],
+    extensions: [
+      StarterKit,
+      Table.configure({ resizable: true }), TableRow, TableHeader, TableCell,
+      Image.configure({ allowBase64: true }), Link.configure({ openOnClick: false }),
+      WavyUnderline, InterventionHighlight,
+    ],
     content: parseStoredContent(project?.document?.content),
     editorProps: {
       attributes: {
@@ -91,18 +103,34 @@ export default function EditorTiptap() {
   // ── Autosave (debounced 1.5s) — serialise ProseMirror JSON (ADR-0009) ────
   const scheduleSave = useCallback(() => {
     if (!editor || !project) return
+    const json = serializeForSave(editor.getJSON())
+    void saveRecoveryDraft(project.id, { content: json, revision: revisionRef.current, updatedAt: Date.now() })
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(async () => {
+      if (!navigator.onLine) {
+        setSaveState('offline')
+        return
+      }
       setSaveState('saving')
-      const json = serializeForSave(editor.getJSON())
       try {
-        const res = await api.saveDocument(project.id, json)
-        updateActiveProjectContent(json, res.lastSaved)
+        const res = await api.saveDocument(project.id, json, revisionRef.current)
+        revisionRef.current = res.revision
+        updateActiveProjectContent(json, res.lastSaved, res.revision, res.contentHash)
         setLastSavedAt(res.lastSaved)
         setSaveState('saved')
+        setConflict(null)
+        await clearRecoveryDraft(project.id)
         setTimeout(() => setSaveState('idle'), 1500)
-      } catch {
-        setSaveState('idle')
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) {
+          setConflict({
+            serverRevision: Number(error.payload.serverRevision ?? revisionRef.current),
+            serverContent: String(error.payload.serverContent ?? ''),
+          })
+          setSaveState('conflict')
+        } else {
+          setSaveState(navigator.onLine ? 'idle' : 'offline')
+        }
       }
     }, 1500)
   }, [editor, project, updateActiveProjectContent])
@@ -113,28 +141,16 @@ export default function EditorTiptap() {
     const handleUpdate = () => {
       scheduleSave()
       idleRef.current?.ping()
-      // Devil's Autocomplete: try commit or load
       const text = editor.getText()
       setWordCount(text.split(/\s+/).filter(Boolean).length)
-      const lastChar = text.slice(-1)
-      if (autocomplete.suggestion && lastChar) {
-        autocomplete.typeCommit(lastChar)
-      } else if (project && text.length > 20) {
-        // Debounced: one LLM call after a typing pause, not one per 8th
-        // keystroke (the burst pattern exhausted the DB connection pool).
-        if (autocompleteTimerRef.current) clearTimeout(autocompleteTimerRef.current)
-        autocompleteTimerRef.current = setTimeout(() => {
-          autocomplete.load(project.id, editor.getText()).catch(() => {})
-        }, 800)
-      }
       // Sentence completion → fire matching engines, staggered 500ms so
       // several engines on one sentence don't trip LLM rate limits (429).
       const endChar = text.trim().slice(-1)
-      if (endChar === '.' || endChar === '?' || endChar === '!') {
+      if (reviewPace !== 'rapid' && (endChar === '.' || endChar === '?' || endChar === '!')) {
         const sentence = extractLastSentence(text)
         if (sentence.split(/\s+/).length >= 4) {
           const { context } = extractContext(text)
-          const engines = pickEnginesForSentence(sentence)
+          const engines = pickEnginesForSentence(sentence).filter((engine) => reviewPace === 'deep' || engine === 'citation' || engine === 'interceptor')
           engines.forEach((eng, idx) => {
             setTimeout(() => fireEngine(eng, sentence, context), idx * 500)
           })
@@ -143,17 +159,44 @@ export default function EditorTiptap() {
     }
     editor.on('update', handleUpdate)
     return () => { editor.off('update', handleUpdate) }
-  }, [editor, scheduleSave, fireEngine, autocomplete, project])
+  }, [editor, scheduleSave, fireEngine, project, reviewPace])
 
   // ── Idle detector at the friction-scaled 45s (IR §2.3.6) ────────────────
   useEffect(() => {
+    if (reviewPace !== 'deep') {
+      idleRef.current?.stop()
+      return
+    }
     idleRef.current = new IdleDetector({
       thresholdMs: idleThresholdForMode(frictionMode),
       onIdle: () => fireEngine('socratic', '', ''),
     })
     idleRef.current.start()
     return () => idleRef.current?.stop()
-  }, [frictionMode, fireEngine])
+  }, [frictionMode, fireEngine, reviewPace])
+
+  // Recover the latest unsent local draft after an offline close or failed save.
+  useEffect(() => {
+    if (!editor || !project) return
+    loadRecoveryDraft(project.id).then((draft) => {
+      if (!draft || draft.content === serializeForSave(editor.getJSON())) return
+      if (draft.revision >= (project.document?.revision ?? 0)) {
+        setSaveState('recovering')
+        editor.commands.setContent(parseStoredContent(draft.content))
+        revisionRef.current = project.document?.revision ?? draft.revision
+        toast('Recovered unsaved work from this device')
+        setTimeout(() => scheduleSave(), 100)
+      }
+    }).catch(() => {})
+  }, [editor, project?.id])
+
+  useEffect(() => {
+    const online = () => { setSaveState('recovering'); scheduleSave() }
+    const offline = () => setSaveState('offline')
+    window.addEventListener('online', online)
+    window.addEventListener('offline', offline)
+    return () => { window.removeEventListener('online', online); window.removeEventListener('offline', offline) }
+  }, [scheduleSave])
 
   // ── Highlight interventions via ProseMirror decorations ─────────────────
   // Push the active list into the InterventionHighlight plugin; it renders
@@ -170,7 +213,6 @@ export default function EditorTiptap() {
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-      if (autocompleteTimerRef.current) clearTimeout(autocompleteTimerRef.current)
     }
   }, [])
 
@@ -209,7 +251,7 @@ export default function EditorTiptap() {
   // Paragraph completion (Enter) → Scaffold + Blindspot
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!editor) return
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && reviewPace === 'deep') {
       setTimeout(() => {
         const text = editor.getText()
         const paras = text.split(/\n\s*\n/).filter((p) => p.trim())
@@ -219,11 +261,6 @@ export default function EditorTiptap() {
           checkBlindspot(text)
         }
       }, 50)
-    }
-    // Tab → autocomplete accept (mode-gated; socratic/coach reject)
-    if (e.key === 'Tab' && autocomplete.suggestion) {
-      e.preventDefault()
-      autocomplete.tabAccept()
     }
     // Esc → clear selection and close any open sentence popover
     if (e.key === 'Escape') {
@@ -241,6 +278,20 @@ export default function EditorTiptap() {
 
   const activeEngines = (Object.keys(engineLoading) as EngineType[]).filter((e) => engineLoading[e])
 
+  function resolveConflict(choice: 'server' | 'mine') {
+    if (!conflict) return
+    revisionRef.current = conflict.serverRevision
+    if (choice === 'server') {
+      editor.commands.setContent(parseStoredContent(conflict.serverContent))
+      void clearRecoveryDraft(project!.id)
+      setSaveState('idle')
+    } else {
+      setSaveState('recovering')
+      setTimeout(() => scheduleSave(), 0)
+    }
+    setConflict(null)
+  }
+
   return (
     <div className="flex flex-col h-full" onKeyDown={handleKeyDown} style={{ background: '#faf7f0' }}>
       {/* Subtle toolbar */}
@@ -254,6 +305,12 @@ export default function EditorTiptap() {
             <span className="flex items-center gap-1.5 text-emerald-600">
               <Check className="w-3 h-3" /> Saved
             </span>
+          ) : saveState === 'offline' ? (
+            <span className="flex items-center gap-1.5 text-amber-700">Offline · draft safe on this device</span>
+          ) : saveState === 'recovering' ? (
+            <span className="flex items-center gap-1.5 text-[#28614f]"><Loader2 className="w-3 h-3 animate-spin" /> Recovering…</span>
+          ) : saveState === 'conflict' ? (
+            <span className="flex items-center gap-1.5 text-rose-700">Another session changed this draft</span>
           ) : lastSavedAt ? (
             <span className="flex items-center gap-1.5">
               <Clock className="w-3 h-3" /> {new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -279,6 +336,13 @@ export default function EditorTiptap() {
         </div>
       </div>
 
+      {conflict && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rose-200 bg-rose-50 px-6 py-2 text-xs text-rose-900" role="alert">
+          <span>Your unsaved copy is safe. Choose which version to continue with.</span>
+          <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => resolveConflict('server')} className="h-7 border-rose-300 bg-white">Use server version</Button><Button size="sm" onClick={() => resolveConflict('mine')} className="h-7 bg-rose-800 hover:bg-rose-900">Keep my version</Button></div>
+        </div>
+      )}
+
       {/* Scrollable writing surface */}
       <div className="flex-1 overflow-y-auto">
         <div className="relative w-full max-w-[1000px] mx-auto px-8 py-16">
@@ -297,22 +361,6 @@ export default function EditorTiptap() {
           >
             <EditorContent editor={editor} />
           </div>
-          {/* Devil's Autocomplete ghost text (§7.1). Shown inline beneath the
-              caret line as greyed text. The commit mechanic is mode-gated:
-              socratic/coach must type each char (Tab is rejected); assistant
-              allows Tab-accept. */}
-          {autocomplete.suggestion && (
-            <div
-              className="max-w-[680px] mx-auto -mt-2 pointer-events-none select-none"
-              style={{ fontFamily: 'var(--font-newsreader), Georgia, serif', fontSize: '18px', lineHeight: 1.8 }}
-              aria-label="autocomplete suggestion"
-            >
-              <span style={{ color: '#b8b0a4' }}>{autocomplete.suggestion}</span>
-              <span className="ml-2 text-[10px] text-stone-400 align-middle">
-                {frictionMode === 'assistant' ? 'Tab to accept' : 'type to continue'}
-              </span>
-            </div>
-          )}
         </div>
       </div>
 

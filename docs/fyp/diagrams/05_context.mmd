@@ -1,0 +1,9 @@
+flowchart LR
+    Writer([Writer / User]) -->|Draft text, PDFs, prompts| Cogdoc[(Cogdoc System)]
+    Cogdoc -->|Interventions, verdicts,<br/>exports, analytics| Writer
+    Cogdoc -->|Embedding & chat requests| Gemini[(Google Gemini API<br/>Embeddings + LLM)]
+    Gemini -->|Vectors, chat completions| Cogdoc
+    Cogdoc -->|Store/read chunks + vectors| DB[(Database<br/>Postgres + pgvector)]
+    DB -->|Retrieved evidence| Cogdoc
+    Cogdoc -->|Auth requests| Supabase[(Supabase Auth)]
+    Supabase -->|Session, user identity| Cogdoc

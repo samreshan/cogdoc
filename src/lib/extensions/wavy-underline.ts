@@ -8,7 +8,7 @@
  * Tiptap behind USE_TIPTAP_EDITOR; this Mark preserves the highlighting
  * contract the characterization tests lock.
  */
-import { Mark, type MarkSpec } from '@tiptap/core'
+import { Mark } from '@tiptap/core'
 import type { EngineType } from '@/lib/types'
 
 /** Hex colours per engine — mirrors ENGINE_COLORS in sentence-highlight.ts. */
@@ -69,8 +69,8 @@ export const WavyUnderline = Mark.create({
     return [{ tag: 'mark.cogdoc-mark' }]
   },
 
-  renderHTML({ node, HTMLAttributes }) {
-    const engineTypes = (node.attrs.engineTypes as string) || ''
+  renderHTML({ HTMLAttributes }) {
+    const engineTypes = String(HTMLAttributes['data-engine-types'] ?? '')
     const style = buildUnderlineStyle(engineTypes)
     return [
       'mark',

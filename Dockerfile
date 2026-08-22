@@ -34,10 +34,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Generate Prisma client for BOTH SQLite and Postgres targets at build time
-# so the runtime image can switch providers without regenerating.
+# The real-world workspace uses PostgreSQL/Supabase for RLS, version history,
+# review jobs and certificate records.
 RUN npx prisma generate --schema=prisma/schema.prisma
-RUN npx prisma generate --schema=prisma/schema.postgres.prisma
 
 # Build Next.js (produces .next/standalone/)
 RUN npm run build

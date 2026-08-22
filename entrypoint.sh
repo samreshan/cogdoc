@@ -9,7 +9,7 @@
 #   4. Otherwise → print error telling user to either run -it or pass env vars
 #
 # After config is loaded:
-#   - Switch Prisma schema based on DATABASE_URL (sqlite vs postgresql)
+#   - Validate the PostgreSQL workspace database
 #   - Run prisma generate + db push
 #   - Run the seed script
 #   - Start Next.js standalone server
@@ -41,12 +41,12 @@ if [ -f "$ENV_FILE" ]; then
   CONFIG_EXISTS="true"
   say "${GREEN}✓${RESET} Loaded existing config from ${BOLD}${ENV_FILE}${RESET}"
   set -a; . "$ENV_FILE"; set +a
-elif [ -n "${COGDOC_SKIP_WIZARD:-}" ] || [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${GROQ_API_KEY:-}" ] || [ -n "${AI_API_KEY:-}" ]; then
+elif [ -n "${DATABASE_URL:-}" ] && { [ -n "${COGDOC_SKIP_WIZARD:-}" ] || [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${GROQ_API_KEY:-}" ] || [ -n "${AI_API_KEY:-}" ]; }; then
   say "${YELLOW}!${RESET} No /data/.env found, but AI keys are set via env vars — using those."
   # Write a minimal .env from current env so subsequent reads are consistent
   {
     echo "# Auto-generated from environment variables"
-    echo "DATABASE_URL=\"${DATABASE_URL:-file:/data/cogdoc.db}\""
+    echo "DATABASE_URL=\"${DATABASE_URL}\""
     [ -n "${AI_PROVIDER:-}" ]      && echo "AI_PROVIDER=\"${AI_PROVIDER}\""
     [ -n "${AI_BASE_URL:-}" ]      && echo "AI_BASE_URL=\"${AI_BASE_URL}\""
     [ -n "${AI_API_KEY:-}" ]       && echo "AI_API_KEY=\"${AI_API_KEY}\""
@@ -111,15 +111,26 @@ else
   say "${YELLOW}!${RESET} No .z-ai-config found — AI calls will fail until you mount one or set AI_BASE_URL + AI_API_KEY"
 fi
 
-# ── Step 3: Pick the right Prisma schema based on DATABASE_URL ───────────────
-DB_URL="${DATABASE_URL:-file:/data/cogdoc.db}"
+# ── Step 3: Require the production PostgreSQL workspace schema ──────────────
+DB_URL="${DATABASE_URL:-}"
 SCHEMA_FILE="$APP_DIR/prisma/schema.prisma"
-if [[ "$DB_URL" == postgresql://* ]] || [[ "$DB_URL" == postgres://* ]]; then
-  say "${CYAN}Using PostgreSQL schema${RESET}"
-  cp "$APP_DIR/prisma/schema.postgres.prisma" "$SCHEMA_FILE"
-else
-  say "${CYAN}Using SQLite schema${RESET}"
-  cp "$APP_DIR/prisma/schema.sqlite.prisma" "$SCHEMA_FILE" 2>/dev/null || true
+if [[ "$DB_URL" != postgresql://* ]] && [[ "$DB_URL" != postgres://* ]]; then
+  say "${RED}Cogdoc Workspace requires a PostgreSQL/Supabase DATABASE_URL.${RESET}"
+  say "${YELLOW}SQLite remains available only for the legacy MVP and cannot store review/certificate state.${RESET}"
+  exit 1
+fi
+say "${CYAN}Using PostgreSQL workspace schema${RESET}"
+
+# Persist a product-attestation key when one is not supplied by the operator.
+# This is a cryptographic product signature, not a legal or authorship signature.
+CERT_KEY_FILE="/data/cogdoc-certificate-ed25519.pem"
+if [ -z "${COGDOC_CERTIFICATE_PRIVATE_KEY:-}" ]; then
+  if [ ! -f "$CERT_KEY_FILE" ]; then
+    node -e "const {generateKeyPairSync}=require('node:crypto'); const {writeFileSync}=require('node:fs'); const {privateKey}=generateKeyPairSync('ed25519'); writeFileSync(process.argv[1], privateKey.export({type:'pkcs8',format:'pem'}), {mode:0o600})" "$CERT_KEY_FILE"
+    say "${GREEN}✓${RESET} Generated persistent Ed25519 product-attestation key"
+  fi
+  COGDOC_CERTIFICATE_PRIVATE_KEY="$(base64 < "$CERT_KEY_FILE" | tr -d '\n')"
+  export COGDOC_CERTIFICATE_PRIVATE_KEY
 fi
 
 # Make sure DATABASE_URL is exported for Prisma
@@ -133,19 +144,14 @@ node "$PRISMA_BIN" generate --schema="$SCHEMA_FILE" 2>&1 | tail -5
 
 # ── Step 5: Push schema to the database ──────────────────────────────────────
 say "${CYAN}Applying schema to database (db push)...${RESET}"
-if [[ "$DB_URL" == file:* ]]; then
-  # SQLite — fast, local
-  node "$PRISMA_BIN" db push --schema="$SCHEMA_FILE" --skip-generate --accept-data-loss 2>&1 | tail -5
-else
-  # Postgres — may need to wait for it to be ready
-  for i in 1 2 3 4 5; do
-    if node "$PRISMA_BIN" db push --schema="$SCHEMA_FILE" --skip-generate --accept-data-loss 2>&1 | tail -10; then
-      break
-    fi
-    say "${YELLOW}Database not ready, retrying in 3s... (${i}/5)${RESET}"
-    sleep 3
-  done
-fi
+# Postgres may need to wait for the service to be ready.
+for i in 1 2 3 4 5; do
+  if node "$PRISMA_BIN" db push --schema="$SCHEMA_FILE" --skip-generate 2>&1 | tail -10; then
+    break
+  fi
+  say "${YELLOW}Database not ready, retrying in 3s... (${i}/5)${RESET}"
+  sleep 3
+done
 say "${GREEN}✓${RESET} Database schema applied"
 
 # ── Step 6: Seed ─────────────────────────────────────────────────────────────
@@ -156,6 +162,11 @@ node scripts/seed.js 2>&1 | tail -10 || {
   say "${YELLOW}!${RESET} Seed script failed (may already be seeded). Continuing..."
 }
 say "${GREEN}✓${RESET} Seed complete"
+
+say "${CYAN}Migrating legacy projects to workspaces...${RESET}"
+node scripts/migrate-legacy-workspaces.js 2>&1 | tail -10 || {
+  say "${YELLOW}!${RESET} Legacy workspace migration failed. Review logs before enabling certificates."
+}
 
 # ── Step 7: Start Next.js ────────────────────────────────────────────────────
 say ""

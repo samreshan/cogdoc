@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase-browser'
 import Dashboard from '@/components/cogdoc/dashboard'
 import EditorShell from '@/components/cogdoc/editor-shell'
 import Login from '@/components/cogdoc/login'
+import WorkspaceHome from '@/components/cogdoc/workspace-home'
+import VerificationWorkspace from '@/components/cogdoc/verification-workspace'
 
 // Auth gate: when Supabase is configured, show Login until a session exists.
 // In local dev with COGDOC_DEV_FALLBACK the route layer falls back to the
@@ -36,5 +38,7 @@ export default function Home() {
   if (view === 'editor' && activeProject) {
     return <EditorShell />
   }
+  if (view === 'workspace' && activeProject) return <WorkspaceHome />
+  if (view === 'verification' && activeProject) return <VerificationWorkspace />
   return <Dashboard />
 }

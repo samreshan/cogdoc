@@ -51,6 +51,11 @@ export interface Intervention {
   }>
 }
 
+export interface PositionedIntervention extends Intervention {
+  position: { top: number; left: number }
+  fadingOut?: boolean
+}
+
 export interface PdfSummary {
   id: string
   filename: string
@@ -67,10 +72,67 @@ export interface Project {
   archived: boolean
   createdAt: string
   updatedAt: string
-  document: { id: string; content: string; lastSaved: string } | null
+  workspaceType?: 'assignment' | 'research'
+  dueAt?: string | null
+  reviewPace?: 'rapid' | 'guided' | 'deep'
+  citationStyle?: 'harvard' | 'apa'
+  lifecycleState?: 'draft' | 'reviewing' | 'ready' | 'certified'
+  briefText?: string | null
+  document: { id: string; content: string; lastSaved: string; revision?: number; contentHash?: string } | null
   pdfs: PdfSummary[]
   interventions: Intervention[]
   _count: { pdfs: number; interventions: number }
+}
+
+export type Workspace = Project
+
+export interface ReviewResponse {
+  id: string
+  responseText: string | null
+  beforeText: string | null
+  afterText: string | null
+  createdAt: string
+}
+
+export interface ReviewItem {
+  id: string
+  projectId: string
+  reviewRunId: string
+  claimId?: string | null
+  type: string
+  severity: 'critical' | 'advisory'
+  title: string
+  detail: string
+  evidenceJson: string
+  anchorJson: string | null
+  state: 'open' | 'in_progress' | 'submitted' | 'rechecking' | 'resolved' | 'dismissed' | 'unresolved'
+  blocksCertification: boolean
+  resolution: string | null
+  createdAt: string
+  resolvedAt: string | null
+  responses?: ReviewResponse[]
+}
+
+export interface ReviewRun {
+  id: string
+  projectId: string
+  documentVersionId: string
+  scope: 'full' | 'changed_blocks'
+  status: 'queued' | 'scanning' | 'ready' | 'failed' | 'cancelled'
+  progress: number
+  currentStage: string | null
+  createdAt: string
+  completedAt: string | null
+  items?: ReviewItem[]
+}
+
+export interface VerificationReport {
+  id: string
+  level: 'scan_report' | 'reviewed_with_warnings' | 'process_verified'
+  reportHash: string
+  coverageJson: string
+  createdAt: string
+  payload?: Record<string, unknown>
 }
 
 export interface Analytics {

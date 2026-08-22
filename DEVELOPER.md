@@ -7,7 +7,7 @@
 ## Prerequisites
 
 - **Node.js 20+** (or **Bun** — faster)
-- **SQLite** (bundled, no setup needed) OR **Postgres** (Supabase or external)
+- **PostgreSQL 16+** (Supabase or external; pgvector recommended)
 - An **LLM API key** — Google Gemini, Groq, or any OpenAI-compatible provider
 
 ---
@@ -21,7 +21,8 @@ cd cogdoc
 bun install   # or: npm ci
 
 # Set up the database
-echo 'DATABASE_URL="file:./db/cogdoc.db"' > .env
+cp .env.example .env.local
+# Set DATABASE_URL to your PostgreSQL instance.
 bun run db:push
 
 # Seed default user + 4 prompt templates
@@ -47,7 +48,7 @@ Open http://localhost:3000.
 ## Architecture overview
 
 ```
-Browser ──fetch──▶ Next.js API Routes ──▶ Prisma ──▶ SQLite/Postgres
+Browser ──fetch──▶ Authenticated Next.js BFF ──▶ Prisma ──▶ PostgreSQL
                           │
                           └──▶ AIService (interface)
                                    │
@@ -77,7 +78,7 @@ Browser ──fetch──▶ Next.js API Routes ──▶ Prisma ──▶ SQLit
 | `InterventionEvidence` | Junction: which chunks a Citation Sentinel verdict cited |
 | `PromptTemplate` | Versioned prompt with behaviour tag (swappable without redeploy) |
 
-To switch from SQLite to Postgres, set `DATABASE_URL` to a `postgresql://` URL — the Docker entrypoint auto-selects `prisma/schema.postgres.prisma`.
+`prisma/schema.prisma` is the canonical PostgreSQL schema. The older SQLite schemas are retained only as migration references and do not support review, audit, or certificate state.
 
 ---
 

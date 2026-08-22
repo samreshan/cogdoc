@@ -21,9 +21,9 @@ const newsreader = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: "Cogdoc — A Research-Assisted Writing IDE",
-  description: "Cogdoc uses productive AI friction to mitigate cognitive atrophy. AI never writes your prose — it interrupts, questions, challenges, and verifies.",
-  keywords: ["Cogdoc", "academic writing", "AI friction", "RAG", "citation verification", "FYP"],
+  title: "Cogdoc — Accountable academic writing",
+  description: "An assignment and research workspace that checks citations, evidence, reasoning and code snapshots without claiming to prove authorship.",
+  keywords: ["Cogdoc", "academic writing", "assignment review", "research workspace", "citation verification"],
   authors: [{ name: "Samreshan Sahani" }],
 };
 
@@ -37,6 +37,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} antialiased bg-background text-foreground`}
       >
+        <a href="#main-content" className="skip-link">Skip to main content</a>
         {children}
         <Toaster position="bottom-right" richColors closeButton />
       </body>

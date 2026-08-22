@@ -1,0 +1,16 @@
+flowchart LR
+    subgraph Research[Research Phase]
+        R1[Literature Review] --> R2[Survey n=33<br/>+ Interviews]
+        R2 --> R3[Requirements]
+    end
+    subgraph Build[Build Phase - Agile Sprints]
+        S0[Sprint 0<br/>Foundation] --> S1[Sprint 1<br/>RAG + Eval]
+        S1 --> S2[Sprint 2<br/>SSE + Auth + Editor]
+        S2 --> S3[Sprint 3<br/>Friction + Experiments]
+    end
+    subgraph Evaluate[Evaluation Phase]
+        E1[Calibrated<br/>Eval Harness] --> E2[Test Results<br/>vs Targets]
+        E2 --> E3[User Testing]
+    end
+    Research --> Build --> Evaluate
+    Evaluate -.feedback.-> Build

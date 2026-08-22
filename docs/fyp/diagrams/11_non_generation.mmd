@@ -1,0 +1,16 @@
+flowchart TD
+    Req([Engine produces<br/>candidate output]) --> Count{Count declarative<br/>sentences in output}
+    Count -->|>= 3| No1[BLOCKED]
+    Count -->|< 3| Words{Word count of output}
+    Words -->|> 60 words| No2[BLOCKED]
+    Words -->|<= 60 words| Type{Output type?}
+    Type -->|Direct prose paragraph<br/>answering the user| No3[BLOCKED]
+    Type -->|Socratic question| Yes1[ALLOWED]
+    Type -->|RAG verdict<br/>supported/unsupported/etc| Yes2[ALLOWED]
+    Type -->|Empty structural scaffold<br/>with blanks| Yes3[ALLOWED]
+    Type -->|Ghost text <=12 words<br/>single sentence, Assistant mode only| Yes4[ALLOWED]
+
+    No1 --> Refuse[Return refusal:<br/>I cant write that for you.<br/>Reframe as Socratic question]
+    No2 --> Refuse
+    No3 --> Refuse
+    Refuse --> Log[Log blocked attempt<br/>as Intervention]

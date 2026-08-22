@@ -1,0 +1,46 @@
+flowchart TB
+    subgraph Browser[Client / Browser]
+        UI[Next.js Frontend<br/>React 19 + Tiptap Editor<br/>Tailwind + shadcn/ui]
+        UI -.SSE.-> SSEClient[SSE Token Stream]
+    end
+
+    subgraph BFF[Next.js App - Backend for Frontend BFF]
+        Routes[Route Handlers<br/>/api/projects, /api/interceptor,<br/>/api/citation-sentinel, etc.]
+        Gateway[AI Gateway<br/>src/lib/ai-gateway.ts<br/>the shared merge seam]
+        Prisma[Prisma ORM]
+        Auth[Auth Layer<br/>requireUserId]
+    end
+
+    subgraph RAG[FastAPI RAG Service - Python]
+        Main[main.py<br/>/api/rag/ingest, /retrieve,<br/>/api/ai/citation, /interceptor/stream]
+        Emb[Embedder<br/>GeminiEmbedder<br/>gemini-embedding-001, 3072-dim]
+        VStore[PgvectorStore<br/>cosine ANN, HNSW]
+        Verdict[Verdict Guard<br/>anti-hallucination]
+        SSEPy[SSE Producer]
+    end
+
+    subgraph DataLayer[Data Layer]
+        Pg[(PostgreSQL / Supabase<br/>8 tables at 3NF)]
+        Pgvector[(pgvector<br/>embedding vector 3072)]
+        RLS[Row-Level Security]
+    end
+
+    LLM[(Google Gemini<br/>gemini-3.1-flash-lite<br/>LLM + chat)]
+    SupaAuth[(Supabase Auth)]
+
+    UI --> Routes
+    Routes --> Gateway
+    Gateway --> Main
+    Routes --> Prisma
+    Routes --> Auth
+    Auth --> SupaAuth
+    Main --> Emb
+    Main --> VStore
+    Main --> Verdict
+    Main --> SSEPy
+    Emb --> LLM
+    Verdict --> LLM
+    VStore --> Pgvector
+    Prisma --> Pg
+    Pg --- RLS
+    SSEPy --> SSEClient

@@ -1,0 +1,9 @@
+{
+  "name": "cogdoc-fyp-doc",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "docx": "^9.7.1",
+    "image-size": "^2.0.2"
+  }
+}

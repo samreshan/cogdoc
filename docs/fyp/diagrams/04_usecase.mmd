@@ -1,0 +1,27 @@
+flowchart LR
+    User((Writer<br/>User))
+    Guest((Guest))
+
+    subgraph Cogdoc System
+        UC1([Sign up / Log in])
+        UC2([Create / open a Project])
+        UC3([Write in the editor])
+        UC4([Upload research PDFs])
+        UC5([Receive AI interventions])
+        UC6([Export document])
+        UC7([View analytics & history])
+        UC8([Switch friction mode])
+        UC9((Trigger Citation<br/>verification))
+
+        UC5 -.includes.-> UC9
+    end
+
+    Guest --> UC1
+    User --> UC2
+    User --> UC3
+    User --> UC4
+    User --> UC5
+    User --> UC6
+    User --> UC7
+    User --> UC8
+    UC3 -.triggers.-> UC5

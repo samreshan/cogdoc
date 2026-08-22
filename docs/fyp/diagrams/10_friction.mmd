@@ -1,0 +1,17 @@
+flowchart TD
+    Start([User writes]) --> Detect{Trigger fires?<br/>. ? ! / idle / enter}
+    Detect -->|Yes| Mode{Current Friction Mode}
+    Mode -->|Socratic - default| S1[All engines active<br/>full cooldowns<br/>Devils Autocomplete disabled]
+    Mode -->|Coach - moderate| C1[Cooldowns relaxed ~50%<br/>phrase accept via typing]
+    Mode -->|Assistant - light| A1[Cooldowns relaxed ~75%<br/>Tab-accept enabled<br/>Interceptor only blocks<br/>write the whole thing]
+    S1 --> Guard
+    C1 --> Guard
+    A1 --> Guard
+
+    Guard{Non-Generation Contract<br/>isGenerationAllowed<br/>Hard invariant ALL modes}
+    Guard -->|Output is 3+ declarative<br/>sentences OR >60 words| Block[BLOCKED<br/>Return refusal / Socratic question]
+    Guard -->|Output is a question,<br/>verdict, or short scaffold| Allow[ALLOWED<br/>Persist Intervention]
+    Allow --> Render[Show wavy underline<br/>+ popover]
+    Block --> Render
+
+    Note[Note: friction relaxes<br/>cadence & accepting help,<br/>NEVER the non-generation contract]

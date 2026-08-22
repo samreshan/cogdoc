@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn() }))
-vi.mock('@/lib/db', () => ({ db: { pdf: { delete: vi.fn() }, user: { findUnique: vi.fn() } } }))
+vi.mock('@/lib/db', () => ({ db: { pdf: { findFirst: vi.fn(), delete: vi.fn() }, user: { findUnique: vi.fn() } } }))
 
 import { GET as getUser } from '@/app/api/user/route'
 import { GET as getSettings } from '@/app/api/settings/route'
@@ -17,6 +17,7 @@ import { db } from '@/lib/db'
 
 const user = getDefaultUser as ReturnType<typeof vi.fn>
 const pdfDelete = db.pdf.delete as ReturnType<typeof vi.fn>
+const pdfFindFirst = db.pdf.findFirst as ReturnType<typeof vi.fn>
 const userFindUnique = db.user.findUnique as ReturnType<typeof vi.fn>
 
 function makeReq(cookie = '') {
@@ -26,7 +27,7 @@ function makeReq(cookie = '') {
 }
 
 beforeEach(() => {
-  user.mockReset(); pdfDelete.mockReset(); userFindUnique.mockReset()
+  user.mockReset(); pdfFindFirst.mockReset(); pdfDelete.mockReset(); userFindUnique.mockReset()
   user.mockResolvedValue({ id: 'u1' })
 })
 
@@ -89,6 +90,7 @@ describe('DELETE /api/pdfs/[id]', () => {
     return { params: Promise.resolve({ id }) }
   }
   it('deletes the pdf and cascades', async () => {
+    pdfFindFirst.mockResolvedValue({ id: 'p1', userId: 'u1' })
     pdfDelete.mockResolvedValue({})
     const res = await deletePdf(new NextRequest('http://localhost/api/pdfs/p1', { method: 'DELETE' }), ctx('p1'))
     expect(res.status).toBe(200)

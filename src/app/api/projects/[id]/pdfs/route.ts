@@ -24,7 +24,7 @@ export async function POST(
   const { id: projectId } = await params
   const userId = await requireUserId(req)
 
-  const project = await db.project.findUnique({ where: { id: projectId } })
+  const project = await db.project.findUnique({ where: { id: projectId, userId, deletedAt: null } })
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
   let filename: string
@@ -46,8 +46,10 @@ export async function POST(
       const buffer = Buffer.from(arrayBuffer)
       try {
         // Dynamic import to avoid bundler issues
-        const pdfParse = (await import('pdf-parse')).default
-        const data = await pdfParse(buffer)
+        const { PDFParse } = await import('pdf-parse')
+        const parser = new PDFParse({ data: buffer })
+        const data = await parser.getText()
+        await parser.destroy()
         rawText = data.text || ''
         if (!rawText.trim()) {
           return NextResponse.json(
@@ -164,12 +166,15 @@ export async function POST(
  * GET /api/projects/[id]/pdfs — list PDFs in a project
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: projectId } = await params
+  const userId = await requireUserId(req)
+  const project = await db.project.findUnique({ where: { id: projectId, userId, deletedAt: null }, select: { id: true } })
+  if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
   const pdfs = await db.pdf.findMany({
-    where: { projectId },
+    where: { projectId, userId },
     orderBy: { uploadedAt: 'desc' },
     select: {
       id: true,

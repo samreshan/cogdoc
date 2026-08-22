@@ -12,7 +12,8 @@ import { BookOpen, BarChart3, History, ArrowLeft, Focus, Eye, EyeOff, Download, 
 import EditorTiptap from './editor-tiptap'
 import ResearchLibrary from './research-library'
 import AnalyticsPanel from './analytics-panel'
-import FrictionModeSelector from './friction-mode-selector'
+import ReviewPaceSelector from './review-pace-selector'
+import ActionQueue from './action-queue'
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api-client'
 import type { Intervention } from '@/lib/types'
@@ -36,7 +37,6 @@ const VERDICT_COLORS: Record<string, string> = {
 export default function EditorShell() {
   const project = useCogdoc((s) => s.activeProject)
   const setView = useCogdoc((s) => s.setView)
-  const setActiveProject = useCogdoc((s) => s.setActiveProject)
   const activeModal = useCogdoc((s) => s.activeModal)
   const setActiveModal = useCogdoc((s) => s.setActiveModal)
   const focusMode = useCogdoc((s) => s.focusMode)
@@ -47,8 +47,7 @@ export default function EditorShell() {
   const [history, setHistory] = useState<Intervention[]>([])
 
   function handleBack() {
-    setActiveProject(null)
-    setView('dashboard')
+    setView('workspace')
   }
 
   function downloadExport(format: 'md' | 'txt' | 'html') {
@@ -63,13 +62,12 @@ export default function EditorShell() {
     }
   }, [activeModal, project, analyticsVersion])
 
-  // Hydrate the friction mode from persisted user settings on first mount, so
-  // the user's chosen calibration survives a reload (PRODUCT.md §9).
+  // Preserve the legacy engine cadence internally while the user-facing
+  // product uses the clearer Rapid / Guided / Deep review pace.
   useEffect(() => {
-    api.getSettings().then((s) => setFrictionMode(s.frictionMode)).catch(() => {})
-    // run once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    const mapping = { rapid: 'assistant', guided: 'coach', deep: 'socratic' } as const
+    setFrictionMode(mapping[project?.reviewPace ?? 'deep'])
+  }, [project?.reviewPace, setFrictionMode])
 
   if (!project) return null
 
@@ -92,7 +90,7 @@ export default function EditorShell() {
         </div>
 
         <div className="flex items-center gap-1">
-          <FrictionModeSelector />
+          <ReviewPaceSelector />
           <Button
             variant="ghost" size="sm"
             onClick={toggleFocusMode}
@@ -101,6 +99,20 @@ export default function EditorShell() {
           >
             {focusMode ? <EyeOff className="w-3.5 h-3.5 mr-1" /> : <Focus className="w-3.5 h-3.5 mr-1" />}
             Focus
+          </Button>
+          <Button
+            variant="ghost" size="sm"
+            onClick={() => setView('verification')}
+            className="h-8 px-2.5 text-xs text-stone-500 hover:text-stone-900"
+          >
+            <FileType className="w-3.5 h-3.5 mr-1" /> Verify
+          </Button>
+          <Button
+            variant="ghost" size="sm"
+            onClick={() => setActiveModal('review')}
+            className="h-8 px-2.5 text-xs text-stone-500 hover:text-stone-900 lg:hidden"
+          >
+            Review
           </Button>
           <Button
             variant="ghost" size="sm"
@@ -139,6 +151,9 @@ export default function EditorShell() {
               <DropdownMenuItem onClick={() => downloadExport('html')}>
                 <FileCode className="w-4 h-4 mr-2" /> HTML (.html)
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.open(`/api/projects/${project.id}/export?format=docx`, '_blank')}>
+                <FileType className="w-4 h-4 mr-2" /> Academic Word (.docx)
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => window.print()}>
                 <FileType className="w-4 h-4 mr-2" /> Print / PDF
               </DropdownMenuItem>
@@ -149,9 +164,18 @@ export default function EditorShell() {
 
       {/* Editor fills the rest — the Tiptap/ProseMirror surface (ADR-0006
           close-out; the legacy contentEditable editor is deleted). */}
-      <div className="flex-1 min-h-0">
-        <EditorTiptap />
+      <div className="grid flex-1 min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-h-0"><EditorTiptap /></div>
+        <div className="hidden min-h-0 lg:block"><ActionQueue /></div>
       </div>
+
+      {/* Library modal */}
+      <Dialog open={activeModal === 'review'} onOpenChange={(o) => !o && setActiveModal('none')}>
+        <DialogContent className="h-[82vh] max-w-md p-0 overflow-hidden">
+          <DialogHeader className="sr-only"><DialogTitle>Review action queue</DialogTitle></DialogHeader>
+          <ActionQueue />
+        </DialogContent>
+      </Dialog>
 
       {/* Library modal */}
       <Dialog open={activeModal === 'library'} onOpenChange={(o) => !o && setActiveModal('none')}>

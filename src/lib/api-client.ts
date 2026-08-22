@@ -1,7 +1,18 @@
 /**
  * Typed API client for the Cogdoc frontend.
  */
-import type { Project, Intervention, Analytics, PdfSummary } from '@/lib/types'
+import type { Project, Intervention, Analytics, PdfSummary, ReviewItem, ReviewRun, VerificationReport } from '@/lib/types'
+
+export class ApiError extends Error {
+  status: number
+  payload: Record<string, unknown>
+  constructor(status: number, payload: Record<string, unknown>) {
+    super(String(payload.error ?? `Request failed: ${status}`))
+    this.name = 'ApiError'
+    this.status = status
+    this.payload = payload
+  }
+}
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -10,12 +21,61 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error(err.error ?? `Request failed: ${res.status}`)
+    throw new ApiError(res.status, err)
   }
   return res.json()
 }
 
 export const api = {
+  // Real-world workspaces (projects remain as compatibility routes)
+  listWorkspaces: () => jsonFetch<{ workspaces: Project[] }>('/api/workspaces'),
+  createWorkspace: (input: {
+    title: string
+    workspaceType: 'assignment' | 'research'
+    dueAt?: string | null
+    reviewPace?: 'rapid' | 'guided' | 'deep'
+    citationStyle?: 'harvard' | 'apa'
+    description?: string
+    briefText?: string
+  }) => jsonFetch<{ workspace: Project }>('/api/workspaces', { method: 'POST', body: JSON.stringify(input) }),
+  getWorkspace: (id: string) => jsonFetch<{ workspace: Project & {
+    reviewItems?: ReviewItem[]
+    reviewRuns?: ReviewRun[]
+    reports?: VerificationReport[]
+  } }>(`/api/workspaces/${id}`),
+  updateWorkspace: (id: string, patch: Record<string, unknown>) =>
+    jsonFetch<{ workspace: Project }>(`/api/workspaces/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deleteWorkspace: (id: string) => jsonFetch<{ ok: boolean }>(`/api/workspaces/${id}`, { method: 'DELETE' }),
+  importWorkspaceFile: async (id: string, file: File, kind: 'docx' | 'brief' | 'source' | 'code' = 'docx') => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('kind', kind)
+    const res = await fetch(`/api/workspaces/${id}/imports`, { method: 'POST', body: form })
+    const body = await res.json().catch(() => ({ error: res.statusText }))
+    if (!res.ok) throw new ApiError(res.status, body)
+    return body
+  },
+  startReview: (id: string, scope: 'full' | 'changed_blocks' = 'full') =>
+    jsonFetch<{ reviewRun: ReviewRun }>(`/api/workspaces/${id}/review-runs`, {
+      method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify({ scope }),
+    }),
+  listReviewItems: (id: string, reviewRunId?: string) =>
+    jsonFetch<{ reviewItems: ReviewItem[]; reviewRunId: string | null; stale?: boolean }>(`/api/workspaces/${id}/review-items${reviewRunId ? `?reviewRunId=${reviewRunId}` : ''}`),
+  respondToReviewItem: (id: string, body: { responseText?: string; action?: 'resolve' | 'dismiss'; resolution?: string; beforeText?: string; afterText?: string }) =>
+    jsonFetch<{ reviewItem: ReviewItem; blockersRemaining: number }>(`/api/review-items/${id}/responses`, {
+      method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body),
+    }),
+  recheckReviewItem: (id: string) => jsonFetch<{ reviewItem: ReviewItem; needsReviewRun: boolean }>(`/api/review-items/${id}/recheck`, { method: 'POST' }),
+  getEvidenceCandidates: (claimId: string) => jsonFetch<{
+    passages: Array<{ chunkId: string; content: string; similarityScore: number; pageApprox: number; pdfFilename: string }>
+    code: Array<{ codeFileId: string; path: string; language: string | null; startLine: number; endLine: number; excerpt: string; score: number }>
+  }>(`/api/claims/${claimId}/evidence-candidates`),
+  linkEvidence: (claimId: string, evidence: Record<string, unknown>) =>
+    jsonFetch<{ evidenceLink: { id: string; supportStatus: string }; resolved: boolean }>(`/api/claims/${claimId}/evidence-links`, {
+      method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify({ ...evidence, confirmed: true }),
+    }),
+  generateReport: (id: string) => jsonFetch<{ report: VerificationReport; eligibleForCertificate: boolean }>(`/api/workspaces/${id}/reports`, { method: 'POST' }),
+  createCertificate: (id: string) => jsonFetch<{ certificate: { id: string }; shareUrl: string; expiresAt: string; pdfUrl: string; documentUrl: string }>(`/api/workspaces/${id}/certificates`, { method: 'POST' }),
   // Projects
   listProjects: () => jsonFetch<{ projects: Project[] }>('/api/projects'),
   createProject: (title: string, description?: string) =>
@@ -26,10 +86,10 @@ export const api = {
   getProject: (id: string) => jsonFetch<{ project: Project }>(`/api/projects/${id}`),
   deleteProject: (id: string) =>
     jsonFetch<{ ok: boolean }>(`/api/projects/${id}`, { method: 'DELETE' }),
-  saveDocument: (id: string, content: string) =>
-    jsonFetch<{ ok: boolean; lastSaved: string }>(`/api/projects/${id}/document`, {
+  saveDocument: (id: string, content: string, baseRevision?: number) =>
+    jsonFetch<{ ok: boolean; lastSaved: string; revision: number; contentHash: string }>(`/api/workspaces/${id}/document`, {
       method: 'PUT',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, baseRevision }),
     }),
 
   // PDFs
@@ -172,7 +232,7 @@ export const api = {
     projectId: string, draft: string,
     paragraphId?: string, frictionMode?: 'socratic' | 'coach' | 'assistant',
   ) =>
-    jsonFetch<{ suggestion: string; intervention?: Intervention }>('/api/autocomplete', {
+    jsonFetch<{ suggestion: ''; cue: string; insertable: false; intervention?: Intervention }>('/api/autocomplete', {
       method: 'POST',
       body: JSON.stringify({ projectId, draft, paragraphId, friction_mode: frictionMode }),
     }),

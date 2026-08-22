@@ -1,0 +1,27 @@
+sequenceDiagram
+    autonumber
+    participant U as Writer
+    participant BFF as Next.js BFF
+    participant PP as pdf-parse
+    participant CK as Chunker
+    participant DB as Database
+    participant F as FastAPI RAG
+    participant Emb as GeminiEmbedder
+    participant VS as PgvectorStore
+
+    U->>BFF: drag PDF into Library
+    BFF->>BFF: store Pdf row (parseStatus=queued)
+    BFF->>PP: extractText(buffer)
+    PP-->>BFF: rawText
+    BFF->>CK: chunk(rawText, ~500 tokens)
+    CK-->>BFF: chunks[]
+    BFF->>DB: insert PdfChunk rows (verbatim ids)
+    BFF->>DB: update Pdf.parseStatus=ready
+    BFF->>F: POST /api/rag/ingest {projectId, chunks}
+    F->>Emb: embedDocuments(chunks)
+    Note over Emb: taskType = RETRIEVAL_DOCUMENT
+    Emb-->>F: vectors[]
+    F->>VS: store(vectors, chunkIds, projectId)
+    VS->>DB: UPDATE embedding = vector WHERE id = chunkId
+    F-->>BFF: ingested count
+    BFF-->>U: PDF ready for RAG verification

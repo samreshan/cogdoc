@@ -4,14 +4,16 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireUserId } from '@/lib/auth-supabase'
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
+  const userId = await requireUserId(req)
   const project = await db.project.findUnique({
-    where: { id },
+    where: { id, userId },
     include: {
       document: true,
       pdfs: {
@@ -36,10 +38,18 @@ export async function GET(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  await db.project.delete({ where: { id } })
+  const userId = await requireUserId(req)
+  const project = await db.project.findUnique({ where: { id }, select: { userId: true } })
+  if (!project || project.userId !== userId) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+  await db.project.update({
+    where: { id },
+    data: { archived: true, deletedAt: new Date() },
+  })
   return NextResponse.json({ ok: true })
 }

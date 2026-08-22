@@ -1,0 +1,28 @@
+sequenceDiagram
+    autonumber
+    participant E as Editor (BFF)
+    participant F as FastAPI RAG
+    participant Emb as GeminiEmbedder
+    participant VS as PgvectorStore
+    participant L as Gemini LLM
+    participant DB as Database
+
+    E->>F: POST /api/ai/citation {claim, projectId}
+    F->>Emb: embedQuery(claim)
+    Note over Emb: taskType = RETRIEVAL_QUERY
+    Emb->>L: embedContent API
+    L-->>Emb: query vector (3072-dim)
+    F->>VS: retrieve(query, projectId, k=5)
+    VS->>VS: cosine ANN over HNSW index
+    VS-->>F: top-5 chunks + similarity
+    F->>F: max_similarity < floor?
+    alt weak grounding
+        Note over F: Verdict forced to<br/>insufficient_evidence<br/>regardless of LLM
+        F-->>E: insufficient_evidence
+    else sufficient grounding
+        F->>L: classify verdict (evidence-only prompt)
+        L-->>F: verdict label
+        F-->>E: verdict + cited excerpts
+    end
+    F->>DB: persist InterventionEvidence per chunk
+    E-->>E: show emerald underline + verdict + View evidence

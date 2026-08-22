@@ -15,8 +15,12 @@ vi.mock('@/lib/db', () => ({
     pdfChunk: { createMany: vi.fn() },
   },
 }))
+vi.mock('@/lib/safe-url', () => ({ fetchPublicHtml: vi.fn() }))
 
 import { POST } from '@/app/api/projects/[id]/add-source/route'
+import { fetchPublicHtml } from '@/lib/safe-url'
+
+const safeFetch = fetchPublicHtml as ReturnType<typeof vi.fn>
 
 function ctx(id: string) {
   return { params: Promise.resolve({ id }) }
@@ -27,12 +31,9 @@ function req(id: string, body: unknown) {
   })
 }
 
-function htmlResponse(html: string) {
-  return { text: async () => html } as Response
-}
-
 beforeEach(() => {
   vi.restoreAllMocks()
+  safeFetch.mockReset()
 })
 
 describe('POST /api/projects/[id]/add-source — validation', () => {
@@ -44,9 +45,7 @@ describe('POST /api/projects/[id]/add-source — validation', () => {
 
 describe('POST /api/projects/[id]/add-source — fetch path', () => {
   it('ingests html content, extracts the <title>, and chunks it', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      htmlResponse('<html><head><title>A Page</title></head><body><p>' + 'A'.repeat(200) + '</p></body></html>'),
-    )
+    safeFetch.mockResolvedValue({ url: new URL('https://example.com/article'), html: '<html><head><title>A Page</title></head><body><p>' + 'A'.repeat(200) + '</p></body></html>' })
     const { db } = await import('@/lib/db')
     ;(db.pdf.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'pdf-1', sizeBytes: 200 })
 
@@ -59,9 +58,7 @@ describe('POST /api/projects/[id]/add-source — fetch path', () => {
   })
 
   it('keeps the caller-provided title over the page <title>', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      htmlResponse('<title>Page Title</title><p>' + 'B'.repeat(200) + '</p>'),
-    )
+    safeFetch.mockResolvedValue({ url: new URL('https://example.com'), html: '<title>Page Title</title><p>' + 'B'.repeat(200) + '</p>' })
     const { db } = await import('@/lib/db')
     ;(db.pdf.create as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'pdf-1', sizeBytes: 200 })
     const res = await POST(req('p1', { url: 'https://example.com', title: 'Orig' }), ctx('p1'))
@@ -71,13 +68,13 @@ describe('POST /api/projects/[id]/add-source — fetch path', () => {
   })
 
   it('returns 422 when extracted content is too short', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(htmlResponse('<p>tiny</p>'))
+    safeFetch.mockResolvedValue({ url: new URL('https://example.com'), html: '<p>tiny</p>' })
     const res = await POST(req('p1', { url: 'https://example.com' }), ctx('p1'))
     expect(res.status).toBe(422)
   })
 
   it('returns 502 when the fetch fails', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network'))
+    safeFetch.mockRejectedValue(new Error('network'))
     const res = await POST(req('p1', { url: 'https://example.com' }), ctx('p1'))
     expect(res.status).toBe(502)
   })

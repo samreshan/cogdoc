@@ -1,0 +1,22 @@
+flowchart TB
+    subgraph Build[Build]
+        Img[Docker Image<br/>multi-arch AMD64 + ARM64<br/>3-stage node:20-alpine]
+    end
+    subgraph Container[Docker Compose - docker-compose.dev.yml]
+        App[app container<br/>Next.js + BFF<br/>port 3000]
+        Rag[rag container<br/>FastAPI + Uvicorn<br/>port 8000]
+        DB[(db container<br/>Postgres + pgvector)]
+        Wizard[setup-wizard.sh<br/>first-run config]
+        Entry[entrypoint.sh]
+    end
+    Ext[Google Gemini API]
+    SupaExt[Supabase Auth - optional]
+
+    Build --> App
+    App --> Rag
+    App --> DB
+    Rag --> DB
+    Wizard --> Entry --> App
+    App --> Ext
+    Rag --> Ext
+    App --> SupaExt

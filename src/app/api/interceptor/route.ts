@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   // authed handles the 401 (no session) → 401 JSON mapping automatically.
   return authed(req, async (userId) => {
-    const project = await db.project.findUnique({ where: { id: projectId } })
+    const project = await db.project.findUnique({ where: { id: projectId, userId } })
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
     const ai = getAIService()

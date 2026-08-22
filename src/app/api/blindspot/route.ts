@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   }
 
   const userId = await requireUserId(req)
-  const project = await db.project.findUnique({ where: { id: projectId } })
+  const project = await db.project.findUnique({ where: { id: projectId, userId } })
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
   // The library: this project's PdfChunks.

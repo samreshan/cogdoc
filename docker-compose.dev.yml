@@ -3,8 +3,7 @@
 #
 # Sprint 3 portfolio artifact: a multi-service deployment that matches the
 # target architecture in PRODUCT.md §10.1. The app-level services use env vars
-# from .env.local; Postgres is the future home of pgvector once the data store
-# migrates off SQLite.
+# from .env.local; Postgres is the canonical workspace and pgvector store.
 #
 # Usage:
 #   docker compose -f docker-compose.dev.yml up         # all three services
@@ -12,7 +11,7 @@
 #   docker compose -f docker-compose.dev.yml down
 # ─────────────────────────────────────────────────────────────────────────────
 services:
-  # ── Postgres + pgvector (the future data store) ──────────────────────────
+  # ── Canonical Postgres + pgvector store ─────────────────────────────────
   postgres:
     image: pgvector/pgvector:pg16
     container_name: cogdoc-postgres
@@ -61,6 +60,7 @@ services:
     ports:
       - "3000:3000"
     environment:
+      DATABASE_URL: "postgresql://cogdoc:cogdoc_dev@postgres:5432/cogdoc"
       FASTAPI_URL: "http://rag:8000"
       USE_VECTOR_RETRIEVAL: "true"
     depends_on:

@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 import { chunkText } from '@/lib/retrieval'
+import { fetchPublicHtml } from '@/lib/safe-url'
 
 export const runtime = 'nodejs'
 export const maxDuration = 45
@@ -45,7 +46,9 @@ export async function POST(
   const body = await req.json().catch(() => ({}))
   const { url, title } = body as { url: string; title?: string }
 
-  if (!url || !url.startsWith('http')) {
+  let parsedUrl: URL | null = null
+  try { parsedUrl = new URL(url) } catch { /* handled below */ }
+  if (!parsedUrl || !['http:', 'https:'].includes(parsedUrl.protocol)) {
     return NextResponse.json({ error: 'A valid URL is required' }, { status: 400 })
   }
 
@@ -59,16 +62,13 @@ export async function POST(
   let sourceTitle = title || url
 
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Cogdoc/1.0 (research assistant)' },
-      signal: AbortSignal.timeout(10000),
-    })
-    const html = await res.text()
+    const { html, url: finalUrl } = await fetchPublicHtml(url)
     rawText = stripHtml(html)
     if (!title) {
       const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
       if (m?.[1]?.trim()) sourceTitle = m[1].trim().slice(0, 200)
     }
+    if (!title) sourceTitle ||= finalUrl.hostname
   } catch (fetchErr) {
     return NextResponse.json({
       error: 'Could not fetch the page content',

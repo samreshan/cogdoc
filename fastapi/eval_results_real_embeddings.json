@@ -1,0 +1,254 @@
+{
+  "dataset": {
+    "passages": 28,
+    "claims": 50,
+    "evidence_claims": 40
+  },
+  "embedder": "GeminiEmbedder",
+  "verdict_provider": "gemini-llm",
+  "retrieval": {
+    "vector_recall_at_5": 0.8875,
+    "keyword_recall_at_5": 0.8625,
+    "delta_pp": 2.499999999999991,
+    "by_k": {
+      "1": {
+        "vector": 0.5375,
+        "keyword": 0.4875,
+        "delta_pp": 4.999999999999999
+      },
+      "3": {
+        "vector": 0.7375,
+        "keyword": 0.725,
+        "delta_pp": 1.2500000000000067
+      },
+      "5": {
+        "vector": 0.8875,
+        "keyword": 0.8625,
+        "delta_pp": 2.499999999999991
+      }
+    }
+  },
+  "calibration": {
+    "similarity_floor": 0.0,
+    "t_supported": null,
+    "calib_macro_f1": 0.6484848484848484,
+    "calib_api_failures": 0,
+    "calib_n": 19,
+    "test_n": 31
+  },
+  "verdicts": {
+    "macro_f1": 0.773323735088441,
+    "n_scored": 31,
+    "api_failures": 0,
+    "report": {
+      "supported": {
+        "precision": 1.0,
+        "recall": 0.6923076923076923,
+        "f1": 0.8181818181818181
+      },
+      "partially_supported": {
+        "precision": 1.0,
+        "recall": 0.6666666666666666,
+        "f1": 0.8
+      },
+      "unsupported": {
+        "precision": 0.7142857142857143,
+        "recall": 0.8333333333333334,
+        "f1": 0.7692307692307692
+      },
+      "insufficient_evidence": {
+        "precision": 0.5454545454545454,
+        "recall": 1.0,
+        "f1": 0.7058823529411764
+      }
+    }
+  },
+  "per_claim": [
+    {
+      "claim": "Bitcoin's proof-of-work consensus consumes more electricity than Argentina.",
+      "expected": "insufficient_evidence",
+      "predicted": "insufficient_evidence",
+      "max_similarity": 0.6209777836085459
+    },
+    {
+      "claim": "The Treaty of Westphalia established the principle of state sovereignty in 1648.",
+      "expected": "insufficient_evidence",
+      "predicted": "insufficient_evidence",
+      "max_similarity": 0.5883421976113243
+    },
+    {
+      "claim": "Spaced repetition improves long-term vocabulary retention in second-language learners.",
+      "expected": "insufficient_evidence",
+      "predicted": "insufficient_evidence",
+      "max_similarity": 0.5999907957919604
+    },
+    {
+      "claim": "The Great Barrier Reef has lost half of its coral cover since 1995.",
+      "expected": "insufficient_evidence",
+      "predicted": "insufficient_evidence",
+      "max_similarity": 0.6091783380705561
+    },
+    {
+      "claim": "Working-memory training games raise IQ scores in healthy adults.",
+      "expected": "insufficient_evidence",
+      "predicted": "insufficient_evidence",
+      "max_similarity": 0.6267770987074032
+    },
+    {
+      "claim": "Norway has one of the lowest criminal reoffending rates in the world.",
+      "expected": "insufficient_evidence",
+      "predicted": "insufficient_evidence",
+      "max_similarity": 0.6597489916726403
+    },
+    {
+      "claim": "Search engines have destroyed people's ability to remember anything on their own.",
+      "expected": "partially_supported",
+      "predicted": "partially_supported",
+      "max_similarity": 0.6965431890863913
+    },
+    {
+      "claim": "Adaptive learning platforms guarantee better outcomes for every student.",
+      "expected": "partially_supported",
+      "predicted": "partially_supported",
+      "max_similarity": 0.6543014351409707
+    },
+    {
+      "claim": "COMPAS was biased because its designers intended to discriminate against black defendants.",
+      "expected": "partially_supported",
+      "predicted": "unsupported",
+      "max_similarity": 0.7438124796470431
+    },
+    {
+      "claim": "Green growth is impossible under any conceivable policy scenario.",
+      "expected": "partially_supported",
+      "predicted": "partially_supported",
+      "max_similarity": 0.7393161301098874
+    },
+    {
+      "claim": "Gerlich's survey of 666 UK participants proves that using AI lowers intelligence.",
+      "expected": "partially_supported",
+      "predicted": "partially_supported",
+      "max_similarity": 0.7411602976511225
+    },
+    {
+      "claim": "AI-curated news feeds always improve the quality of information people consume.",
+      "expected": "partially_supported",
+      "predicted": "unsupported",
+      "max_similarity": 0.6733134469054133
+    },
+    {
+      "claim": "Younger people lean on AI assistants more heavily and score worse on critical thinking than their elders.",
+      "expected": "supported",
+      "predicted": "insufficient_evidence",
+      "max_similarity": 0.7672987790762222
+    },
+    {
+      "claim": "People with more schooling show stronger reasoning skills no matter how much AI they use.",
+      "expected": "supported",
+      "predicted": "insufficient_evidence",
+      "max_similarity": 0.7393788465750133
+    },
+    {
+      "claim": "Handing mental work to external aids can wither the very skills that work would have exercised.",
+      "expected": "supported",
+      "predicted": "supported",
+      "max_similarity": 0.7341855991474172
+    },
+    {
+      "claim": "People tend to remember where information lives rather than the information itself.",
+      "expected": "supported",
+      "predicted": "supported",
+      "max_similarity": 0.6532645193711427
+    },
+    {
+      "claim": "Recommendation algorithms can wall users into bubbles that echo what they already think.",
+      "expected": "supported",
+      "predicted": "insufficient_evidence",
+      "max_similarity": 0.644934784901842
+    },
+    {
+      "claim": "Human working memory can only hold a limited amount at once, which constrains learning.",
+      "expected": "supported",
+      "predicted": "supported",
+      "max_similarity": 0.6688892815992927
+    },
+    {
+      "claim": "One-on-one AI tutoring software has boosted results in science and maths subjects.",
+      "expected": "supported",
+      "predicted": "supported",
+      "max_similarity": 0.6635362192009312
+    },
+    {
+      "claim": "Halpern's critical-thinking test mixes multiple-choice questions with open-ended exercises.",
+      "expected": "supported",
+      "predicted": "supported",
+      "max_similarity": 0.789090886407622
+    },
+    {
+      "claim": "The more someone trusts an AI system, the more thinking they tend to offload onto it.",
+      "expected": "supported",
+      "predicted": "insufficient_evidence",
+      "max_similarity": 0.7718931213740776
+    },
+    {
+      "claim": "The recidivism score flagged black defendants as riskier than their actual reoffending justified.",
+      "expected": "supported",
+      "predicted": "supported",
+      "max_similarity": 0.799789868097221
+    },
+    {
+      "claim": "When base rates differ, no risk score can satisfy equal calibration and equal false-positive rates at once.",
+      "expected": "supported",
+      "predicted": "supported",
+      "max_similarity": 0.8067813207375429
+    },
+    {
+      "claim": "Wealthy countries' claimed emission cuts largely reflect shifting dirty industry abroad.",
+      "expected": "supported",
+      "predicted": "supported",
+      "max_similarity": 0.7457014488562149
+    },
+    {
+      "claim": "Early printed books were riddled with piracy and false attribution.",
+      "expected": "supported",
+      "predicted": "supported",
+      "max_similarity": 0.8381777474511828
+    },
+    {
+      "claim": "The Gerlich study found no relationship between AI tool usage and critical thinking.",
+      "expected": "unsupported",
+      "predicted": "unsupported",
+      "max_similarity": 0.7948506210095756
+    },
+    {
+      "claim": "Older participants were more dependent on AI tools than younger ones.",
+      "expected": "unsupported",
+      "predicted": "insufficient_evidence",
+      "max_similarity": 0.7675519408915535
+    },
+    {
+      "claim": "Northpointe conceded that its tool was poorly calibrated for black defendants.",
+      "expected": "unsupported",
+      "predicted": "unsupported",
+      "max_similarity": 0.8521415334086929
+    },
+    {
+      "claim": "A well-designed risk score can always achieve equal calibration and equal false-positive rates across groups.",
+      "expected": "unsupported",
+      "predicted": "unsupported",
+      "max_similarity": 0.7832600553069087
+    },
+    {
+      "claim": "The decoupling achieved so far reflects genuine domestic efficiency gains rather than offshoring.",
+      "expected": "unsupported",
+      "predicted": "unsupported",
+      "max_similarity": 0.8167979383677633
+    },
+    {
+      "claim": "Fixity was an inherent technical property of the printing press.",
+      "expected": "unsupported",
+      "predicted": "unsupported",
+      "max_similarity": 0.8257923635410843
+    }
+  ]
+}

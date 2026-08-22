@@ -39,7 +39,7 @@ say "${BOLD}${MAGENTA}╚══════════════════�
 say ""
 say "This wizard configures Cogdoc for first use. You'll be asked for:"
 say "  ${DIM}1.${RESET}  AI provider choice (Gemini / Groq / OpenAI-compatible)"
-say "  ${DIM}2.${RESET}  Database choice (embedded SQLite / Supabase Postgres)"
+say "  ${DIM}2.${RESET}  PostgreSQL database connection"
 say "  ${DIM}3.${RESET}  Supabase auth keys (optional — for JWT verification)"
 say "  ${DIM}4.${RESET}  App settings (port, token budget)"
 say ""
@@ -116,49 +116,41 @@ fi
 # ── 2. Database ──────────────────────────────────────────────────────────────
 hdr "2/4  Database"
 
-say "Cogdoc needs a database. Choose:"
+say "The assignment, review, audit, and certificate models require PostgreSQL. Choose:"
 say ""
-say "  ${BOLD}1)${RESET} Embedded SQLite  ${DIM}(default — no setup, file stored in /data volume)${RESET}"
-say "  ${BOLD}2)${RESET} Supabase Postgres ${DIM}(use your Supabase project's connection string)${RESET}"
-say "  ${BOLD}3)${RESET} External Postgres ${DIM}(any Postgres URL)${RESET}"
+say "  ${BOLD}1)${RESET} Supabase Postgres ${DIM}(use your Supabase project's connection string)${RESET}"
+say "  ${BOLD}2)${RESET} External Postgres ${DIM}(any PostgreSQL URL)${RESET}"
 say ""
 
 DB_PROVIDER=""
 DATABASE_URL=""
 
 while true; do
-  ask "${BOLD}Choose database [1-3, default=1]: ${RESET}" db_choice
+  ask "${BOLD}Choose database [1-2, default=1]: ${RESET}" db_choice
   db_choice="${db_choice:-1}"
   case "$db_choice" in
     1)
-      DB_PROVIDER="sqlite"
-      DATABASE_URL="file:/data/cogdoc.db"
-      say "${GREEN}✓${RESET} Embedded SQLite selected. DB file: ${BOLD}/data/cogdoc.db${RESET}"
-      ;;
-    2)
       DB_PROVIDER="supabase"
       say "Get your connection string from Supabase Dashboard → Project Settings → Database → Connection string (URI)."
       say "${DIM}It looks like: postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres${RESET}"
       ask "${BOLD}Paste Supabase Postgres URL: ${RESET}" DATABASE_URL
       if [ -z "$DATABASE_URL" ]; then
-        say "${RED}No URL entered — falling back to SQLite.${RESET}"
-        DB_PROVIDER="sqlite"
-        DATABASE_URL="file:/data/cogdoc.db"
+        say "${RED}A PostgreSQL URL is required.${RESET}"
+        continue
       fi
       say "${GREEN}✓${RESET} Supabase Postgres configured."
       ;;
-    3)
+    2)
       DB_PROVIDER="postgres"
       ask "${BOLD}Paste Postgres URL (postgresql://user:pass@host:5432/db): ${RESET}" DATABASE_URL
       if [ -z "$DATABASE_URL" ]; then
-        say "${RED}No URL entered — falling back to SQLite.${RESET}"
-        DB_PROVIDER="sqlite"
-        DATABASE_URL="file:/data/cogdoc.db"
+        say "${RED}A PostgreSQL URL is required.${RESET}"
+        continue
       fi
       say "${GREEN}✓${RESET} External Postgres configured."
       ;;
     *)
-      say "${RED}Invalid choice. Please enter 1, 2, or 3.${RESET}"
+      say "${RED}Invalid choice. Please enter 1 or 2.${RESET}"
       continue
       ;;
   esac
