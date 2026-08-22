@@ -88,6 +88,7 @@ Open http://localhost:3000.
 ### Writing
 - **Notebook-style editor** with Newsreader serif font, 18px body, 1.8 line-height
 - **Auto-save** (debounced 1.5s) with live save-state indicator
+- **Natural Style Review** for a selection, paragraph, or full draft: local deterministic prompts identify cadence, clarity, repetition, and overly formulaic phrasing without changing the author’s text
 - **Keyboard shortcuts**: Cmd/Ctrl+B (bold), Cmd/Ctrl+I (italic), Cmd/Ctrl+U (underline), Esc (clear selection)
 - **Focus mode** — dims all paragraphs except the one you're editing
 - **Word count** in the toolbar

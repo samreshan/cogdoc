@@ -138,6 +138,7 @@ These principles are derived from the literature review (IR §2.1.6) and govern 
 4. **Friction must be calibrated, not absolute.** The paradox in §2.2 demands it: friction that users abandon under pressure is friction that fails. Intensity must adapt to context (§9).
 5. **The human retains authorship and authorship responsibility.** There is always a clear separation between user-authored prose and AI-authored interventions; the AI never writes into the document body.
 6. **Intelligence amplification, not substitution.** Following Bush (1945) and Engelbart (1962), the artefact augments the thinker's capacity to deal with complexity — it does not replace the thinking.
+7. **Style feedback is transparent and local.** Natural Style Review uses deterministic rules to prompt revision; it does not infer authorship, assess plagiarism or detector outcomes, or generate replacement prose.
 
 ---
 

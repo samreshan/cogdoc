@@ -45,12 +45,13 @@ import { useEngineFiring } from '@/lib/use-engine-firing'
 import type { EngineType } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Send, Loader2, Clock, Check, Sparkles } from 'lucide-react'
+import { Send, Loader2, Clock, Check, Sparkles, ScanSearch } from 'lucide-react'
 import { toast } from 'sonner'
 import SentencePopover from './sentence-popover'
 import RunningPets, { IdlePetBadge } from './running-pets'
 import { ApiError } from '@/lib/api-client'
 import { clearRecoveryDraft, loadRecoveryDraft, saveRecoveryDraft } from '@/lib/draft-recovery'
+import StyleReviewPanel from './style-review-panel'
 
 export default function EditorTiptap() {
   const project = useCogdoc((s) => s.activeProject)
@@ -75,6 +76,7 @@ export default function EditorTiptap() {
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
   const revisionRef = useRef(project?.document?.revision ?? 0)
   const [conflict, setConflict] = useState<{ serverRevision: number; serverContent: string } | null>(null)
+  const [styleReviewOpen, setStyleReviewOpen] = useState(false)
   const reviewPace = project?.reviewPace ?? 'deep'
 
   const editor = useEditor({
@@ -331,8 +333,11 @@ export default function EditorTiptap() {
             </>
           )}
         </div>
-        <div className="text-[11px] text-stone-400">
-          Sentences with interventions are <span style={{ textDecoration: 'underline wavy #78716c', textUnderlineOffset: '3px' }}>underlined</span> — hover to see them
+        <div className="flex items-center gap-3 text-[11px] text-stone-400">
+          <span className="hidden xl:inline">Sentences with interventions are <span style={{ textDecoration: 'underline wavy #78716c', textUnderlineOffset: '3px' }}>underlined</span> — hover to see them</span>
+          <Button variant="ghost" size="sm" onClick={() => setStyleReviewOpen(true)} className="h-7 px-2 text-[11px] text-stone-600 hover:text-[#173f35]">
+            <ScanSearch className="mr-1.5 h-3.5 w-3.5" /> Style review
+          </Button>
         </div>
       </div>
 
@@ -402,6 +407,8 @@ export default function EditorTiptap() {
 
       {/* Running pixelated pets — animate across the screen when engines fire */}
       <RunningPets />
+
+      <StyleReviewPanel editor={editor} open={styleReviewOpen} onOpenChange={setStyleReviewOpen} />
     </div>
   )
 }
