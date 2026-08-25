@@ -3,7 +3,7 @@
  *
  * Mocks global fetch with Gemini generateContent response shapes. Covers
  * validation, the assessed-JSON path, the grounding-chunk fallback, the
- * no-results path, and the API-failure path.
+ * no-results path, OpenAlex fallback, and the API-failure path.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
@@ -31,6 +31,10 @@ function geminiResponse(text: string, groundingChunks?: Array<{ web: { uri: stri
       }],
     }),
   } as Response
+}
+
+function openAlexResponse(works: Array<Record<string, unknown>>) {
+  return { ok: true, json: async () => ({ results: works }) } as Response
 }
 
 beforeEach(() => {
@@ -77,10 +81,31 @@ describe('POST /api/find-sources — pipeline', () => {
     expect(body.message).toMatch(/No sources found/)
   })
 
-  it('returns 502 when the Gemini call fails', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: false, status: 429, text: async () => 'quota',
-    } as Response)
+  it('falls back to OpenAlex scholarly records when Gemini is quota-limited', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({ ok: false, status: 429, text: async () => 'quota' } as Response)
+      .mockResolvedValueOnce(openAlexResponse([{
+        id: 'https://openalex.org/W1',
+        display_name: 'A relevant research paper',
+        doi: 'https://doi.org/10.1000/example',
+        abstract_inverted_index: { Relevant: [0], evidence: [1], findings: [2] },
+      }]))
+    const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.provider).toBe('openalex')
+    expect(body.sources).toEqual([expect.objectContaining({
+      title: 'A relevant research paper',
+      url: 'https://doi.org/10.1000/example',
+      snippet: 'Relevant evidence findings',
+      relevance: 'medium',
+    })])
+  })
+
+  it('returns 502 only when Gemini and OpenAlex both fail', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({ ok: false, status: 429, text: async () => 'quota' } as Response)
+      .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
     const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
     expect(res.status).toBe(502)
   })

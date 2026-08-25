@@ -3,10 +3,9 @@
  * Body: { claim, projectId }
  *
  * Searches the internet for evidence related to the claim using the Gemini
- * generateContent API with the google_search grounding tool (same
- * GEMINI_API_KEY as the engines and embeddings). Returns a list of sources
- * with title, URL, snippet, and relevance assessment — search and relevance
- * assessment happen in a single grounded call.
+ * generateContent API with the google_search grounding tool. When the Gemini
+ * provider is temporarily unavailable or quota-limited, falls back to the
+ * public OpenAlex scholarly index so source discovery remains available.
  *
  * This makes Cogdoc a SMART writing assistant — it proactively finds
  * evidence for your claims without you having to manually search.
@@ -26,6 +25,16 @@ interface SearchResult {
   snippet: string
   relevance: 'high' | 'medium' | 'low'
   publishedTime?: string
+}
+
+interface OpenAlexWork {
+  id?: string
+  display_name?: string
+  doi?: string | null
+  publication_date?: string | null
+  cited_by_count?: number
+  abstract_inverted_index?: Record<string, number[]> | null
+  primary_location?: { landing_page_url?: string | null; source?: { display_name?: string | null } | null } | null
 }
 
 export async function POST(req: NextRequest) {
@@ -49,14 +58,21 @@ export async function POST(req: NextRequest) {
     const searchQuery = buildSearchQuery(claim)
 
     let sources: SearchResult[]
+    let provider: 'gemini' | 'openalex' = 'gemini'
     try {
       sources = await geminiFindSources(claim, searchQuery)
     } catch (e) {
-      console.error('Web search failed:', e)
-      return NextResponse.json({
-        error: 'Web search failed. The AI provider may not support search grounding.',
-        detail: (e as Error).message,
-      }, { status: 502 })
+      console.warn('Gemini source search unavailable; trying OpenAlex:', (e as Error).message)
+      try {
+        sources = await openAlexFindSources(searchQuery)
+        provider = 'openalex'
+      } catch (fallbackError) {
+        console.error('Source search failed:', fallbackError)
+        return NextResponse.json({
+          error: 'Source search failed. Both Gemini and the scholarly index were unavailable.',
+          detail: (fallbackError as Error).message,
+        }, { status: 502 })
+      }
     }
 
     if (sources.length === 0) {
@@ -70,6 +86,8 @@ export async function POST(req: NextRequest) {
       sources,
       query: searchQuery,
       totalFound: sources.length,
+      provider,
+      ...(provider === 'openalex' ? { message: 'Gemini was unavailable; showing matching scholarly records from OpenAlex.' } : {}),
     })
   } catch (e) {
     console.error('Find-sources failed:', e)
@@ -78,6 +96,60 @@ export async function POST(req: NextRequest) {
       detail: (e as Error).message,
     }, { status: 500 })
   }
+}
+
+/**
+ * No-key academic fallback for source discovery. OpenAlex ranks works by the
+ * search query and provides stable DOI or landing-page links. It intentionally
+ * returns neutral relevance because it does not infer whether a work proves a
+ * particular claim.
+ */
+export async function openAlexFindSources(query: string): Promise<SearchResult[]> {
+  const endpoint = new URL('https://api.openalex.org/works')
+  endpoint.searchParams.set('search', query)
+  endpoint.searchParams.set('per-page', '8')
+  endpoint.searchParams.set('select', 'id,display_name,doi,publication_date,cited_by_count,abstract_inverted_index,primary_location')
+  const mailto = process.env.OPENALEX_MAILTO?.trim()
+  if (mailto) endpoint.searchParams.set('mailto', mailto)
+
+  const res = await fetch(endpoint, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (!res.ok) throw new Error(`OpenAlex search failed: ${res.status}`)
+
+  const data = await res.json() as { results?: OpenAlexWork[] }
+  return (data.results ?? [])
+    .map((work) => {
+      const url = work.doi || work.primary_location?.landing_page_url || work.id
+      if (!url || !work.display_name) return null
+      return {
+        title: work.display_name,
+        url,
+        snippet: openAlexSnippet(work),
+        relevance: 'medium' as const,
+      }
+    })
+    .filter((work): work is SearchResult => work !== null)
+}
+
+function openAlexSnippet(work: OpenAlexWork): string {
+  const abstract = work.abstract_inverted_index
+    ? Object.entries(work.abstract_inverted_index)
+      .flatMap(([word, positions]) => positions.map((position) => ({ word, position })))
+      .sort((a, b) => a.position - b.position)
+      .map(({ word }) => word)
+      .join(' ')
+      .slice(0, 300)
+    : ''
+  if (abstract) return abstract
+
+  const details = [
+    work.primary_location?.source?.display_name,
+    work.publication_date ? `Published ${work.publication_date}` : null,
+    typeof work.cited_by_count === 'number' ? `${work.cited_by_count} citations` : null,
+  ].filter(Boolean)
+  return details.join(' · ') || 'Scholarly record indexed by OpenAlex.'
 }
 
 /**
