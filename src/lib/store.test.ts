@@ -52,6 +52,7 @@ beforeEach(() => {
     activeInterventions: [],
     hoveredSentenceKey: null,
     hoveredPosition: null,
+    editorFocusQuote: null,
     activeModal: 'none',
     libraryVersion: 0,
     analyticsVersion: 0,
@@ -142,6 +143,21 @@ describe('focus mode', () => {
     expect(useCogdoc.getState().focusMode).toBe(false)
     useCogdoc.getState().toggleFocusMode()
     expect(useCogdoc.getState().focusMode).toBe(true)
+  })
+})
+
+describe('editor focus requests', () => {
+  it('stores a right-pane quote until the editor consumes it', () => {
+    useCogdoc.getState().focusEditorText('  Find this sentence in the draft.  ')
+    expect(useCogdoc.getState().editorFocusQuote).toBe('Find this sentence in the draft.')
+    useCogdoc.getState().clearEditorFocus()
+    expect(useCogdoc.getState().editorFocusQuote).toBeNull()
+  })
+
+  it('clears a pending focus request when switching projects', () => {
+    useCogdoc.getState().focusEditorText('A stale sentence')
+    useCogdoc.getState().setActiveProject(makeProject({ id: 'p2' }))
+    expect(useCogdoc.getState().editorFocusQuote).toBeNull()
   })
 })
 

@@ -36,6 +36,11 @@ interface CogdocState {
   hoveredPosition: { top: number; left: number } | null
   setHovered: (key: string | null, position: { top: number; left: number } | null) => void
 
+  // A right-pane item can request that the editor select and reveal its text.
+  editorFocusQuote: string | null
+  focusEditorText: (quote: string) => void
+  clearEditorFocus: () => void
+
   // Modals
   activeModal: ModalName
   setActiveModal: (m: ModalName) => void
@@ -73,6 +78,7 @@ export const useCogdoc = create<CogdocState>((set) => ({
       activeProject: p,
       activeInterventions: [],
       hoveredSentenceKey: null,
+      editorFocusQuote: null,
       blindspotShownThisSession: false,
     }),
   updateActiveProjectContent: (content, lastSaved, revision, contentHash) =>
@@ -120,6 +126,10 @@ export const useCogdoc = create<CogdocState>((set) => ({
   hoveredSentenceKey: null,
   hoveredPosition: null,
   setHovered: (key, position) => set({ hoveredSentenceKey: key, hoveredPosition: position }),
+
+  editorFocusQuote: null,
+  focusEditorText: (quote) => set({ editorFocusQuote: quote.trim() || null }),
+  clearEditorFocus: () => set({ editorFocusQuote: null }),
 
   activeModal: 'none',
   setActiveModal: (m) => set({ activeModal: m }),

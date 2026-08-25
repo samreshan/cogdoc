@@ -51,6 +51,7 @@ import SentencePopover from './sentence-popover'
 import RunningPets, { IdlePetBadge } from './running-pets'
 import { ApiError } from '@/lib/api-client'
 import { clearRecoveryDraft, loadRecoveryDraft, saveRecoveryDraft } from '@/lib/draft-recovery'
+import { findEditorTextRange } from '@/lib/editor-focus'
 
 export default function EditorTiptap() {
   const project = useCogdoc((s) => s.activeProject)
@@ -62,6 +63,8 @@ export default function EditorTiptap() {
   const bumpAnalytics = useCogdoc((s) => s.bumpAnalytics)
   const focusMode = useCogdoc((s) => s.focusMode)
   const setHovered = useCogdoc((s) => s.setHovered)
+  const editorFocusQuote = useCogdoc((s) => s.editorFocusQuote)
+  const clearEditorFocus = useCogdoc((s) => s.clearEditorFocus)
   const frictionMode = useCogdoc((s) => s.frictionMode)
 
   const [promptInput, setPromptInput] = useState('')
@@ -208,6 +211,20 @@ export default function EditorTiptap() {
       editor.state.tr.setMeta(interventionHighlightKey, activeInterventions),
     )
   }, [editor, activeInterventions])
+
+  // The review queue and live writing signals use this handoff to reveal a
+  // sentence in long documents without requiring the author to hunt for an
+  // underline manually.
+  useEffect(() => {
+    if (!editor || !editorFocusQuote) return
+    const range = findEditorTextRange(editor.state.doc, editorFocusQuote)
+    clearEditorFocus()
+    if (!range) {
+      toast('This passage changed after the review and could not be located.')
+      return
+    }
+    editor.chain().focus().setTextSelection(range).scrollIntoView().run()
+  }, [editor, editorFocusQuote, clearEditorFocus])
 
   // Cleanup
   useEffect(() => {
