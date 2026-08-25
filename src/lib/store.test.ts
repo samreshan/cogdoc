@@ -53,6 +53,7 @@ beforeEach(() => {
     hoveredSentenceKey: null,
     hoveredPosition: null,
     editorFocusQuote: null,
+    reviewHighlightQuotes: [],
     activeModal: 'none',
     libraryVersion: 0,
     analyticsVersion: 0,
@@ -158,6 +159,19 @@ describe('editor focus requests', () => {
     useCogdoc.getState().focusEditorText('A stale sentence')
     useCogdoc.getState().setActiveProject(makeProject({ id: 'p2' }))
     expect(useCogdoc.getState().editorFocusQuote).toBeNull()
+  })
+})
+
+describe('review highlight anchors', () => {
+  it('stores unique, usable review quotes for editor decoration', () => {
+    useCogdoc.getState().setReviewHighlightQuotes(['  A reviewable sentence. ', 'A reviewable sentence.', 'tiny'])
+    expect(useCogdoc.getState().reviewHighlightQuotes).toEqual(['A reviewable sentence.'])
+  })
+
+  it('clears review underlines when switching projects', () => {
+    useCogdoc.getState().setReviewHighlightQuotes(['A reviewable sentence.'])
+    useCogdoc.getState().setActiveProject(makeProject({ id: 'p2' }))
+    expect(useCogdoc.getState().reviewHighlightQuotes).toEqual([])
   })
 })
 

@@ -28,10 +28,18 @@ function quoteForReviewItem(item: ReviewItem): string | null {
   }
 }
 
+function quotesForReviewItems(items: ReviewItem[]): string[] {
+  return items
+    .filter((item) => !['resolved', 'dismissed'].includes(item.state))
+    .map(quoteForReviewItem)
+    .filter((quote): quote is string => Boolean(quote))
+}
+
 export default function ActionQueue() {
   const workspace = useCogdoc((state) => state.activeProject)
   const activeInterventions = useCogdoc((state) => state.activeInterventions)
   const focusEditorText = useCogdoc((state) => state.focusEditorText)
+  const setReviewHighlightQuotes = useCogdoc((state) => state.setReviewHighlightQuotes)
   const bumpLibrary = useCogdoc((state) => state.bumpLibrary)
   const [items, setItems] = useState<ReviewItem[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -54,6 +62,7 @@ export default function ActionQueue() {
     try {
       const result = await api.listReviewItems(workspace.id)
       setItems(result.reviewItems)
+      setReviewHighlightQuotes(quotesForReviewItems(result.reviewItems))
       setScanStale(Boolean(result.stale))
       if (!selectedId) setSelectedId(result.reviewItems.find((item) => item.state !== 'resolved')?.id ?? null)
     } finally {
@@ -100,6 +109,7 @@ export default function ActionQueue() {
     try {
       const result = await api.startReview(workspace.id, scope)
       setItems(result.reviewRun.items ?? [])
+      setReviewHighlightQuotes(quotesForReviewItems(result.reviewRun.items ?? []))
       setScanStale(false)
       setSelectedId(result.reviewRun.items?.find((item) => item.state !== 'resolved')?.id ?? null)
       toast.success('Review ready', { description: String(result.reviewRun.items?.length ?? 0) + ' actions prioritized.' })

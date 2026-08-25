@@ -41,6 +41,10 @@ import {
   InterventionHighlight,
   interventionHighlightKey,
 } from '@/lib/extensions/intervention-highlight'
+import {
+  ReviewItemHighlight,
+  reviewItemHighlightKey,
+} from '@/lib/extensions/review-item-highlight'
 import { useEngineFiring } from '@/lib/use-engine-firing'
 import type { EngineType } from '@/lib/types'
 import { Button } from '@/components/ui/button'
@@ -65,6 +69,7 @@ export default function EditorTiptap() {
   const setHovered = useCogdoc((s) => s.setHovered)
   const editorFocusQuote = useCogdoc((s) => s.editorFocusQuote)
   const clearEditorFocus = useCogdoc((s) => s.clearEditorFocus)
+  const reviewHighlightQuotes = useCogdoc((s) => s.reviewHighlightQuotes)
   const frictionMode = useCogdoc((s) => s.frictionMode)
 
   const [promptInput, setPromptInput] = useState('')
@@ -85,7 +90,7 @@ export default function EditorTiptap() {
       StarterKit,
       Table.configure({ resizable: true }), TableRow, TableHeader, TableCell,
       Image.configure({ allowBase64: true }), Link.configure({ openOnClick: false }),
-      WavyUnderline, InterventionHighlight,
+      WavyUnderline, InterventionHighlight, ReviewItemHighlight,
     ],
     content: parseStoredContent(project?.document?.content),
     editorProps: {
@@ -211,6 +216,16 @@ export default function EditorTiptap() {
       editor.state.tr.setMeta(interventionHighlightKey, activeInterventions),
     )
   }, [editor, activeInterventions])
+
+  // Document-anchored review actions receive their own visible underline.
+  // This is deliberately separate from live intervention marks: review items
+  // do not open engine popovers and never alter the author's text.
+  useEffect(() => {
+    if (!editor) return
+    editor.view.dispatch(
+      editor.state.tr.setMeta(reviewItemHighlightKey, reviewHighlightQuotes),
+    )
+  }, [editor, reviewHighlightQuotes])
 
   // The review queue and live writing signals use this handoff to reveal a
   // sentence in long documents without requiring the author to hunt for an

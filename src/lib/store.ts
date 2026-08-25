@@ -41,6 +41,10 @@ interface CogdocState {
   focusEditorText: (quote: string) => void
   clearEditorFocus: () => void
 
+  // Current review anchors rendered as visible document underlines.
+  reviewHighlightQuotes: string[]
+  setReviewHighlightQuotes: (quotes: string[]) => void
+
   // Modals
   activeModal: ModalName
   setActiveModal: (m: ModalName) => void
@@ -79,6 +83,7 @@ export const useCogdoc = create<CogdocState>((set) => ({
       activeInterventions: [],
       hoveredSentenceKey: null,
       editorFocusQuote: null,
+      reviewHighlightQuotes: [],
       blindspotShownThisSession: false,
     }),
   updateActiveProjectContent: (content, lastSaved, revision, contentHash) =>
@@ -130,6 +135,10 @@ export const useCogdoc = create<CogdocState>((set) => ({
   editorFocusQuote: null,
   focusEditorText: (quote) => set({ editorFocusQuote: quote.trim() || null }),
   clearEditorFocus: () => set({ editorFocusQuote: null }),
+  reviewHighlightQuotes: [],
+  setReviewHighlightQuotes: (quotes) => set({
+    reviewHighlightQuotes: [...new Set(quotes.map((quote) => quote.trim()).filter((quote) => quote.length >= 5))],
+  }),
 
   activeModal: 'none',
   setActiveModal: (m) => set({ activeModal: m }),
