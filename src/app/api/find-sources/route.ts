@@ -110,8 +110,11 @@ interface GeminiSearchResponse {
  * so a formatting hiccup degrades to unassessed sources instead of an error.
  */
 async function geminiFindSources(claim: string, query: string): Promise<SearchResult[]> {
-  const key = process.env.GEMINI_API_KEY
-  if (!key) throw new Error('GEMINI_API_KEY is not set')
+  // AI_API_KEY is the documented application-level setting. Keep the
+  // provider-specific name for deployments that use it, but accept either so
+  // local source search uses the same Gemini credential as the other engines.
+  const key = process.env.GEMINI_API_KEY || process.env.AI_API_KEY
+  if (!key) throw new Error('GEMINI_API_KEY or AI_API_KEY is not set')
   const model = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite'
 
   const prompt = `You are a research assistant. A writer made the following claim:
