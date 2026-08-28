@@ -2,10 +2,10 @@
  * POST /api/find-sources
  * Body: { claim, projectId }
  *
- * Searches the OpenAlex scholarly index first. Gemini search grounding is a
- * secondary broad-web fallback when the scholarly query returns no records or
- * OpenAlex is unavailable, keeping research discovery outside the LLM quota
- * critical path.
+ * Searches OpenAlex and then Crossref before considering Gemini grounding.
+ * DOI-bearing results can be enriched with a legal open-access location from
+ * Unpaywall. Research discovery therefore remains useful when the LLM quota is
+ * exhausted, while every result exposes its metadata and access provenance.
  *
  * This makes Cogdoc a SMART writing assistant — it proactively finds
  * evidence for your claims without you having to manually search.
@@ -20,6 +20,11 @@ export const runtime = 'nodejs'
 export const maxDuration = 45
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models'
+const UNPAYWALL_CACHE_TTL_MS = 6 * 60 * 60 * 1000
+const UNPAYWALL_CACHE_LIMIT = 1_000
+
+type RecordProvider = 'openalex' | 'crossref' | 'gemini'
+type OpenAccessProvider = 'openalex' | 'unpaywall'
 
 interface SearchResult {
   title: string
@@ -27,8 +32,13 @@ interface SearchResult {
   snippet: string
   relevance: 'high' | 'medium' | 'low'
   publishedTime?: string
+  recordProvider: RecordProvider
   openAccessUrl?: string | null
   isOpenAccess?: boolean
+  openAccessProvider?: OpenAccessProvider | null
+  openAccessHostType?: string | null
+  openAccessVersion?: string | null
+  openAccessLicense?: string | null
   citation?: {
     authors: string[]
     year: string | null
@@ -51,7 +61,13 @@ interface OpenAlexWork {
   abstract_inverted_index?: Record<string, number[]> | null
   authorships?: Array<{ author?: { display_name?: string | null } | null }>
   primary_location?: { landing_page_url?: string | null; source?: { display_name?: string | null } | null } | null
-  best_oa_location?: { landing_page_url?: string | null; pdf_url?: string | null } | null
+  best_oa_location?: {
+    landing_page_url?: string | null
+    pdf_url?: string | null
+    license?: string | null
+    version?: string | null
+    source?: { host_organization_name?: string | null; type?: string | null } | null
+  } | null
   open_access?: { is_oa?: boolean; oa_url?: string | null } | null
   biblio?: { volume?: string | null; issue?: string | null; first_page?: string | null; last_page?: string | null } | null
 }
@@ -79,27 +95,49 @@ export async function POST(req: NextRequest) {
     const searchQuery = buildSearchQuery(claim)
 
     let sources: SearchResult[] = []
-    let provider: 'gemini' | 'openalex' = 'openalex'
-    let openAlexFailed = false
-    try {
-      sources = await openAlexFindSources(searchQuery)
-    } catch (e) {
-      openAlexFailed = true
-      console.warn('OpenAlex source search unavailable; trying grounded web search:', (e as Error).message)
+    let provider: RecordProvider | null = null
+    let reachableProviders = 0
+    const providersTried: RecordProvider[] = []
+
+    const scholarlyProviders: Array<{
+      name: Exclude<RecordProvider, 'gemini'>
+      search: (query: string) => Promise<SearchResult[]>
+    }> = [
+      { name: 'openalex', search: openAlexFindSources },
+      { name: 'crossref', search: crossrefFindSources },
+    ]
+
+    for (const scholarly of scholarlyProviders) {
+      providersTried.push(scholarly.name)
+      try {
+        const matches = await scholarly.search(searchQuery)
+        reachableProviders += 1
+        if (matches.length > 0) {
+          sources = matches
+          provider = scholarly.name
+          break
+        }
+      } catch (error) {
+        console.warn(`${providerLabel(scholarly.name)} source search unavailable:`, (error as Error).message)
+      }
     }
 
     if (sources.length === 0) {
+      providersTried.push('gemini')
       try {
         sources = await geminiFindSources(claim, searchQuery)
-        provider = 'gemini'
+        reachableProviders += 1
+        if (sources.length > 0) provider = 'gemini'
       } catch (geminiError) {
-        if (openAlexFailed) {
+        if (reachableProviders === 0) {
           console.error('Source search failed:', geminiError)
           return NextResponse.json({
-            error: 'Source search failed. Both the scholarly index and grounded web search were unavailable.',
+            error: 'Source search failed. OpenAlex, Crossref, and grounded web search were unavailable.',
             detail: (geminiError as Error).message,
+            providersTried,
           }, { status: 502 })
         }
+        console.warn('Grounded web fallback unavailable:', (geminiError as Error).message)
       }
     }
 
@@ -107,10 +145,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         sources: [],
         message: 'No sources found for this claim.',
+        providersTried,
       })
     }
 
-    const formattedSources = sources.map((source) => {
+    const accessEnrichedSources = await enrichWithUnpaywall(sources)
+    const formattedSources = accessEnrichedSources.map((source) => {
       if (!source.citation) return source
       try {
         return {
@@ -142,6 +182,9 @@ export async function POST(req: NextRequest) {
       query: searchQuery,
       totalFound: sources.length,
       provider,
+      providersTried,
+      accessResolver: process.env.UNPAYWALL_EMAIL?.trim() ? 'unpaywall' : null,
+      ...(provider === 'crossref' ? { message: 'OpenAlex returned no matches; showing Crossref scholarly records.' } : {}),
       ...(provider === 'gemini' ? { message: 'No scholarly-index match was found; showing grounded web results.' } : {}),
     })
   } catch (e) {
@@ -185,11 +228,16 @@ export async function openAlexFindSources(query: string): Promise<SearchResult[]
       url,
       snippet: openAlexSnippet(work),
       relevance: 'medium',
+      recordProvider: 'openalex',
       isOpenAccess: Boolean(work.open_access?.is_oa),
       openAccessUrl: work.best_oa_location?.pdf_url
         || work.best_oa_location?.landing_page_url
         || work.open_access?.oa_url
         || null,
+      openAccessProvider: work.open_access?.is_oa ? 'openalex' : null,
+      openAccessHostType: work.best_oa_location?.source?.type ?? null,
+      openAccessVersion: work.best_oa_location?.version ?? null,
+      openAccessLicense: work.best_oa_location?.license ?? null,
       citation: {
         authors: (work.authorships ?? []).map((authorship) => authorship.author?.display_name?.trim() ?? '').filter(Boolean),
         year: work.publication_date?.slice(0, 4) ?? null,
@@ -206,6 +254,252 @@ export async function openAlexFindSources(query: string): Promise<SearchResult[]
     })
   }
   return sources
+}
+
+interface CrossrefWork {
+  DOI?: string | null
+  URL?: string | null
+  title?: string[] | null
+  abstract?: string | null
+  author?: Array<{ given?: string | null; family?: string | null; name?: string | null }> | null
+  issued?: { 'date-parts'?: Array<Array<number | null>> } | null
+  'published-print'?: { 'date-parts'?: Array<Array<number | null>> } | null
+  'published-online'?: { 'date-parts'?: Array<Array<number | null>> } | null
+  'container-title'?: string[] | null
+  volume?: string | null
+  issue?: string | null
+  page?: string | null
+  publisher?: string | null
+  'is-referenced-by-count'?: number | null
+}
+
+/** A second, free scholarly metadata index used before any LLM fallback. */
+export async function crossrefFindSources(query: string): Promise<SearchResult[]> {
+  const endpoint = new URL('https://api.crossref.org/works')
+  endpoint.searchParams.set('query.bibliographic', query)
+  endpoint.searchParams.set('rows', '8')
+  endpoint.searchParams.set('select', [
+    'DOI', 'URL', 'title', 'abstract', 'author', 'issued', 'published-print',
+    'published-online', 'container-title', 'volume', 'issue', 'page',
+    'publisher', 'is-referenced-by-count',
+  ].join(','))
+  const mailto = process.env.CROSSREF_MAILTO?.trim()
+  if (mailto) endpoint.searchParams.set('mailto', mailto)
+
+  const res = await fetch(endpoint, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': `Cogdoc/1.0 (${mailto ? `mailto:${mailto}` : 'https://github.com/cogdoc'})`,
+    },
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (!res.ok) throw new Error(`Crossref search failed: ${res.status}`)
+
+  const data = await res.json() as { message?: { items?: CrossrefWork[] } }
+  const sources: SearchResult[] = []
+  for (const work of data.message?.items ?? []) {
+    const title = work.title?.find((value) => value.trim())?.trim()
+    const doi = normalizeDoi(work.DOI)
+    const url = doi ? `https://doi.org/${doi}` : validHttpUrl(work.URL)
+    if (!title || !url) continue
+    const year = crossrefYear(work)
+    const authors = (work.author ?? []).map(crossrefAuthorName).filter(Boolean)
+    sources.push({
+      title,
+      url,
+      snippet: crossrefSnippet(work, year),
+      relevance: 'medium',
+      recordProvider: 'crossref',
+      ...(year ? { publishedTime: year } : {}),
+      isOpenAccess: false,
+      openAccessUrl: null,
+      openAccessProvider: null,
+      citation: {
+        authors,
+        year,
+        venue: work['container-title']?.find((value) => value.trim())?.trim() || null,
+        doi,
+        volume: work.volume?.trim() || null,
+        issue: work.issue?.trim() || null,
+        pages: work.page?.trim() || null,
+        publisher: work.publisher?.trim() || null,
+      },
+    })
+  }
+  return sources
+}
+
+function crossrefAuthorName(author: NonNullable<CrossrefWork['author']>[number]): string {
+  if (author.name?.trim()) return author.name.trim()
+  return [author.given?.trim(), author.family?.trim()].filter(Boolean).join(' ')
+}
+
+function crossrefYear(work: CrossrefWork): string | null {
+  const date = work['published-print'] ?? work['published-online'] ?? work.issued
+  const year = date?.['date-parts']?.[0]?.[0]
+  return typeof year === 'number' && Number.isFinite(year) ? String(year) : null
+}
+
+function crossrefSnippet(work: CrossrefWork, year: string | null): string {
+  const abstract = plainText(work.abstract ?? '').slice(0, 300)
+  if (abstract) return abstract
+  const details = [
+    work['container-title']?.[0]?.trim(),
+    year ? `Published ${year}` : null,
+    typeof work['is-referenced-by-count'] === 'number'
+      ? `${work['is-referenced-by-count']} citations`
+      : null,
+  ].filter(Boolean)
+  return details.join(' · ') || 'Scholarly metadata registered with Crossref.'
+}
+
+interface UnpaywallLocation {
+  url_for_pdf?: string | null
+  url?: string | null
+  host_type?: string | null
+  version?: string | null
+  license?: string | null
+}
+
+interface UnpaywallResolution {
+  url: string
+  hostType: string | null
+  version: string | null
+  license: string | null
+}
+
+const unpaywallCache = new Map<string, { expiresAt: number; resolution: UnpaywallResolution | null }>()
+
+async function enrichWithUnpaywall(sources: SearchResult[]): Promise<SearchResult[]> {
+  const email = process.env.UNPAYWALL_EMAIL?.trim()
+  if (!email) return sources
+
+  return mapWithConcurrency(sources, 4, async (source) => {
+    if (source.openAccessUrl || !source.citation?.doi) return source
+    try {
+      const resolution = await unpaywallLookup(source.citation.doi, email)
+      if (!resolution) return source
+      return {
+        ...source,
+        isOpenAccess: true,
+        openAccessUrl: resolution.url,
+        openAccessProvider: 'unpaywall' as const,
+        openAccessHostType: resolution.hostType,
+        openAccessVersion: resolution.version,
+        openAccessLicense: resolution.license,
+      }
+    } catch (error) {
+      console.warn('Unpaywall lookup unavailable for DOI:', source.citation.doi, (error as Error).message)
+      return source
+    }
+  })
+}
+
+async function unpaywallLookup(doiValue: string, email: string): Promise<UnpaywallResolution | null> {
+  const doi = normalizeDoi(doiValue)
+  if (!doi) return null
+  const now = Date.now()
+  const cached = unpaywallCache.get(doi)
+  if (cached && cached.expiresAt > now) return cached.resolution
+
+  const endpoint = new URL(`https://api.unpaywall.org/v2/${encodeURIComponent(doi)}`)
+  endpoint.searchParams.set('email', email)
+  let lastStatus = 0
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const res = await fetch(endpoint, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(6_000),
+    })
+    lastStatus = res.status
+    if (res.status === 404) return rememberUnpaywall(doi, null, now)
+    if (res.ok) {
+      const data = await res.json() as {
+        is_oa?: boolean
+        best_oa_location?: UnpaywallLocation | null
+        oa_locations?: UnpaywallLocation[] | null
+      }
+      const location = data.best_oa_location ?? data.oa_locations?.[0] ?? null
+      const url = validHttpUrl(location?.url_for_pdf) ?? validHttpUrl(location?.url)
+      const resolution = data.is_oa && url ? {
+        url,
+        hostType: location?.host_type?.trim() || null,
+        version: location?.version?.trim() || null,
+        license: location?.license?.trim() || null,
+      } : null
+      return rememberUnpaywall(doi, resolution, now)
+    }
+    if (attempt === 0 && (res.status === 429 || res.status >= 500)) {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+      continue
+    }
+    break
+  }
+  throw new Error(`Unpaywall lookup failed: ${lastStatus}`)
+}
+
+function rememberUnpaywall(
+  doi: string,
+  resolution: UnpaywallResolution | null,
+  now: number,
+): UnpaywallResolution | null {
+  if (unpaywallCache.size >= UNPAYWALL_CACHE_LIMIT) {
+    const oldestKey = unpaywallCache.keys().next().value as string | undefined
+    if (oldestKey) unpaywallCache.delete(oldestKey)
+  }
+  unpaywallCache.set(doi, { expiresAt: now + UNPAYWALL_CACHE_TTL_MS, resolution })
+  return resolution
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length)
+  let nextIndex = 0
+  async function worker() {
+    while (nextIndex < values.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await mapper(values[index]!)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, () => worker()))
+  return results
+}
+
+function normalizeDoi(value: string | null | undefined): string | null {
+  const doi = value?.trim().replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '')
+  return doi || null
+}
+
+function validHttpUrl(value: string | null | undefined): string | null {
+  if (!value) return null
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : null
+  } catch {
+    return null
+  }
+}
+
+function plainText(value: string): string {
+  return value
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function providerLabel(provider: RecordProvider): string {
+  if (provider === 'openalex') return 'OpenAlex'
+  if (provider === 'crossref') return 'Crossref'
+  return 'Gemini'
 }
 
 function openAlexSnippet(work: OpenAlexWork): string {
@@ -298,6 +592,7 @@ Then respond with ONLY a JSON array (no markdown, no code fences) of up to 8 sou
     url: r.url || '#',
     snippet: (r.snippet ?? '').slice(0, 300),
     relevance: r.relevance === 'high' || r.relevance === 'low' ? r.relevance : 'medium',
+    recordProvider: 'gemini',
   })
 
   // Prefer the model's assessed JSON list

@@ -136,7 +136,7 @@ export const api = {
     doi?: string | null
     rawText?: string
     style?: 'harvard' | 'apa'
-    provider?: 'openalex' | 'gemini'
+    provider?: 'openalex' | 'crossref' | 'gemini'
   }) => jsonFetch<{ reference: ReferenceSummary; alreadySaved: boolean }>(`/api/workspaces/${projectId}/references`, {
     method: 'POST',
     body: JSON.stringify(input),
@@ -236,8 +236,13 @@ export const api = {
         url: string
         snippet: string
         relevance: 'high' | 'medium' | 'low'
+        recordProvider: 'openalex' | 'crossref' | 'gemini'
         openAccessUrl?: string | null
         isOpenAccess?: boolean
+        openAccessProvider?: 'openalex' | 'unpaywall' | null
+        openAccessHostType?: string | null
+        openAccessVersion?: string | null
+        openAccessLicense?: string | null
         citation?: {
           authors: string[]
           year: string | null
@@ -252,7 +257,9 @@ export const api = {
       }>
       query?: string
       totalFound?: number
-      provider?: 'openalex' | 'gemini'
+      provider?: 'openalex' | 'crossref' | 'gemini'
+      providersTried?: Array<'openalex' | 'crossref' | 'gemini'>
+      accessResolver?: 'unpaywall' | null
       message?: string
       error?: string
       detail?: string

@@ -1,8 +1,9 @@
 /**
  * Integration tests for POST /api/find-sources (scholarly-first source search).
  *
- * Mocks OpenAlex and Gemini response shapes. Covers scholarly metadata,
- * grounded fallback, no-results, and dual-provider failure.
+ * Mocks OpenAlex, Crossref, Unpaywall, and Gemini response shapes. Covers
+ * scholarly metadata, legal full-text resolution, grounded fallback,
+ * no-results, and provider failure.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
@@ -36,9 +37,18 @@ function openAlexResponse(works: Array<Record<string, unknown>>) {
   return { ok: true, json: async () => ({ results: works }) } as Response
 }
 
+function crossrefResponse(items: Array<Record<string, unknown>>) {
+  return { ok: true, json: async () => ({ message: { items } }) } as Response
+}
+
+function unpaywallResponse(input: Record<string, unknown>) {
+  return { ok: true, json: async () => input } as Response
+}
+
 beforeEach(() => {
   vi.restoreAllMocks()
   process.env.GEMINI_API_KEY = 'test-key'
+  delete process.env.UNPAYWALL_EMAIL
 })
 
 describe('POST /api/find-sources — validation', () => {
@@ -78,14 +88,103 @@ describe('POST /api/find-sources — pipeline', () => {
     expect(body.sources[0]).toMatchObject({
       title: 'Paper A',
       snippet: 'Strong evidence',
+      recordProvider: 'openalex',
       isOpenAccess: true,
       openAccessUrl: 'https://repository.example/paper.pdf',
+      openAccessProvider: 'openalex',
       citation: {
         authors: ['Maya Chen'], year: '2025', venue: 'Journal of Research',
         volume: '12', issue: '3', pages: '101–119',
         formatted: expect.objectContaining({ style: 'harvard', processor: 'citation-js/citeproc-js' }),
       },
     })
+  })
+
+  it('uses Crossref as the non-LLM scholarly fallback', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(openAlexResponse([]))
+      .mockResolvedValueOnce(crossrefResponse([{
+        DOI: '10.1000/crossref',
+        title: ['Crossref indexed study'],
+        URL: 'https://doi.org/10.1000/crossref',
+        abstract: '<jats:p>Evidence from a longitudinal study.</jats:p>',
+        author: [{ given: 'Maya', family: 'Chen' }],
+        issued: { 'date-parts': [[2023, 4, 2]] },
+        'container-title': ['Journal of Evidence'],
+        volume: '7', issue: '2', page: '14-29', publisher: 'Example Press',
+      }]))
+
+    const res = await POST(req({ claim: 'a sufficiently long claim about longitudinal evidence' }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.provider).toBe('crossref')
+    expect(body.providersTried).toEqual(['openalex', 'crossref'])
+    expect(body.sources[0]).toMatchObject({
+      title: 'Crossref indexed study',
+      url: 'https://doi.org/10.1000/crossref',
+      snippet: 'Evidence from a longitudinal study.',
+      recordProvider: 'crossref',
+      citation: {
+        authors: ['Maya Chen'], year: '2023', venue: 'Journal of Evidence',
+        doi: '10.1000/crossref', volume: '7', issue: '2', pages: '14-29',
+        publisher: 'Example Press',
+        formatted: expect.objectContaining({ processor: 'citation-js/citeproc-js' }),
+      },
+    })
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('resolves a legal open-access location through Unpaywall when configured', async () => {
+    process.env.UNPAYWALL_EMAIL = 'research@example.com'
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(openAlexResponse([]))
+      .mockResolvedValueOnce(crossrefResponse([{
+        DOI: '10.1000/open-copy', title: ['Open study'],
+        author: [{ family: 'Chen' }], issued: { 'date-parts': [[2022]] },
+      }]))
+      .mockResolvedValueOnce(unpaywallResponse({
+        is_oa: true,
+        best_oa_location: {
+          url_for_pdf: 'https://repository.example/open-copy.pdf',
+          url: 'https://repository.example/open-copy',
+          host_type: 'repository', version: 'acceptedVersion', license: 'cc-by',
+        },
+      }))
+
+    const res = await POST(req({ claim: 'a sufficiently long claim about an open study' }))
+    const body = await res.json()
+    expect(body.sources[0]).toMatchObject({
+      isOpenAccess: true,
+      openAccessUrl: 'https://repository.example/open-copy.pdf',
+      openAccessProvider: 'unpaywall',
+      openAccessHostType: 'repository',
+      openAccessVersion: 'acceptedVersion',
+      openAccessLicense: 'cc-by',
+    })
+  })
+
+  it('retries a transient Unpaywall failure and caches the DOI result', async () => {
+    process.env.UNPAYWALL_EMAIL = 'research@example.com'
+    const item = {
+      DOI: '10.1000/cached-copy', title: ['Cached open study'],
+      author: [{ family: 'Chen' }], issued: { 'date-parts': [[2021]] },
+    }
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(openAlexResponse([]))
+      .mockResolvedValueOnce(crossrefResponse([item]))
+      .mockResolvedValueOnce({ ok: false, status: 429 } as Response)
+      .mockResolvedValueOnce(unpaywallResponse({
+        is_oa: true,
+        best_oa_location: { url: 'https://repository.example/cached-copy' },
+      }))
+      .mockResolvedValueOnce(openAlexResponse([]))
+      .mockResolvedValueOnce(crossrefResponse([item]))
+
+    const first = await POST(req({ claim: 'a sufficiently long claim about cached access' }))
+    const second = await POST(req({ claim: 'a sufficiently long claim about cached access' }))
+    expect((await first.json()).sources[0].openAccessUrl).toBe('https://repository.example/cached-copy')
+    expect((await second.json()).sources[0].openAccessUrl).toBe('https://repository.example/cached-copy')
+    expect(fetchSpy).toHaveBeenCalledTimes(6)
   })
 
   it('uses the workspace citation style for CSL rendering', async () => {
@@ -106,6 +205,7 @@ describe('POST /api/find-sources — pipeline', () => {
   it('returns empty sources with a message when no results', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(openAlexResponse([]))
+      .mockResolvedValueOnce(crossrefResponse([]))
       .mockResolvedValueOnce(geminiResponse('[]'))
     const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
     expect(res.status).toBe(200)
@@ -114,19 +214,22 @@ describe('POST /api/find-sources — pipeline', () => {
     expect(body.message).toMatch(/No sources found/)
   })
 
-  it('falls back to grounded web search when OpenAlex is unavailable', async () => {
+  it('falls back to grounded web search when both scholarly providers are unavailable', async () => {
     vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
       .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
       .mockResolvedValueOnce(geminiResponse('[{"title":"Web report","url":"https://example.org/report","snippet":"Relevant findings","relevance":"high"}]'))
     const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.provider).toBe('gemini')
-    expect(body.sources[0]).toMatchObject({ title: 'Web report', relevance: 'high' })
+    expect(body.providersTried).toEqual(['openalex', 'crossref', 'gemini'])
+    expect(body.sources[0]).toMatchObject({ title: 'Web report', relevance: 'high', recordProvider: 'gemini' })
   })
 
-  it('returns 502 only when OpenAlex and Gemini both fail', async () => {
+  it('returns 502 only when every discovery provider fails', async () => {
     vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
       .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
       .mockResolvedValueOnce({ ok: false, status: 429, text: async () => 'quota' } as Response)
     const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
@@ -136,6 +239,7 @@ describe('POST /api/find-sources — pipeline', () => {
   it('falls back to grounding chunks at medium relevance when the JSON is unparseable', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(openAlexResponse([]))
+      .mockResolvedValueOnce(crossrefResponse([]))
       .mockResolvedValueOnce(geminiResponse(
         'I found some sources but forgot to format them.',
         [{ web: { uri: 'https://x', title: 'X' } }],

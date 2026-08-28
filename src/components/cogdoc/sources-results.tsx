@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -21,8 +21,13 @@ export interface FoundSource {
   url: string
   snippet: string
   relevance: 'high' | 'medium' | 'low'
+  recordProvider: 'openalex' | 'crossref' | 'gemini'
   openAccessUrl?: string | null
   isOpenAccess?: boolean
+  openAccessProvider?: 'openalex' | 'unpaywall' | null
+  openAccessHostType?: string | null
+  openAccessVersion?: string | null
+  openAccessLicense?: string | null
   citation?: {
     authors: string[]
     year: string | null
@@ -59,7 +64,7 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
   const [sources, setSources] = useState<FoundSource[]>([])
   const [error, setError] = useState<string | null>(null)
   const [emptyMessage, setEmptyMessage] = useState<string | null>(null)
-  const [provider, setProvider] = useState<'openalex' | 'gemini' | null>(null)
+  const [provider, setProvider] = useState<'openalex' | 'crossref' | 'gemini' | null>(null)
   const [addedUrls, setAddedUrls] = useState<Set<string>>(new Set())
   const [addingUrl, setAddingUrl] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
@@ -150,12 +155,12 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
             <Search className="w-5 h-5 text-stone-600" />
             Find Sources
           </DialogTitle>
-          <p className="text-sm text-stone-500 mt-1">
-            Cogdoc searches scholarly records first, then uses grounded web
-            search only as a fallback. Open the original work before relying on
-            it; <Plus className="inline h-3 w-3" /> saves its metadata to your
-            library. Upload a legal PDF copy for passage-level evidence checks.
-          </p>
+          <DialogDescription className="text-sm text-stone-500 mt-1">
+            Cogdoc checks OpenAlex and Crossref before using grounded web
+            search. Open the original work before relying on it; <Plus className="inline h-3 w-3" /> saves
+            its metadata. When available, a legal open-access copy is linked
+            separately for passage-level evidence checks.
+          </DialogDescription>
           <div className="mt-3 p-3 rounded-lg bg-stone-50 border border-stone-200">
             <p className="text-[11px] uppercase tracking-wide text-stone-400 font-medium mb-1">Your claim</p>
             <p className="text-sm text-stone-700 italic">&ldquo;{claim}&rdquo;</p>
@@ -185,7 +190,11 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
         <ScrollArea className="h-[50vh]">
           <div className="p-4 space-y-2">
             {provider && sources.length > 0 && <div className="flex items-center justify-between rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-[11px] text-stone-600">
-              <span>{provider === 'openalex' ? 'Scholarly records from OpenAlex' : 'Grounded web fallback results'}</span>
+              <span>{provider === 'openalex'
+                ? 'Scholarly records from OpenAlex'
+                : provider === 'crossref'
+                  ? 'Scholarly records from Crossref'
+                  : 'Grounded web fallback results'}</span>
               <span className="font-medium text-[#28614f]">{sources.length} matches</span>
             </div>}
             {error && (
@@ -247,6 +256,14 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
                     <p className="text-xs text-stone-600 leading-relaxed mb-2">
                       {source.snippet}
                     </p>
+                    <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] text-stone-500">
+                      <span className="rounded-full border border-stone-200 bg-white/70 px-2 py-0.5 font-medium">
+                        Metadata: {providerName(source.recordProvider)}
+                      </span>
+                      {source.openAccessUrl && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+                        Free copy via {providerName(source.openAccessProvider)}{accessDetails(source)}
+                      </span>}
+                    </div>
                     {citation && <div className="mb-2 rounded-md border border-stone-200/80 bg-white/70 p-2.5">
                       <div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-stone-500">CSL {citation.style === 'apa' ? 'APA' : 'Harvard'} reference</p><button type="button" onClick={() => copyCitation(citation.reference, 'Reference')} className="rounded p-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700" aria-label="Copy suggested reference"><Clipboard className="h-3.5 w-3.5" /></button></div>
                       <p className="mt-1 text-[11px] leading-4 text-stone-700">{citation.reference}</p>
@@ -254,7 +271,7 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
                       <p className="mt-1 text-[9px] leading-4 text-stone-400">Rendered with CSL from discovered metadata—confirm authors, date, venue, and locators against the original.</p>
                     </div>}
                     <div className="flex items-center gap-2">
-                      {source.openAccessUrl && <a href={source.openAccessUrl} target="_blank" rel="noopener noreferrer" className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[#28614f] hover:underline"><Unlock className="h-3 w-3" />Open copy</a>}
+                      {source.openAccessUrl && <a href={source.openAccessUrl} target="_blank" rel="noopener noreferrer" aria-label={`Open legal copy of ${source.title}`} className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[#28614f] hover:underline"><Unlock className="h-3 w-3" />Open legal copy</a>}
                       <a
                         href={source.url}
                         target="_blank"
@@ -290,4 +307,29 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
       </DialogContent>
     </Dialog>
   )
+}
+
+function providerName(provider: FoundSource['recordProvider'] | FoundSource['openAccessProvider']): string {
+  if (provider === 'openalex') return 'OpenAlex'
+  if (provider === 'crossref') return 'Crossref'
+  if (provider === 'unpaywall') return 'Unpaywall'
+  if (provider === 'gemini') return 'Gemini'
+  return 'source registry'
+}
+
+function accessDetails(source: FoundSource): string {
+  const details = [
+    source.openAccessHostType === 'repository' ? 'repository' : source.openAccessHostType,
+    humanizeVersion(source.openAccessVersion),
+    source.openAccessLicense?.toUpperCase(),
+  ].filter(Boolean)
+  return details.length > 0 ? ` · ${details.join(' · ')}` : ''
+}
+
+function humanizeVersion(version: string | null | undefined): string | null {
+  if (!version) return null
+  if (version === 'acceptedVersion') return 'accepted manuscript'
+  if (version === 'publishedVersion') return 'published version'
+  if (version === 'submittedVersion') return 'submitted manuscript'
+  return version.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()
 }

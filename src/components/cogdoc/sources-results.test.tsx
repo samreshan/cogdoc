@@ -13,6 +13,7 @@ const source: FoundSource = {
   url: 'https://doi.org/10.1000/example',
   snippet: 'A study of deliberate practice.',
   relevance: 'medium',
+  recordProvider: 'openalex',
   citation: {
     authors: ['Maya Chen', 'Noah Williams'],
     year: '2025',
@@ -55,7 +56,7 @@ describe('SourcesResults', () => {
       provider: 'openalex',
       sources: [{
         title: 'A scholarly result', url: 'https://doi.org/10.1000/result',
-        snippet: 'Relevant abstract.', relevance: 'medium',
+        snippet: 'Relevant abstract.', relevance: 'medium', recordProvider: 'openalex',
       }],
     })
 
@@ -64,6 +65,39 @@ describe('SourcesResults', () => {
     await waitFor(() => expect(search).toHaveBeenCalledWith('Cognitive load affects learning outcomes', 'project-1'))
     expect(await screen.findByText('A scholarly result')).toBeInTheDocument()
     expect(screen.getByText('Scholarly records from OpenAlex')).toBeInTheDocument()
+    search.mockRestore()
+  })
+
+  it('explains Crossref metadata and Unpaywall access provenance', async () => {
+    useCogdoc.setState({
+      activeProject: {
+        id: 'project-1', title: 'Research', description: null, archived: false,
+        createdAt: '2026-08-28T00:00:00.000Z', updatedAt: '2026-08-28T00:00:00.000Z',
+        citationStyle: 'harvard', document: null, pdfs: [], interventions: [],
+        _count: { pdfs: 0, interventions: 0 },
+      } as Project,
+    })
+    const search = vi.spyOn(api, 'findSources').mockResolvedValue({
+      provider: 'crossref',
+      providersTried: ['openalex', 'crossref'],
+      sources: [{
+        title: 'An open scholarly result', url: 'https://doi.org/10.1000/open',
+        snippet: 'Relevant abstract.', relevance: 'medium', recordProvider: 'crossref',
+        isOpenAccess: true,
+        openAccessUrl: 'https://repository.example/open.pdf',
+        openAccessProvider: 'unpaywall',
+        openAccessHostType: 'repository',
+        openAccessVersion: 'acceptedVersion',
+        openAccessLicense: 'cc-by',
+      }],
+    })
+
+    render(<SourcesResults open onOpenChange={() => {}} claim="Evidence-informed teaching improves learning outcomes" />)
+
+    expect(await screen.findByText('Scholarly records from Crossref')).toBeInTheDocument()
+    expect(screen.getByText('Metadata: Crossref')).toBeInTheDocument()
+    expect(screen.getByText(/Free copy via Unpaywall/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Open legal copy/i })).toHaveAttribute('href', 'https://repository.example/open.pdf')
     search.mockRestore()
   })
 })

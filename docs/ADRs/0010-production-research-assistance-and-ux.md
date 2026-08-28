@@ -53,16 +53,27 @@ one step instead of a copy/paste workflow.
 ### 3. Scholarly search does not depend on LLM quota
 
 OpenAlex is the primary source-discovery provider. Basic requests work without
-a key, and a free `OPENALEX_API_KEY` increases the daily allowance. Gemini
-grounded search is a secondary fallback when scholarly search returns no
-records or is unavailable. OpenAlex open-access locations are exposed when
-present. Crossref remains the DOI metadata authority used by document review.
-`UNPAYWALL_EMAIL` is reserved for an additional full-text resolver integration.
+a key, and a free `OPENALEX_API_KEY` increases the daily allowance. Crossref is
+the second scholarly discovery provider as well as a DOI metadata authority.
+Gemini grounded search is considered only when both scholarly indexes return
+no usable records or are unavailable. The response names every provider tried
+and each result names its record provider.
+
+OpenAlex open-access locations are exposed when present. When
+`UNPAYWALL_EMAIL` is configured, DOI-bearing results without an OpenAlex copy
+are checked through Unpaywall. Lookup results are cached in-process for six
+hours, transient 429/5xx responses receive one bounded retry, and at most four
+lookups run concurrently. The interface labels the access resolver separately
+from the metadata provider and displays host type, manuscript version, and
+license when supplied. A free-copy link does not mean Cogdoc has read or
+verified the work.
 
 This reverses the first implementation, which called Gemini first and used
 OpenAlex only after a quota failure. The change makes the common academic
 search path deterministic, cheaper, and resilient to model quota. See the
-[OpenAlex API reference](https://help.openalex.org/api/) and
+[OpenAlex API reference](https://help.openalex.org/api/),
+[Crossref REST API access guide](https://www.crossref.org/documentation/retrieve-metadata/rest-api/access-and-authentication/),
+[Unpaywall API documentation](https://data.unpaywall.org/products/api), and
 [Gemini rate-limit documentation](https://ai.google.dev/gemini-api/docs/rate-limits).
 
 ### 4. Citation suggestions are deterministic and author-controlled
@@ -153,7 +164,7 @@ container initialization, not imported by request handlers.
 | `OPENALEX_API_KEY` | Optional | Free key for a larger OpenAlex daily allowance |
 | `OPENALEX_MAILTO` | Optional | Courteous contact identity for OpenAlex |
 | `CROSSREF_MAILTO` | Recommended | Contact identity for DOI metadata requests |
-| `UNPAYWALL_EMAIL` | Reserved | Future open-access full-text resolver identity |
+| `UNPAYWALL_EMAIL` | Recommended | Contact identity required for legal open-access DOI resolution |
 
 ## SDG 4 contribution boundary
 
@@ -171,11 +182,10 @@ messaging must distinguish implemented affordances from evaluated impact.
 ## Production boundaries still open
 
 - Additional CSL styles and institution-specific document templates beyond the shipped APA/Harvard processors.
-- Unpaywall full-text resolution and provenance display.
 - Bundled local-model distribution and hardware-specific evaluation (the Ollama adapter itself is implemented).
 - WCAG audit with assistive-technology testing.
 - Supabase RLS/storage policy deployment and malware-scanning service.
-- Load, recovery, quota, and provider-failover exercises.
+- Load, recovery, quota, and external provider-failover exercises beyond automated route coverage.
 - Consented usability and learning-outcome evaluation.
 
 These boundaries must remain visible in release documentation; passing unit

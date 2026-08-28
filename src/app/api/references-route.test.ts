@@ -64,12 +64,15 @@ describe('POST /api/workspaces/:id/references', () => {
     mocks.referenceCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'ref-2', ...data, source: null }))
     const response = await POST(request({
       title: 'Learning through practice', url: 'https://doi.org/10.1000/Test',
-      doi: 'https://doi.org/10.1000/Test', authors: ['Maya Chen'], year: '2025', provider: 'openalex',
+      doi: 'https://doi.org/10.1000/Test', authors: ['Maya Chen'], year: '2025', provider: 'crossref',
     }), { params: Promise.resolve({ id: 'project-1' }) })
 
     expect(response.status).toBe(201)
     expect(mocks.referenceCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ doi: '10.1000/test', authorsJson: '["Maya Chen"]', metadataStatus: 'unverified' }),
+      data: expect.objectContaining({
+        doi: '10.1000/test', authorsJson: '["Maya Chen"]', metadataStatus: 'unverified',
+        metadataJson: expect.stringContaining('"provider":"crossref"'),
+      }),
     }))
     expect(mocks.auditCreate).toHaveBeenCalledOnce()
   })

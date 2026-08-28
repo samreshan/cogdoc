@@ -109,9 +109,13 @@ The right-side **Action queue** keeps a persistent overview grouped into Evidenc
 5. Choose **Save** to keep the bibliographic record in your workspace library.
 6. If you have a legal full-text copy, upload its PDF for passage-level evidence checks.
 
-Cogdoc searches OpenAlex first and may use grounded web search when no
-scholarly record is found. Citation text is a suggestion, not an authoritative
-replacement for your institution's guidance.
+Cogdoc searches OpenAlex first, then Crossref, and uses grounded web search
+only when neither scholarly index returns a record. Each result labels its
+metadata provider. When `UNPAYWALL_EMAIL` is configured, DOI results may also
+show **Open legal copy** with the resolver, repository or publisher location,
+manuscript version, and license when those details are available. Citation text
+is a suggestion, not an authoritative replacement for your institution's
+guidance.
 
 Saved references and indexed full text are intentionally distinct. A saved
 record helps organize and format the bibliography; Cogdoc does not claim to

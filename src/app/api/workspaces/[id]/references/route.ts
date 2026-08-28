@@ -50,7 +50,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const year = typeof body.year === 'string' ? body.year.trim().slice(0, 20) || null : null
   const venue = typeof body.venue === 'string' ? body.venue.trim().slice(0, 500) || null : null
-  const provider = body.provider === 'openalex' || body.provider === 'gemini' ? body.provider : null
+  const provider = body.provider === 'openalex' || body.provider === 'crossref' || body.provider === 'gemini'
+    ? body.provider
+    : null
   const style = body.style === 'apa' || body.style === 'harvard' ? body.style : workspace.citationStyle
   const rawText = typeof body.rawText === 'string' && body.rawText.trim()
     ? body.rawText.trim().slice(0, 5_000)

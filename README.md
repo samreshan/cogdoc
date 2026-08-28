@@ -180,7 +180,7 @@ All env vars (set via Docker wizard or directly):
 | `OPENALEX_API_KEY` | — | Optional free key for a larger scholarly-search allowance |
 | `OPENALEX_MAILTO` | — | Contact address for courteous OpenAlex requests |
 | `CROSSREF_MAILTO` | — | Contact address for Crossref metadata requests |
-| `UNPAYWALL_EMAIL` | — | Reserved for open-access full-text resolution |
+| `UNPAYWALL_EMAIL` | — | Contact email required for legal open-access DOI resolution |
 | `IDLE_THRESHOLD` | `2` | Seconds of idle before Socratic fires |
 | `DAILY_TOKEN_BUDGET` | `100000` | Per-user daily LLM token budget |
 | `SUPABASE_URL` | — | Optional Supabase auth |
