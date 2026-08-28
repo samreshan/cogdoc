@@ -21,10 +21,10 @@ export interface FoundSource {
   url: string
   snippet: string
   relevance: 'high' | 'medium' | 'low'
-  recordProvider: 'openalex' | 'crossref' | 'gemini'
+  recordProvider: 'openalex' | 'crossref' | 'semantic_scholar' | 'gemini'
   openAccessUrl?: string | null
   isOpenAccess?: boolean
-  openAccessProvider?: 'openalex' | 'unpaywall' | null
+  openAccessProvider?: 'openalex' | 'semantic_scholar' | 'unpaywall' | null
   openAccessHostType?: string | null
   openAccessVersion?: string | null
   openAccessLicense?: string | null
@@ -64,7 +64,7 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
   const [sources, setSources] = useState<FoundSource[]>([])
   const [error, setError] = useState<string | null>(null)
   const [emptyMessage, setEmptyMessage] = useState<string | null>(null)
-  const [provider, setProvider] = useState<'openalex' | 'crossref' | 'gemini' | null>(null)
+  const [provider, setProvider] = useState<'openalex' | 'crossref' | 'semantic_scholar' | 'gemini' | null>(null)
   const [addedUrls, setAddedUrls] = useState<Set<string>>(new Set())
   const [addingUrl, setAddingUrl] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
@@ -156,7 +156,7 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
             Find Sources
           </DialogTitle>
           <DialogDescription className="text-sm text-stone-500 mt-1">
-            Cogdoc checks OpenAlex and Crossref before using grounded web
+            Cogdoc checks OpenAlex, Crossref, and Semantic Scholar before using grounded web
             search. Open the original work before relying on it; <Plus className="inline h-3 w-3" /> saves
             its metadata. When available, a legal open-access copy is linked
             separately for passage-level evidence checks.
@@ -194,6 +194,8 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
                 ? 'Scholarly records from OpenAlex'
                 : provider === 'crossref'
                   ? 'Scholarly records from Crossref'
+                  : provider === 'semantic_scholar'
+                    ? 'Scholarly records from Semantic Scholar'
                   : 'Grounded web fallback results'}</span>
               <span className="font-medium text-[#28614f]">{sources.length} matches</span>
             </div>}
@@ -312,6 +314,7 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
 function providerName(provider: FoundSource['recordProvider'] | FoundSource['openAccessProvider']): string {
   if (provider === 'openalex') return 'OpenAlex'
   if (provider === 'crossref') return 'Crossref'
+  if (provider === 'semantic_scholar') return 'Semantic Scholar'
   if (provider === 'unpaywall') return 'Unpaywall'
   if (provider === 'gemini') return 'Gemini'
   return 'source registry'

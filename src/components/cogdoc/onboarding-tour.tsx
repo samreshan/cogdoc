@@ -36,7 +36,7 @@ const STEPS = [
     title: 'Select a claim and find sources in one step.',
     description: 'Highlight text in the editor, then choose Find sources. Add useful records to the library or upload a PDF for passage-level evidence checks.',
     icon: FileSearch,
-    points: ['Search OpenAlex and Crossref from selected text', 'Copy a CSL citation or open a legal full-text link', 'Review source evidence before citing it'],
+    points: ['Search three scholarly indexes from selected text', 'Copy a CSL citation or open a legal full-text link', 'Review source evidence before citing it'],
   },
   {
     eyebrow: 'Finish with confidence',

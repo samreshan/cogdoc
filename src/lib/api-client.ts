@@ -145,7 +145,7 @@ export const api = {
     doi?: string | null
     rawText?: string
     style?: 'harvard' | 'apa'
-    provider?: 'openalex' | 'crossref' | 'gemini'
+    provider?: 'openalex' | 'crossref' | 'semantic_scholar' | 'gemini'
   }) => jsonFetch<{ reference: ReferenceSummary; alreadySaved: boolean }>(`/api/workspaces/${projectId}/references`, {
     method: 'POST',
     body: JSON.stringify(input),
@@ -245,10 +245,10 @@ export const api = {
         url: string
         snippet: string
         relevance: 'high' | 'medium' | 'low'
-        recordProvider: 'openalex' | 'crossref' | 'gemini'
+        recordProvider: 'openalex' | 'crossref' | 'semantic_scholar' | 'gemini'
         openAccessUrl?: string | null
         isOpenAccess?: boolean
-        openAccessProvider?: 'openalex' | 'unpaywall' | null
+        openAccessProvider?: 'openalex' | 'semantic_scholar' | 'unpaywall' | null
         openAccessHostType?: string | null
         openAccessVersion?: string | null
         openAccessLicense?: string | null
@@ -266,8 +266,8 @@ export const api = {
       }>
       query?: string
       totalFound?: number
-      provider?: 'openalex' | 'crossref' | 'gemini'
-      providersTried?: Array<'openalex' | 'crossref' | 'gemini'>
+      provider?: 'openalex' | 'crossref' | 'semantic_scholar' | 'gemini'
+      providersTried?: Array<'openalex' | 'crossref' | 'semantic_scholar' | 'gemini'>
       accessResolver?: 'unpaywall' | null
       message?: string
       error?: string

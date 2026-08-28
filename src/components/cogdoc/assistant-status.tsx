@@ -70,7 +70,7 @@ export default function AssistantStatus() {
           {readiness && readiness.status !== 'reachable' && <div className="rounded-md border border-stone-200 bg-stone-50 p-3 text-[11px] leading-5 text-stone-600">
             {setupGuidance(readiness)}
           </div>}
-          <p className="text-[10px] leading-4 text-stone-500">Source search still works through OpenAlex and Crossref even when model-backed guidance is unavailable.</p>
+          <p className="text-[10px] leading-4 text-stone-500">Source search still works through OpenAlex, Crossref, and Semantic Scholar even when model-backed guidance is unavailable.</p>
           <Button type="button" variant="outline" size="sm" onClick={() => void check()} disabled={checking} className="h-8 w-full border-stone-300 text-xs">
             {checking ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
             Check again

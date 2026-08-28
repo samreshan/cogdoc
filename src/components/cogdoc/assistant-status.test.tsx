@@ -33,7 +33,7 @@ describe('AssistantStatus', () => {
 
     expect(await screen.findByRole('button', { name: 'Assistant needs attention' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Assistant needs attention' }))
-    expect(screen.getByText(/Source search still works through OpenAlex and Crossref/i)).toBeInTheDocument()
+    expect(screen.getByText(/Source search still works through OpenAlex, Crossref, and Semantic Scholar/i)).toBeInTheDocument()
   })
 
   it('can refresh readiness from the popover', async () => {

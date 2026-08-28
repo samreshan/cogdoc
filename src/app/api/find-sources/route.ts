@@ -2,7 +2,8 @@
  * POST /api/find-sources
  * Body: { claim, projectId }
  *
- * Searches OpenAlex and then Crossref before considering Gemini grounding.
+ * Searches OpenAlex, Crossref, and Semantic Scholar before considering Gemini
+ * grounding.
  * DOI-bearing results can be enriched with a legal open-access location from
  * Unpaywall. Research discovery therefore remains useful when the LLM quota is
  * exhausted, while every result exposes its metadata and access provenance.
@@ -23,8 +24,8 @@ const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models
 const UNPAYWALL_CACHE_TTL_MS = 6 * 60 * 60 * 1000
 const UNPAYWALL_CACHE_LIMIT = 1_000
 
-type RecordProvider = 'openalex' | 'crossref' | 'gemini'
-type OpenAccessProvider = 'openalex' | 'unpaywall'
+type RecordProvider = 'openalex' | 'crossref' | 'semantic_scholar' | 'gemini'
+type OpenAccessProvider = 'openalex' | 'semantic_scholar' | 'unpaywall'
 
 interface SearchResult {
   title: string
@@ -105,6 +106,7 @@ export async function POST(req: NextRequest) {
     }> = [
       { name: 'openalex', search: openAlexFindSources },
       { name: 'crossref', search: crossrefFindSources },
+      { name: 'semantic_scholar', search: semanticScholarFindSources },
     ]
 
     for (const scholarly of scholarlyProviders) {
@@ -132,7 +134,7 @@ export async function POST(req: NextRequest) {
         if (reachableProviders === 0) {
           console.error('Source search failed:', geminiError)
           return NextResponse.json({
-            error: 'Source search failed. OpenAlex, Crossref, and grounded web search were unavailable.',
+            error: 'Source search failed. OpenAlex, Crossref, Semantic Scholar, and grounded web search were unavailable.',
             detail: (geminiError as Error).message,
             providersTried,
           }, { status: 502 })
@@ -185,6 +187,7 @@ export async function POST(req: NextRequest) {
       providersTried,
       accessResolver: process.env.UNPAYWALL_EMAIL?.trim() ? 'unpaywall' : null,
       ...(provider === 'crossref' ? { message: 'OpenAlex returned no matches; showing Crossref scholarly records.' } : {}),
+      ...(provider === 'semantic_scholar' ? { message: 'OpenAlex and Crossref returned no matches; showing Semantic Scholar records.' } : {}),
       ...(provider === 'gemini' ? { message: 'No scholarly-index match was found; showing grounded web results.' } : {}),
     })
   } catch (e) {
@@ -327,6 +330,95 @@ export async function crossrefFindSources(query: string): Promise<SearchResult[]
     })
   }
   return sources
+}
+
+interface SemanticScholarPaper {
+  paperId?: string | null
+  title?: string | null
+  url?: string | null
+  abstract?: string | null
+  year?: number | null
+  publicationDate?: string | null
+  venue?: string | null
+  citationCount?: number | null
+  authors?: Array<{ name?: string | null }> | null
+  externalIds?: { DOI?: string | null } | null
+  openAccessPdf?: { url?: string | null; status?: string | null; license?: string | null } | null
+  journal?: { name?: string | null; volume?: string | null; pages?: string | null } | null
+}
+
+/**
+ * Relevance-ranked scholarly fallback. An API key is optional; when supplied,
+ * Semantic Scholar documents a dedicated introductory request allowance.
+ */
+export async function semanticScholarFindSources(query: string): Promise<SearchResult[]> {
+  const endpoint = new URL('https://api.semanticscholar.org/graph/v1/paper/search')
+  endpoint.searchParams.set('query', query.replaceAll('-', ' '))
+  endpoint.searchParams.set('limit', '8')
+  endpoint.searchParams.set('fields', [
+    'title', 'url', 'abstract', 'year', 'publicationDate', 'venue',
+    'citationCount', 'authors', 'externalIds', 'openAccessPdf', 'journal',
+  ].join(','))
+  const apiKey = process.env.SEMANTIC_SCHOLAR_API_KEY?.trim()
+
+  const res = await fetch(endpoint, {
+    headers: {
+      Accept: 'application/json',
+      ...(apiKey ? { 'x-api-key': apiKey } : {}),
+    },
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (!res.ok) throw new Error(`Semantic Scholar search failed: ${res.status}`)
+
+  const data = await res.json() as { data?: SemanticScholarPaper[] }
+  const sources: SearchResult[] = []
+  for (const paper of data.data ?? []) {
+    const title = paper.title?.trim()
+    const doi = normalizeDoi(paper.externalIds?.DOI)
+    const url = doi
+      ? `https://doi.org/${doi}`
+      : validHttpUrl(paper.url)
+        ?? (paper.paperId ? `https://www.semanticscholar.org/paper/${paper.paperId}` : null)
+    if (!title || !url) continue
+    const openAccessUrl = validHttpUrl(paper.openAccessPdf?.url)
+    const year = typeof paper.year === 'number' && Number.isFinite(paper.year)
+      ? String(paper.year)
+      : paper.publicationDate?.slice(0, 4) ?? null
+    sources.push({
+      title,
+      url,
+      snippet: semanticScholarSnippet(paper, year),
+      relevance: 'medium',
+      recordProvider: 'semantic_scholar',
+      ...(paper.publicationDate || year ? { publishedTime: paper.publicationDate ?? year ?? undefined } : {}),
+      isOpenAccess: Boolean(openAccessUrl),
+      openAccessUrl,
+      openAccessProvider: openAccessUrl ? 'semantic_scholar' : null,
+      openAccessHostType: null,
+      openAccessVersion: paper.openAccessPdf?.status?.trim() || null,
+      openAccessLicense: paper.openAccessPdf?.license?.trim() || null,
+      citation: {
+        authors: (paper.authors ?? []).map((author) => author.name?.trim() ?? '').filter(Boolean),
+        year,
+        venue: paper.journal?.name?.trim() || paper.venue?.trim() || null,
+        doi,
+        volume: paper.journal?.volume?.trim() || null,
+        pages: paper.journal?.pages?.trim() || null,
+      },
+    })
+  }
+  return sources
+}
+
+function semanticScholarSnippet(paper: SemanticScholarPaper, year: string | null): string {
+  const abstract = plainText(paper.abstract ?? '').slice(0, 300)
+  if (abstract) return abstract
+  const details = [
+    paper.journal?.name?.trim() || paper.venue?.trim(),
+    year ? `Published ${year}` : null,
+    typeof paper.citationCount === 'number' ? `${paper.citationCount} citations` : null,
+  ].filter(Boolean)
+  return details.join(' · ') || 'Scholarly record indexed by Semantic Scholar.'
 }
 
 function crossrefAuthorName(author: NonNullable<CrossrefWork['author']>[number]): string {
@@ -499,6 +591,7 @@ function plainText(value: string): string {
 function providerLabel(provider: RecordProvider): string {
   if (provider === 'openalex') return 'OpenAlex'
   if (provider === 'crossref') return 'Crossref'
+  if (provider === 'semantic_scholar') return 'Semantic Scholar'
   return 'Gemini'
 }
 

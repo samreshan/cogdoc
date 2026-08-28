@@ -1,7 +1,7 @@
 /**
  * Integration tests for POST /api/find-sources (scholarly-first source search).
  *
- * Mocks OpenAlex, Crossref, Unpaywall, and Gemini response shapes. Covers
+ * Mocks OpenAlex, Crossref, Semantic Scholar, Unpaywall, and Gemini response shapes. Covers
  * scholarly metadata, legal full-text resolution, grounded fallback,
  * no-results, and provider failure.
  */
@@ -41,6 +41,10 @@ function crossrefResponse(items: Array<Record<string, unknown>>) {
   return { ok: true, json: async () => ({ message: { items } }) } as Response
 }
 
+function semanticScholarResponse(papers: Array<Record<string, unknown>>) {
+  return { ok: true, json: async () => ({ total: papers.length, data: papers }) } as Response
+}
+
 function unpaywallResponse(input: Record<string, unknown>) {
   return { ok: true, json: async () => input } as Response
 }
@@ -49,6 +53,7 @@ beforeEach(() => {
   vi.restoreAllMocks()
   process.env.GEMINI_API_KEY = 'test-key'
   delete process.env.UNPAYWALL_EMAIL
+  delete process.env.SEMANTIC_SCHOLAR_API_KEY
 })
 
 describe('POST /api/find-sources — validation', () => {
@@ -163,6 +168,56 @@ describe('POST /api/find-sources — pipeline', () => {
     })
   })
 
+  it('uses Semantic Scholar before any model-backed web search', async () => {
+    process.env.SEMANTIC_SCHOLAR_API_KEY = 'semantic-test-key'
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(openAlexResponse([]))
+      .mockResolvedValueOnce(crossrefResponse([]))
+      .mockResolvedValueOnce(semanticScholarResponse([{
+        paperId: 'paper-1',
+        title: 'Semantic Scholar indexed study',
+        url: 'https://www.semanticscholar.org/paper/paper-1',
+        abstract: 'Evidence from a relevance-ranked scholarly record.',
+        year: 2024,
+        publicationDate: '2024-05-10',
+        venue: 'Evidence Conference',
+        citationCount: 17,
+        authors: [{ name: 'Maya Chen' }, { name: 'A. Rai' }],
+        externalIds: { DOI: '10.1000/semantic' },
+        openAccessPdf: {
+          url: 'https://repository.example/semantic.pdf', status: 'GOLD', license: 'CC-BY',
+        },
+        journal: { name: 'Journal of Evidence', volume: '9', pages: '30-42' },
+      }]))
+
+    const res = await POST(req({ claim: 'a sufficiently long evidence-based claim' }))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.provider).toBe('semantic_scholar')
+    expect(body.providersTried).toEqual(['openalex', 'crossref', 'semantic_scholar'])
+    expect(body.sources[0]).toMatchObject({
+      title: 'Semantic Scholar indexed study',
+      url: 'https://doi.org/10.1000/semantic',
+      snippet: 'Evidence from a relevance-ranked scholarly record.',
+      recordProvider: 'semantic_scholar',
+      openAccessUrl: 'https://repository.example/semantic.pdf',
+      openAccessProvider: 'semantic_scholar',
+      openAccessVersion: 'GOLD',
+      citation: {
+        authors: ['Maya Chen', 'A. Rai'], year: '2024', venue: 'Journal of Evidence',
+        doi: '10.1000/semantic', volume: '9', pages: '30-42',
+        formatted: expect.objectContaining({ processor: 'citation-js/citeproc-js' }),
+      },
+    })
+    const semanticCall = fetchSpy.mock.calls[2]
+    expect(String(semanticCall?.[0])).toContain('api.semanticscholar.org/graph/v1/paper/search')
+    expect(semanticCall?.[1]).toMatchObject({
+      headers: expect.objectContaining({ 'x-api-key': 'semantic-test-key' }),
+    })
+    expect(fetchSpy).toHaveBeenCalledTimes(3)
+  })
+
   it('retries a transient Unpaywall failure and caches the DOI result', async () => {
     process.env.UNPAYWALL_EMAIL = 'research@example.com'
     const item = {
@@ -206,6 +261,7 @@ describe('POST /api/find-sources — pipeline', () => {
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(openAlexResponse([]))
       .mockResolvedValueOnce(crossrefResponse([]))
+      .mockResolvedValueOnce(semanticScholarResponse([]))
       .mockResolvedValueOnce(geminiResponse('[]'))
     const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
     expect(res.status).toBe(200)
@@ -214,8 +270,9 @@ describe('POST /api/find-sources — pipeline', () => {
     expect(body.message).toMatch(/No sources found/)
   })
 
-  it('falls back to grounded web search when both scholarly providers are unavailable', async () => {
+  it('falls back to grounded web search when every scholarly provider is unavailable', async () => {
     vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
       .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
       .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
       .mockResolvedValueOnce(geminiResponse('[{"title":"Web report","url":"https://example.org/report","snippet":"Relevant findings","relevance":"high"}]'))
@@ -223,12 +280,13 @@ describe('POST /api/find-sources — pipeline', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.provider).toBe('gemini')
-    expect(body.providersTried).toEqual(['openalex', 'crossref', 'gemini'])
+    expect(body.providersTried).toEqual(['openalex', 'crossref', 'semantic_scholar', 'gemini'])
     expect(body.sources[0]).toMatchObject({ title: 'Web report', relevance: 'high', recordProvider: 'gemini' })
   })
 
   it('returns 502 only when every discovery provider fails', async () => {
     vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
       .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
       .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
       .mockResolvedValueOnce({ ok: false, status: 429, text: async () => 'quota' } as Response)
@@ -240,6 +298,7 @@ describe('POST /api/find-sources — pipeline', () => {
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(openAlexResponse([]))
       .mockResolvedValueOnce(crossrefResponse([]))
+      .mockResolvedValueOnce(semanticScholarResponse([]))
       .mockResolvedValueOnce(geminiResponse(
         'I found some sources but forgot to format them.',
         [{ web: { uri: 'https://x', title: 'X' } }],

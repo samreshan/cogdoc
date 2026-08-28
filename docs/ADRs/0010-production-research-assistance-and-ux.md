@@ -55,9 +55,12 @@ one step instead of a copy/paste workflow.
 OpenAlex is the primary source-discovery provider. Basic requests work without
 a key, and a free `OPENALEX_API_KEY` increases the daily allowance. Crossref is
 the second scholarly discovery provider as well as a DOI metadata authority.
-Gemini grounded search is considered only when both scholarly indexes return
-no usable records or are unavailable. The response names every provider tried
-and each result names its record provider.
+Semantic Scholar's relevance-ranked Academic Graph search is the third
+provider; it works without a key, while `SEMANTIC_SCHOLAR_API_KEY` opts into a
+dedicated introductory allowance instead of the shared anonymous pool. Gemini
+grounded search is considered only when all three scholarly indexes return no
+usable records or are unavailable. The response names every provider tried and
+each result names its record provider.
 
 OpenAlex open-access locations are exposed when present. When
 `UNPAYWALL_EMAIL` is configured, DOI-bearing results without an OpenAlex copy
@@ -73,6 +76,7 @@ OpenAlex only after a quota failure. The change makes the common academic
 search path deterministic, cheaper, and resilient to model quota. See the
 [OpenAlex API reference](https://help.openalex.org/api/),
 [Crossref REST API access guide](https://www.crossref.org/documentation/retrieve-metadata/rest-api/access-and-authentication/),
+[Semantic Scholar API tutorial](https://www.semanticscholar.org/product/api/tutorial),
 [Unpaywall API documentation](https://data.unpaywall.org/products/api), and
 [Gemini rate-limit documentation](https://ai.google.dev/gemini-api/docs/rate-limits).
 
@@ -149,7 +153,7 @@ status such as reachable, quota limited, model unavailable, or unreachable.
 The connectivity probe does not claim that hosted generation quota remains;
 recent real generation failures are retained in-process for ten minutes and
 override the connectivity result. Keys and base URLs are never returned.
-Research discovery remains available through OpenAlex and Crossref when
+Research discovery remains available through OpenAlex, Crossref, and Semantic Scholar when
 model-backed interventions are unavailable.
 
 ### 8. Dependency remediation is part of the release gate
@@ -175,6 +179,7 @@ container initialization, not imported by request handlers.
 | `OPENALEX_API_KEY` | Optional | Free key for a larger OpenAlex daily allowance |
 | `OPENALEX_MAILTO` | Optional | Courteous contact identity for OpenAlex |
 | `CROSSREF_MAILTO` | Recommended | Contact identity for DOI metadata requests |
+| `SEMANTIC_SCHOLAR_API_KEY` | Optional | Dedicated Semantic Scholar request allowance; anonymous access remains available |
 | `UNPAYWALL_EMAIL` | Recommended | Contact identity required for legal open-access DOI resolution |
 
 ## SDG 4 contribution boundary
