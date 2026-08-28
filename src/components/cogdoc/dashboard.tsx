@@ -119,7 +119,7 @@ export default function Dashboard() {
   }
 
   return (
-    <main id="main-content" className="min-h-screen bg-[#f4f1e9] text-stone-900">
+    <main id="main-content" className="min-h-[100dvh] bg-[#f4f1e9] text-stone-900">
       <header className="border-b border-stone-300/70 bg-[#f8f6f0]/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">

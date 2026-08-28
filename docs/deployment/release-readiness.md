@@ -30,7 +30,7 @@ npm run build
 git diff --check
 ```
 
-At the 2026-08-28 checkpoint, the gate passed with 67 Vitest files and 484
+At the 2026-08-28 checkpoint, the gate passed with 68 Vitest files and 487
 tests. Later releases must record their own output instead of relying on that
 historical count.
 
@@ -38,6 +38,7 @@ The automated suite covers these production-critical contracts:
 
 | Contract | Representative evidence |
 |---|---|
+| First-use auth entry, loading/setup states, and product boundaries | `src/components/cogdoc/login.test.tsx`, `src/components/cogdoc/auth-gate-state.test.tsx` |
 | Underline matching and accessible decoration attributes | `src/lib/sentence-highlight.test.ts`, `src/lib/extensions/intervention-highlight.test.ts` |
 | Hover/focus intervention dialog and named actions | `src/components/cogdoc/sentence-popover.test.tsx` |
 | Grouped right-pane overview, passage navigation, and action persistence | `src/components/cogdoc/action-queue.test.tsx`, `src/lib/editor-focus.test.ts` |
@@ -129,25 +130,28 @@ Run at desktop and narrow viewport sizes with keyboard-only input, VoiceOver or
 NVDA, reduced motion, and 200% zoom. Record browser/assistive-technology versions
 and defects.
 
-1. A first-time account receives onboarding; completing or skipping it persists,
+1. The unauthenticated entry explains the research workflow and product boundary;
+   visible labels, keyboard focus, validation errors, loading state, setup error,
+   and the skip link remain usable at narrow and desktop viewports.
+2. A first-time account receives onboarding; completing or skipping it persists,
    and Tutorial reopens it from every authenticated view.
-2. Create Assignment and Research workspaces, choose APA and Harvard, import a
+3. Create Assignment and Research workspaces, choose APA and Harvard, import a
    DOCX, and recover an interrupted draft.
-3. Tab to an intervention underline. Its accessible label announces the count;
+4. Tab to an intervention underline. Its accessible label announces the count;
    focus, Enter, and Space expose the same intervention dialog as hover/click.
-4. Use the grouped Action queue to locate a passage in a long document. Confirm
+5. Use the grouped Action queue to locate a passage in a long document. Confirm
    focus, selection, scrolling, stale-anchor messaging, Mark addressed, and
    Dismiss.
-5. Select text across inline formatting, start Find sources in one action, open
+6. Select text across inline formatting, start Find sources in one action, open
    the original, save metadata, upload a lawful PDF, and link a supporting
    passage.
-6. Operate every formatting command, undo/redo, tables, autosave, offline
+7. Operate every formatting command, undo/redo, tables, autosave, offline
    recovery, and conflict resolution without a mouse.
-7. Change citation style and inspect the reported reformatted/manual-review
+8. Change citation style and inspect the reported reformatted/manual-review
    counts. Copy one reference and the alphabetized saved-reference list.
-8. Export DOCX and inspect it in supported Word/LibreOffice versions for margins,
+9. Export DOCX and inspect it in supported Word/LibreOffice versions for margins,
    font, spacing, headings, links, tables, quotations, code, and page numbers.
-9. Run review, resolve a blocking issue through its required action, generate a
+10. Run review, resolve a blocking issue through its required action, generate a
    report, and verify that certificates remain unavailable for stale or failing
    snapshots.
 

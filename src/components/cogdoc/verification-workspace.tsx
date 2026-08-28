@@ -78,7 +78,7 @@ export default function VerificationWorkspace() {
   }
 
   return (
-    <main id="main-content" className="min-h-screen bg-[#f4f1e9] text-stone-900">
+    <main id="main-content" className="min-h-[100dvh] bg-[#f4f1e9] text-stone-900">
       <header className="border-b border-stone-300 bg-[#f8f6f0]">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4"><button onClick={() => setView('workspace')} className="flex items-center gap-2 text-sm text-stone-500 hover:text-stone-900"><ArrowLeft className="h-4 w-4" />Workspace</button><span className="font-mono text-[10px] uppercase tracking-[0.18em] text-stone-500">Verification</span></div>
       </header>

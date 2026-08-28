@@ -73,7 +73,7 @@ export default function EditorShell() {
   if (!project) return null
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: '#faf7f0' }}>
+    <div id="main-content" className="flex h-[100dvh] flex-col" style={{ background: '#faf7f0' }}>
       {/* Minimal top bar */}
       <header className="border-b border-stone-200/50 px-6 py-2.5 flex items-center justify-between gap-4 shrink-0" style={{ background: '#fffefb' }}>
         <div className="flex items-center gap-3 min-w-0">
@@ -97,7 +97,7 @@ export default function EditorShell() {
             variant="ghost" size="sm"
             onClick={toggleFocusMode}
             className={`h-8 px-2.5 text-xs ${focusMode ? 'text-amber-700 bg-amber-50' : 'text-stone-500 hover:text-stone-900'}`}
-            title="Focus mode — dims other paragraphs"
+            title="Focus mode: dims other paragraphs"
           >
             {focusMode ? <EyeOff className="w-3.5 h-3.5 mr-1" /> : <Focus className="w-3.5 h-3.5 mr-1" />}
             Focus

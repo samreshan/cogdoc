@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-28
 **Status:** Accepted, implementation in progress
-**Scope:** editor navigation, source discovery, citation assistance, onboarding, model configuration, and SDG 4 positioning
+**Scope:** first-use experience, editor navigation, source discovery, citation assistance, onboarding, model configuration, and SDG 4 positioning
 
 ## Context
 
@@ -193,6 +193,28 @@ the installed Next.js release, and moved the Prisma CLI to development tooling.
 reports zero known vulnerabilities at this checkpoint. Prisma CLI advisories
 remain visible in the full development-tool audit; the CLI is used during
 container initialization, not imported by request handlers.
+
+### 9. The unauthenticated entry point is a product explanation, not a blank gate
+
+The sign-in surface now gives a concise account of the research workflow before
+asking for credentials: source discovery, evidence and citation review, and
+author-controlled editing. It states the SDG 4 design alignment alongside the
+boundary that Cogdoc does not prove authorship, detect plagiarism, or replace
+the writer's judgement. These are capability and intent statements, not claims
+of measured educational outcomes.
+
+Email and password fields have persistent visible labels, validation and
+confirmation feedback use announced status semantics, and controls are disabled
+during submission. Authentication checks show an announced loading state rather
+than an empty page. A missing deployment configuration shows the supported
+Supabase and private single-user choices without exposing secrets. Every primary
+screen, including the editor and auth states, now provides the target used by
+the global skip link. Dynamic viewport units replace fixed screen-height units
+on these top-level surfaces to avoid mobile browser chrome clipping.
+
+This is a targeted evolution of the existing entry screen rather than a public
+marketing site. It deliberately avoids testimonials, adoption metrics, or
+unsupported performance claims.
 
 ## Environment variables
 

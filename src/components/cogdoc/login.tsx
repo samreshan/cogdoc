@@ -13,7 +13,8 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase-browser'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Sparkles, MailCheck } from 'lucide-react'
+import { Label } from '@/components/ui/label'
+import { BookOpenCheck, MailCheck, SearchCheck, ShieldCheck, Sparkles } from 'lucide-react'
 
 type Mode = 'signin' | 'signup'
 
@@ -69,101 +70,174 @@ export default function Login() {
         window.location.reload()
       } else {
         // Confirmation email sent; the user signs in after confirming.
-        setNotice('Check your inbox — we sent a confirmation link. Sign in after confirming.')
+        setNotice('Check your inbox. We sent a confirmation link. Sign in after confirming.')
         setLoading(false)
       }
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: '#faf7f0' }}>
-      <div className="w-full max-w-sm p-8 bg-white rounded-xl border border-stone-200">
-        <div className="flex items-center gap-2 mb-6">
-          <Sparkles className="w-5 h-5 text-amber-500" />
-          <h1
-            className="text-xl font-semibold text-stone-900"
-            style={{ fontFamily: 'var(--font-newsreader), Georgia, serif' }}
-          >
-            Cogdoc
-          </h1>
-        </div>
-        <p className="text-sm text-stone-500 mb-6">
-          {mode === 'signin'
-            ? 'Sign in to your research-assisted writing IDE.'
-            : 'Create an account to start writing with productive friction.'}
-        </p>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <Input
-            type="email"
-            aria-label="Email"
-            autoComplete="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="h-10"
-          />
-          <Input
-            type="password"
-            aria-label="Password"
-            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="h-10"
-          />
-          {mode === 'signup' && (
-            <Input
-              type="password"
-              aria-label="Confirm password"
-              autoComplete="new-password"
-              placeholder="Confirm password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              required
-              className="h-10"
-            />
-          )}
-          {error && <p className="text-xs text-rose-600">{error}</p>}
-          {notice && (
-            <p className="text-xs text-emerald-700 flex items-start gap-1.5">
-              <MailCheck className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-              {notice}
+    <main
+      id="main-content"
+      className="flex min-h-[100dvh] items-center bg-[#faf7f0] px-5 py-10 sm:px-8 lg:px-12"
+    >
+      <div className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-xl border border-stone-200 bg-[#fffefb] lg:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
+        <section className="flex flex-col justify-between border-b border-stone-200 p-7 sm:p-10 lg:min-h-[38rem] lg:border-b-0 lg:border-r lg:p-12">
+          <div>
+            <div className="mb-12 flex items-center gap-2.5">
+              <span className="flex size-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+                <Sparkles className="size-4" aria-hidden="true" />
+              </span>
+              <span
+                className="text-xl font-semibold text-stone-900"
+                style={{ fontFamily: 'var(--font-newsreader), Georgia, serif' }}
+              >
+                Cogdoc
+              </span>
+            </div>
+
+            <p className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-emerald-800">
+              Accountable academic writing
             </p>
-          )}
-          <Button type="submit" disabled={loading} className="w-full h-10">
-            {loading
-              ? mode === 'signin' ? 'Signing in…' : 'Creating account…'
-              : mode === 'signin' ? 'Sign in' : 'Create account'}
-          </Button>
-        </form>
-        <p className="text-xs text-stone-500 mt-4 text-center">
-          {mode === 'signin' ? (
-            <>
-              No account yet?{' '}
-              <button
-                type="button"
-                onClick={() => switchMode('signup')}
-                className="text-stone-900 font-medium underline underline-offset-2 hover:text-stone-600"
-              >
-                Sign up
-              </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{' '}
-              <button
-                type="button"
-                onClick={() => switchMode('signin')}
-                className="text-stone-900 font-medium underline underline-offset-2 hover:text-stone-600"
-              >
-                Sign in
-              </button>
-            </>
-          )}
-        </p>
+            <h1
+              className="mt-4 max-w-xl text-4xl font-medium leading-[1.08] tracking-[-0.025em] text-stone-900 sm:text-5xl"
+              style={{ fontFamily: 'var(--font-newsreader), Georgia, serif' }}
+            >
+              Build research you can account for.
+            </h1>
+            <p className="mt-5 max-w-lg text-base leading-7 text-stone-600">
+              Develop claims, find scholarly sources, verify citations, and keep every edit under your control.
+            </p>
+
+            <div className="mt-8 grid gap-3 text-sm text-stone-700 sm:grid-cols-3 lg:grid-cols-1">
+              <p className="flex items-center gap-3">
+                <SearchCheck className="size-4 shrink-0 text-emerald-700" aria-hidden="true" />
+                Find and inspect sources
+              </p>
+              <p className="flex items-center gap-3">
+                <BookOpenCheck className="size-4 shrink-0 text-emerald-700" aria-hidden="true" />
+                Review evidence and citations
+              </p>
+              <p className="flex items-center gap-3">
+                <ShieldCheck className="size-4 shrink-0 text-emerald-700" aria-hidden="true" />
+                Preserve author control
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-12 border-t border-stone-200 pt-5 text-xs leading-5 text-stone-500">
+            <p>Designed to strengthen research literacy in support of SDG 4: Quality Education.</p>
+            <p className="mt-2">Cogdoc does not prove authorship, detect plagiarism, or replace your judgement.</p>
+          </div>
+        </section>
+
+        <section className="flex items-center p-7 sm:p-10 lg:p-12" aria-labelledby="auth-heading">
+          <div className="w-full">
+            <p className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-stone-500">
+              {mode === 'signin' ? 'Welcome back' : 'Start a workspace'}
+            </p>
+            <h2
+              id="auth-heading"
+              className="mt-3 text-3xl font-medium tracking-[-0.015em] text-stone-900"
+              style={{ fontFamily: 'var(--font-newsreader), Georgia, serif' }}
+            >
+              {mode === 'signin' ? 'Sign in to Cogdoc' : 'Create your account'}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-stone-500">
+              {mode === 'signin'
+                ? 'Continue to your projects, sources, and review queue.'
+                : 'Create a private workspace for your research and writing.'}
+            </p>
+
+            <form onSubmit={handleSubmit} className="mt-7 space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="auth-email">Email</Label>
+                <Input
+                  id="auth-email"
+                  type="email"
+                  autoComplete="email"
+                  inputMode="email"
+                  placeholder="you@example.edu"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={loading}
+                  className="h-11 bg-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="auth-password">Password</Label>
+                <Input
+                  id="auth-password"
+                  type="password"
+                  autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                  aria-describedby={mode === 'signup' ? 'password-help' : undefined}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                  className="h-11 bg-white"
+                />
+                {mode === 'signup' && (
+                  <p id="password-help" className="text-xs text-stone-500">Use at least 6 characters.</p>
+                )}
+              </div>
+              {mode === 'signup' && (
+                <div className="space-y-2">
+                  <Label htmlFor="auth-confirm">Confirm password</Label>
+                  <Input
+                    id="auth-confirm"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    required
+                    disabled={loading}
+                    className="h-11 bg-white"
+                  />
+                </div>
+              )}
+              {error && <p role="alert" className="text-sm leading-5 text-rose-700">{error}</p>}
+              {notice && (
+                <p role="status" className="flex items-start gap-2 text-sm leading-5 text-emerald-800">
+                  <MailCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                  {notice}
+                </p>
+              )}
+              <Button type="submit" disabled={loading} className="h-11 w-full bg-[#173f35] hover:bg-[#28614f]">
+                {loading
+                  ? mode === 'signin' ? 'Signing in…' : 'Creating account…'
+                  : mode === 'signin' ? 'Sign in' : 'Create account'}
+              </Button>
+            </form>
+            <p className="mt-5 text-center text-xs text-stone-500">
+              {mode === 'signin' ? (
+                <>
+                  No account yet?{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchMode('signup')}
+                    className="font-medium text-stone-900 underline underline-offset-4 hover:text-emerald-800"
+                  >
+                    Sign up
+                  </button>
+                </>
+              ) : (
+                <>
+                  Already have an account?{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchMode('signin')}
+                    className="font-medium text-stone-900 underline underline-offset-4 hover:text-emerald-800"
+                  >
+                    Sign in
+                  </button>
+                </>
+              )}
+            </p>
+          </div>
+        </section>
       </div>
-    </div>
+    </main>
   )
 }

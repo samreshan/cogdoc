@@ -35,15 +35,22 @@ afterEach(() => cleanup)
 describe('Login', () => {
   it('renders email + password fields and a sign-in button', () => {
     render(<Login />)
-    expect(screen.getByPlaceholderText(/email/i)).toBeTruthy()
-    expect(screen.getByPlaceholderText(/password/i)).toBeTruthy()
+    expect(screen.getByLabelText('Email')).toBeTruthy()
+    expect(screen.getByLabelText('Password')).toBeTruthy()
     expect(screen.getByRole('button', { name: /sign in/i })).toBeTruthy()
+  })
+
+  it('explains the product boundary and its support for research literacy', () => {
+    render(<Login />)
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content')
+    expect(screen.getByText(/sdg 4/i)).toBeTruthy()
+    expect(screen.getByText(/does not prove authorship/i)).toBeTruthy()
   })
 
   it('calls signInWithPassword with the entered credentials on submit', async () => {
     render(<Login />)
-    fireEvent.change(screen.getByPlaceholderText(/email/i), { target: { value: 'w@c.co' } })
-    fireEvent.change(screen.getByPlaceholderText(/password/i), { target: { value: 'secret' } })
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'w@c.co' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret' } })
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }))
     expect(signInMock).toHaveBeenCalledWith({ email: 'w@c.co', password: 'secret' })
   })
@@ -57,27 +64,27 @@ describe('Login — signup mode', () => {
 
   it('shows a confirm-password field after switching to sign up', () => {
     toSignup()
-    expect(screen.getByPlaceholderText(/confirm password/i)).toBeTruthy()
+    expect(screen.getByLabelText('Confirm password')).toBeTruthy()
     expect(screen.getByRole('button', { name: /create account/i })).toBeTruthy()
   })
 
   it('rejects mismatched passwords without calling signUp', async () => {
     toSignup()
-    fireEvent.change(screen.getByPlaceholderText(/email/i), { target: { value: 'w@c.co' } })
-    fireEvent.change(screen.getByPlaceholderText(/^password$/i), { target: { value: 'secret1' } })
-    fireEvent.change(screen.getByPlaceholderText(/confirm password/i), { target: { value: 'different' } })
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'w@c.co' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret1' } })
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'different' } })
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
-    expect(await screen.findByText(/do not match/i)).toBeTruthy()
+    expect(await screen.findByRole('alert')).toHaveTextContent(/do not match/i)
     expect(signUpMock).not.toHaveBeenCalled()
   })
 
   it('calls signUp with matching credentials and shows the confirmation notice', async () => {
     toSignup()
-    fireEvent.change(screen.getByPlaceholderText(/email/i), { target: { value: 'w@c.co' } })
-    fireEvent.change(screen.getByPlaceholderText(/^password$/i), { target: { value: 'secret1' } })
-    fireEvent.change(screen.getByPlaceholderText(/confirm password/i), { target: { value: 'secret1' } })
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'w@c.co' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret1' } })
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'secret1' } })
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
-    expect(await screen.findByText(/confirmation link/i)).toBeTruthy()
+    expect(await screen.findByRole('status')).toHaveTextContent(/confirmation link/i)
     expect(signUpMock).toHaveBeenCalledWith({ email: 'w@c.co', password: 'secret1' })
   })
 })

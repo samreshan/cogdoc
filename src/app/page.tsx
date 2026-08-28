@@ -9,6 +9,7 @@ import Login from '@/components/cogdoc/login'
 import WorkspaceHome from '@/components/cogdoc/workspace-home'
 import VerificationWorkspace from '@/components/cogdoc/verification-workspace'
 import OnboardingTour from '@/components/cogdoc/onboarding-tour'
+import { AuthConfigurationError, AuthLoading } from '@/components/cogdoc/auth-gate-state'
 
 // Auth gate: when Supabase is configured, show Login until a session exists.
 // In local dev with COGDOC_DEV_FALLBACK the route layer falls back to the
@@ -52,29 +53,12 @@ function useSessionGate() {
   return status
 }
 
-function AuthConfigurationError() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-[#faf7f0] px-6">
-      <section className="max-w-lg rounded-xl border border-amber-200 bg-white p-8 text-center">
-        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-amber-700">Setup required</p>
-        <h1 className="mt-3 font-serif text-2xl font-semibold text-stone-900">Authentication is not configured</h1>
-        <p className="mt-3 text-sm leading-6 text-stone-600">
-          Configure Supabase authentication for a shared deployment, or explicitly enable private single-user mode for a one-person installation.
-        </p>
-        <p className="mt-4 rounded-lg bg-stone-50 px-4 py-3 font-mono text-xs text-stone-600">
-          COGDOC_SINGLE_USER_MODE=1
-        </p>
-      </section>
-    </main>
-  )
-}
-
 export default function Home() {
   const view = useCogdoc((s) => s.view)
   const activeProject = useCogdoc((s) => s.activeProject)
   const authStatus = useSessionGate()
 
-  if (authStatus === 'loading') return null
+  if (authStatus === 'loading') return <AuthLoading />
   if (authStatus === 'misconfigured') return <AuthConfigurationError />
   if (authStatus === 'anon') return <Login />
 

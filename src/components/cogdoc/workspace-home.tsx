@@ -112,7 +112,7 @@ export default function WorkspaceHome() {
   }
 
   return (
-    <main id="main-content" className="min-h-screen bg-[#f4f1e9] text-stone-900">
+    <main id="main-content" className="min-h-[100dvh] bg-[#f4f1e9] text-stone-900">
       <header className="border-b border-stone-300/70 bg-[#f8f6f0]">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <button onClick={() => { setActive(null); setView('dashboard') }} className="flex items-center gap-2 text-sm text-stone-500 transition hover:text-stone-900"><ArrowLeft className="h-4 w-4" />All workspaces</button>
