@@ -67,3 +67,18 @@ assistive technology, a deployed provider, or an educational outcome.
 Until the gates applicable to the intended target pass, the honest posture is
 the one in `docs/deployment/release-readiness.md`: local demonstration is
 supported, while shared and public release remain conditional.
+
+## Local operational checkpoint
+
+The 2026-08-28 local checkpoint produced the following evidence:
+
+- `docker compose -f docker-compose.dev.yml ps` reported the PostgreSQL service
+  healthy, and a direct catalog query confirmed the `vector` extension exists.
+- `npm audit --omit=dev --omit=optional` reported zero known vulnerabilities in
+  the deployable dependency set.
+- `npm run security:verify` correctly rejected the plain local Compose database:
+  required Supabase RLS policies were absent and the Supabase private-storage
+  schema was unavailable. This expected failure is evidence that the verifier
+  does not mistake local development infrastructure for a complete shared
+  deployment. It must pass against the intended Supabase deployment before a
+  shared pilot.
