@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatCitation, parseDisplayName } from '@/lib/citation-format'
+import { formatCitation, formatStoredReference, parseDisplayName } from '@/lib/citation-format'
 
 const source = {
   title: 'Learning through deliberate practice',
@@ -38,5 +38,38 @@ describe('parseDisplayName', () => {
 
   it('accepts registry-style family, given names', () => {
     expect(parseDisplayName('Chen, Maya')).toEqual({ family: 'Chen', given: 'Maya' })
+  })
+})
+
+describe('formatStoredReference', () => {
+  it('re-renders discovery metadata without inventing missing fields', () => {
+    const result = formatStoredReference({
+      title: source.title,
+      authorsJson: JSON.stringify(source.authors),
+      year: source.year,
+      doi: source.doi,
+      url: source.url,
+      metadataJson: JSON.stringify({
+        provider: 'openalex', venue: source.venue, volume: '18', issue: '2', pages: '41-59',
+      }),
+    }, 'apa')
+
+    expect(result?.reference).toBe(formatCitation({
+      ...source, volume: '18', issue: '2', pages: '41-59',
+    }, 'apa').reference)
+    expect(result?.reference).toContain('18')
+    expect(result?.reference).toContain('41–59')
+    expect(result?.style).toBe('apa')
+  })
+
+  it('leaves an unstructured imported reference for manual review', () => {
+    expect(formatStoredReference({
+      title: null,
+      authorsJson: '[]',
+      year: null,
+      doi: null,
+      url: null,
+      metadataJson: null,
+    }, 'harvard')).toBeNull()
   })
 })

@@ -112,7 +112,6 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
     if (!project) return
     setAddingUrl(source.url)
     try {
-      const citation = formatCitationSuggestions(source)
       const res = await api.addReference(project.id, {
         title: source.title,
         url: source.url,
@@ -120,8 +119,10 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
         year: source.citation?.year,
         venue: source.citation?.venue,
         doi: source.citation?.doi,
-        rawText: citation?.reference,
-        style: project.citationStyle ?? 'harvard',
+        volume: source.citation?.volume,
+        issue: source.citation?.issue,
+        pages: source.citation?.pages,
+        publisher: source.citation?.publisher,
         provider: provider ?? undefined,
       })
       setAddedUrls((prev) => new Set([...prev, source.url]))
@@ -267,7 +268,7 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
                       </span>}
                     </div>
                     {citation && <div className="mb-2 rounded-md border border-stone-200/80 bg-white/70 p-2.5">
-                      <div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-stone-500">CSL {citation.style === 'apa' ? 'APA' : 'Harvard'} reference</p><button type="button" onClick={() => copyCitation(citation.reference, 'Reference')} className="rounded p-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700" aria-label="Copy suggested reference"><Clipboard className="h-3.5 w-3.5" /></button></div>
+                      <div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-stone-500">CSL {citation.style === 'apa' ? 'APA 7' : 'Harvard Cite Them Right'} reference</p><button type="button" onClick={() => copyCitation(citation.reference, 'Reference')} className="rounded p-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700" aria-label="Copy suggested reference"><Clipboard className="h-3.5 w-3.5" /></button></div>
                       <p className="mt-1 text-[11px] leading-4 text-stone-700">{citation.reference}</p>
                       <button type="button" onClick={() => copyCitation(citation.inText, 'In-text citation')} className="mt-2 text-[10px] font-medium text-[#28614f] hover:underline">Copy in-text {citation.inText}</button>
                       <p className="mt-1 text-[9px] leading-4 text-stone-400">Rendered with CSL from discovered metadata—confirm authors, date, venue, and locators against the original.</p>

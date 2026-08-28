@@ -88,7 +88,7 @@ Open http://localhost:3000.
 ### Writing
 - **Notebook-style editor** with Newsreader serif font, 18px body, 1.8 line-height
 - **Auto-save** (debounced 1.5s) with live save-state indicator
-- **Keyboard shortcuts**: Cmd/Ctrl+B (bold), Cmd/Ctrl+I (italic), Cmd/Ctrl+U (underline), Esc (clear selection)
+- **Keyboard shortcuts**: Cmd/Ctrl+B (bold), Cmd/Ctrl+I (italic), Esc (clear selection)
 - **Focus mode** — dims all paragraphs except the one you're editing
 - **Word count** in the toolbar
 
@@ -108,14 +108,21 @@ Open http://localhost:3000.
 ### Research library
 - **PDF upload** (drag-and-drop) — parsed via `pdf-parse`, chunked into ~500-token passages
 - **Paste text** — for web articles, e-book excerpts, or notes
-- **Keyword-overlap retrieval** — Jaccard similarity simulates pgvector RAG (the retrieval interface is vector-DB-ready for a future swap)
+- **Scholarly discovery** — OpenAlex first, then Crossref and Semantic Scholar, with optional grounded-web fallback
+- **Open-access resolution** — OpenAlex and Unpaywall links are labeled separately from indexed metadata
+- **CSL citation suggestions** — APA 7 or Harvard Cite Them Right references and in-text citations from the same deterministic processor
 - **Citation provenance** — every Citation Sentinel verdict links to the cited chunks with similarity score and page number
 
 ### Export
 - **Markdown** (.md) — for importing into Notion, Obsidian, GitHub
 - **Plain text** (.txt) — for email or simple editors
 - **HTML** (.html) — styled standalone page
+- **Normalized academic Word** (.docx) — one-inch margins, Times New Roman 12 pt body, 1.5 spacing, heading hierarchy, semantic tables/quotes/code, and page numbers
 - **Print / PDF** — via browser print dialog
+
+Word export is a consistent academic baseline, not an institution-specific
+submission template. Authors should apply any faculty cover page, margin,
+pagination, or reference-layout requirements before submission.
 
 ### Analytics
 - Total interventions, engagement rate, breakdowns by engine / action / verdict

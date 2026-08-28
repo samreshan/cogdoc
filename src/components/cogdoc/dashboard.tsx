@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { ArrowRight, BookOpen, CalendarClock, FileInput, FlaskConical, Loader2, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import type { CitationStyle } from '@/lib/workspace'
 
 type WorkspaceWithStatus = Project & {
   reviewRuns?: Array<{ status: string; createdAt: string }>
@@ -27,6 +28,7 @@ export default function Dashboard() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [dueAt, setDueAt] = useState('')
+  const [citationStyle, setCitationStyle] = useState<CitationStyle>('harvard')
   const [creating, setCreating] = useState(false)
   const [importing, setImporting] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -63,12 +65,13 @@ export default function Dashboard() {
       const { workspace } = await api.createWorkspace({
         title: title.trim(), workspaceType: createType, description,
         dueAt: createType === 'assignment' && dueAt ? new Date(dueAt).toISOString() : null,
-        reviewPace: createType === 'assignment' ? 'guided' : 'deep', citationStyle: 'harvard',
+        reviewPace: createType === 'assignment' ? 'guided' : 'deep', citationStyle,
       })
       setCreateType(null)
       setTitle('')
       setDescription('')
       setDueAt('')
+      setCitationStyle('harvard')
       setActiveProject(workspace)
       setView('workspace')
     } catch (error) {
@@ -180,6 +183,7 @@ export default function Dashboard() {
           <div className="space-y-4 py-2">
             <div><label className="mb-1.5 block text-sm font-medium" htmlFor="workspace-title">Title</label><Input id="workspace-title" autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder={createType === 'assignment' ? 'e.g. Software engineering assignment' : 'e.g. Cognitive offloading literature review'} /></div>
             {createType === 'assignment' && <div><label className="mb-1.5 block text-sm font-medium" htmlFor="due-at">Deadline</label><Input id="due-at" type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /><p className="mt-1 text-xs text-stone-500">Optional. It changes prioritization, never verification standards.</p></div>}
+            <div><label className="mb-1.5 block text-sm font-medium" htmlFor="citation-style">Citation style</label><select id="citation-style" value={citationStyle} onChange={(event) => setCitationStyle(event.target.value as CitationStyle)} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"><option value="harvard">Harvard — Cite Them Right</option><option value="apa">APA 7th edition</option></select><p className="mt-1 text-xs text-stone-500">Used for source suggestions and saved references. You can change it later.</p></div>
             <div><label className="mb-1.5 block text-sm font-medium" htmlFor="workspace-description">Context <span className="font-normal text-stone-400">optional</span></label><Textarea id="workspace-description" rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Brief, research question, or what you need to finish" /></div>
           </div>
           <DialogFooter><Button variant="ghost" onClick={() => setCreateType(null)}>Cancel</Button><Button onClick={createWorkspace} disabled={creating || !title.trim()} className="bg-[#173f35] hover:bg-[#245548]">{creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Create workspace</Button></DialogFooter>

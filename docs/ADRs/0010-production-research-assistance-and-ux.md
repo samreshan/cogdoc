@@ -94,8 +94,15 @@ The application never inserts or silently rewrites citations. This is a
 deliberate deviation from conventional "complete assistant" products and
 preserves the Product Specification's human-authorship boundary. CSL rendering
 is now implemented for the two citation styles supported by the workspace
-model. Institution-specific variants and additional styles remain separate
-product extensions.
+model. The author chooses APA 7 or Harvard Cite Them Right when creating a
+workspace and can change it from the workspace overview. A style change
+re-renders every metadata-backed saved reference from its structured fields and
+reports legacy or unstructured entries that still require manual review. The
+server, rather than the browser, selects the workspace style and renders saved
+discovery records so a client cannot persist a mixed-style library. Volume,
+issue, page, publisher, and venue fields remain structured during that change.
+Institution-specific variants and additional styles remain separate product
+extensions.
 
 Saving a discovered reference stores bibliographic metadata separately from
 indexed full text. It does not scrape DOI landing pages or imply that a
@@ -113,6 +120,14 @@ strike, inline code, lists, block quotations, dividers, tables, clear format,
 undo, and redo. Intervention underlines stay separate ProseMirror decorations
 and are never serialized into the document. Academic DOCX export remains the
 canonical structured export path.
+
+That export now applies a deterministic normalized academic profile: one-inch
+page margins, Times New Roman 12-point body text, 1.5 line spacing, centered page
+numbers, explicit title and heading hierarchy, indented block quotations,
+monospaced code, bordered tables with differentiated header cells, dividers,
+and safe HTTP(S) hyperlinks. These choices prioritize a readable, editable
+baseline. They do not claim conformance with a particular university, journal,
+or assessment brief; the export label and workspace copy state that boundary.
 
 Ordinary underline formatting is intentionally omitted from the initial bar
 because wavy underlines already carry interaction meaning in Cogdoc. This is a
@@ -197,7 +212,7 @@ messaging must distinguish implemented affordances from evaluated impact.
 
 ## Production boundaries still open
 
-- Additional CSL styles and institution-specific document templates beyond the shipped APA/Harvard processors.
+- Additional CSL styles and institution-specific document templates beyond the shipped APA/Harvard processors and normalized academic DOCX profile.
 - Bundled local-model distribution and hardware-specific evaluation (the Ollama adapter itself is implemented).
 - WCAG audit with assistive-technology testing.
 - Supabase RLS/storage policy deployment and malware-scanning service.

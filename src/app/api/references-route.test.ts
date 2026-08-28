@@ -64,16 +64,22 @@ describe('POST /api/workspaces/:id/references', () => {
     mocks.referenceCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'ref-2', ...data, source: null }))
     const response = await POST(request({
       title: 'Learning through practice', url: 'https://doi.org/10.1000/Test',
-      doi: 'https://doi.org/10.1000/Test', authors: ['Maya Chen'], year: '2025', provider: 'crossref',
+      doi: 'https://doi.org/10.1000/Test', authors: ['Maya Chen'], year: '2025', provider: 'semantic_scholar',
+      venue: 'Journal of Learning', volume: '12', issue: '3', pages: '44-61', publisher: 'Example Press',
     }), { params: Promise.resolve({ id: 'project-1' }) })
 
     expect(response.status).toBe(201)
     expect(mocks.referenceCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         doi: '10.1000/test', authorsJson: '["Maya Chen"]', metadataStatus: 'unverified',
-        metadataJson: expect.stringContaining('"provider":"crossref"'),
+        style: 'harvard', rawText: expect.stringContaining('Learning through practice'),
+        metadataJson: expect.stringContaining('"provider":"semantic_scholar"'),
       }),
     }))
+    const savedMetadata = JSON.parse(mocks.referenceCreate.mock.calls[0]![0].data.metadataJson as string)
+    expect(savedMetadata).toMatchObject({
+      venue: 'Journal of Learning', volume: '12', issue: '3', pages: '44-61', publisher: 'Example Press',
+    })
     expect(mocks.auditCreate).toHaveBeenCalledOnce()
   })
 })

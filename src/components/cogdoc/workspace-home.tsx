@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, BookOpen, CalendarClock, CheckCircle2, FileInput, FileText, FlaskConical, Loader2, ScanSearch, ShieldCheck, Upload, Waypoints } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, CalendarClock, CheckCircle2, FileInput, FileText, FlaskConical, Library, Loader2, ScanSearch, ShieldCheck, Upload, Waypoints } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
 import type { Project, ReviewItem, ReviewRun, VerificationReport } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import type { CitationStyle } from '@/lib/workspace'
 
 type WorkspaceDetail = Project & {
   reviewItems?: ReviewItem[]
@@ -77,6 +78,24 @@ export default function WorkspaceHome() {
     }
   }
 
+  async function updateCitationStyle(value: CitationStyle) {
+    try {
+      const result = await api.updateWorkspace(workspaceId, { citationStyle: value })
+      const updated = result.workspace
+      setWorkspace((current) => current ? { ...current, ...updated } : current)
+      setActive({ ...workspace, ...updated })
+      const reformatted = result.referencesReformatted ?? 0
+      const needsReview = result.referencesNeedingReview ?? 0
+      toast.success(value === 'apa' ? 'APA style applied' : 'Harvard style applied', {
+        description: needsReview
+          ? `${reformatted} saved references reformatted; ${needsReview} imported references still need a manual check.`
+          : `${reformatted} saved references reformatted.`,
+      })
+    } catch (error) {
+      toast.error('Could not change citation style', { description: (error as Error).message })
+    }
+  }
+
   async function importFile(file: File, kind: 'docx' | 'brief' | 'code') {
     setUploading(kind)
     try {
@@ -122,10 +141,11 @@ export default function WorkspaceHome() {
           </aside>
         </div>
 
-        <div className="mt-12 grid gap-px overflow-hidden rounded-xl border border-stone-300 bg-stone-300 md:grid-cols-3">
+        <div className="mt-12 grid gap-px overflow-hidden rounded-xl border border-stone-300 bg-stone-300 md:grid-cols-2 xl:grid-cols-4">
           <section className="bg-[#f8f6f0] p-5"><Waypoints className="h-5 w-5 text-[#386c5c]" /><h2 className="mt-5 font-serif text-xl font-semibold">Review pace</h2><p className="mt-2 min-h-12 text-sm leading-6 text-stone-500">Change what Cogdoc surfaces, not what verification requires.</p><Select value={workspace.reviewPace ?? 'deep'} onValueChange={(value) => updatePace(value as 'rapid' | 'guided' | 'deep')}><SelectTrigger className="mt-5 bg-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="rapid">Rapid — critical only</SelectItem><SelectItem value="guided">Guided — balanced</SelectItem><SelectItem value="deep">Deep — full inquiry</SelectItem></SelectContent></Select></section>
           <section className="bg-[#f8f6f0] p-5"><BookOpen className="h-5 w-5 text-[#386c5c]" /><h2 className="mt-5 font-serif text-xl font-semibold">Materials</h2><p className="mt-2 text-sm leading-6 text-stone-500">{workspace._count?.pdfs ?? 0} sources · {workspace.codeSnapshots?.length ?? 0} code snapshots</p><div className="mt-5 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => briefRef.current?.click()}>{uploading === 'brief' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Upload className="mr-1 h-3 w-3" />}Brief</Button><Button size="sm" variant="outline" onClick={() => codeRef.current?.click()}>{uploading === 'code' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Upload className="mr-1 h-3 w-3" />}Code ZIP</Button></div></section>
-          <section className="bg-[#f8f6f0] p-5"><FileInput className="h-5 w-5 text-[#386c5c]" /><h2 className="mt-5 font-serif text-xl font-semibold">Document</h2><p className="mt-2 text-sm leading-6 text-stone-500">Revision {workspace.document?.revision ?? 0}. DOCX imports preserve academic structure and report degraded formatting.</p><Button size="sm" variant="outline" onClick={() => docxRef.current?.click()} className="mt-5">{uploading === 'docx' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <FileInput className="mr-1 h-3 w-3" />}Replace from DOCX</Button></section>
+          <section className="bg-[#f8f6f0] p-5"><Library className="h-5 w-5 text-[#386c5c]" /><h2 className="mt-5 font-serif text-xl font-semibold">Citation style</h2><p className="mt-2 min-h-12 text-sm leading-6 text-stone-500">Keeps new suggestions and metadata-backed library entries consistent.</p><Select value={workspace.citationStyle ?? 'harvard'} onValueChange={(value) => updateCitationStyle(value as CitationStyle)}><SelectTrigger className="mt-5 bg-white" aria-label="Citation style"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="harvard">Harvard — Cite Them Right</SelectItem><SelectItem value="apa">APA 7th edition</SelectItem></SelectContent></Select></section>
+          <section className="bg-[#f8f6f0] p-5"><FileInput className="h-5 w-5 text-[#386c5c]" /><h2 className="mt-5 font-serif text-xl font-semibold">Document</h2><p className="mt-2 text-sm leading-6 text-stone-500">Revision {workspace.document?.revision ?? 0}. Imports preserve academic structure; Word export applies a normalized academic layout.</p><Button size="sm" variant="outline" onClick={() => docxRef.current?.click()} className="mt-5">{uploading === 'docx' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <FileInput className="mr-1 h-3 w-3" />}Replace from DOCX</Button></section>
         </div>
 
         <div className="mt-8 flex items-start gap-3 rounded-lg border border-stone-300 bg-[#f8f6f0] p-4 text-sm text-stone-600"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#386c5c]" /><p>Cogdoc certifies the checks completed against an exact document snapshot. It does not certify authorship, originality, correctness, AI-free writing, or institutional approval.</p></div>

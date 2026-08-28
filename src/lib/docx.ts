@@ -1,16 +1,23 @@
 import mammoth from 'mammoth'
 import {
   AlignmentType,
+  BorderStyle,
   Document as DocxDocument,
+  ExternalHyperlink,
+  Footer,
   HeadingLevel,
   ImageRun,
+  LineRuleType,
   Packer,
+  PageNumber,
   Paragraph,
   Table,
   TableCell,
   TableRow,
   TextRun,
+  WidthType,
   type ISectionOptions,
+  type ParagraphChild,
 } from 'docx'
 import { documentToPlainText, parseDocumentContent, type ProseMirrorNode } from '@/lib/document-content'
 
@@ -59,16 +66,27 @@ export async function importDocx(buffer: Buffer): Promise<{
   }
 }
 
-function textRuns(node: ProseMirrorNode): Array<TextRun | ImageRun> {
+const ACADEMIC_FONT = 'Times New Roman'
+const ACADEMIC_BODY_SIZE = 24
+const ONE_INCH_TWIPS = 1_440
+const ONE_AND_A_HALF_LINE_SPACING = 360
+
+function textRuns(node: ProseMirrorNode, forceBold = false): ParagraphChild[] {
   if (node.type === 'text') {
-    const markTypes = new Set((node.marks ?? []).map((mark) => mark.type))
-    return [new TextRun({
+    const marks = node.marks ?? []
+    const markTypes = new Set(marks.map((mark) => mark.type))
+    const run = new TextRun({
       text: node.text ?? '',
-      bold: markTypes.has('bold'),
+      bold: forceBold || markTypes.has('bold'),
       italics: markTypes.has('italic'),
       strike: markTypes.has('strike'),
       font: markTypes.has('code') ? 'Courier New' : undefined,
-    })]
+    })
+    const href = marks.find((mark) => mark.type === 'link')?.attrs?.href
+    if (typeof href === 'string' && /^https?:\/\//i.test(href)) {
+      return [new ExternalHyperlink({ link: href, children: [run] })]
+    }
+    return [run]
   }
   if (node.type === 'hardBreak') return [new TextRun({ break: 1 })]
   if (node.type === 'image') {
@@ -85,10 +103,14 @@ function textRuns(node: ProseMirrorNode): Array<TextRun | ImageRun> {
       },
     })]
   }
-  return (node.content ?? []).flatMap(textRuns)
+  return (node.content ?? []).flatMap((child) => textRuns(child, forceBold))
 }
 
-function paragraphFromNode(node: ProseMirrorNode, listKind?: 'bullet' | 'number'): Paragraph {
+function paragraphFromNode(
+  node: ProseMirrorNode,
+  listKind?: 'bullet' | 'number',
+  forceBold = false,
+): Paragraph {
   const headingMap: Record<number, (typeof HeadingLevel)[keyof typeof HeadingLevel]> = {
     1: HeadingLevel.HEADING_1,
     2: HeadingLevel.HEADING_2,
@@ -97,22 +119,46 @@ function paragraphFromNode(node: ProseMirrorNode, listKind?: 'bullet' | 'number'
     5: HeadingLevel.HEADING_5,
     6: HeadingLevel.HEADING_6,
   }
+  if (node.type === 'horizontalRule') {
+    return new Paragraph({
+      border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'A8A29E', space: 6 } },
+      spacing: { before: 120, after: 120 },
+    })
+  }
   return new Paragraph({
-    children: textRuns(node),
+    children: textRuns(node, forceBold),
     heading: node.type === 'heading' ? headingMap[Number(node.attrs?.level ?? 1)] : undefined,
     bullet: listKind === 'bullet' ? { level: 0 } : undefined,
     numbering: listKind === 'number' ? { reference: 'cogdoc-numbering', level: 0 } : undefined,
-    style: node.type === 'codeBlock' ? 'Code' : undefined,
+    style: node.type === 'codeBlock' ? 'Code' : node.type === 'blockquote' ? 'BlockQuote' : undefined,
   })
 }
 
 function tableFromNode(node: ProseMirrorNode): Table {
   const rows = (node.content ?? []).filter((child) => child.type === 'tableRow').map((row) => new TableRow({
     children: (row.content ?? []).map((cell) => new TableCell({
-      children: (cell.content ?? []).map((paragraph) => paragraphFromNode(paragraph)),
+      children: (cell.content ?? []).map((paragraph) => paragraphFromNode(
+        paragraph,
+        undefined,
+        cell.type === 'tableHeader',
+      )),
+      margins: { top: 80, bottom: 80, left: 100, right: 100 },
+      shading: cell.type === 'tableHeader' ? { fill: 'E7E5E4' } : undefined,
     })),
   }))
-  return new Table({ rows })
+  const border = { style: BorderStyle.SINGLE, size: 4, color: 'A8A29E' }
+  return new Table({
+    rows,
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: border,
+      bottom: border,
+      left: border,
+      right: border,
+      insideHorizontal: border,
+      insideVertical: border,
+    },
+  })
 }
 
 function docxChildren(root: ProseMirrorNode): Array<Paragraph | Table> {
@@ -141,17 +187,108 @@ export async function exportAcademicDocx(title: string, content: string): Promis
     ? documentToPlainText(parsed).split(/\n{2,}/).map((text) => new Paragraph(text))
     : docxChildren(parsed)
   const section: ISectionOptions = {
-    properties: {},
+    properties: {
+      page: {
+        margin: {
+          top: ONE_INCH_TWIPS,
+          right: ONE_INCH_TWIPS,
+          bottom: ONE_INCH_TWIPS,
+          left: ONE_INCH_TWIPS,
+          header: 720,
+          footer: 720,
+        },
+        pageNumbers: { start: 1 },
+      },
+    },
+    footers: {
+      default: new Footer({
+        children: [new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [new TextRun({ children: [PageNumber.CURRENT], size: 20, font: ACADEMIC_FONT })],
+        })],
+      }),
+    },
     children: [
       new Paragraph({
-        children: [new TextRun({ text: title, bold: true, size: 36 })],
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 480 },
+        children: [new TextRun(title)],
+        style: 'Title',
       }),
       ...body,
     ],
   }
   const document = new DocxDocument({
+    title,
+    creator: 'Cogdoc',
+    description: 'Normalized academic document exported from Cogdoc',
+    styles: {
+      default: {
+        document: {
+          run: { font: ACADEMIC_FONT, size: ACADEMIC_BODY_SIZE, color: '1C1917' },
+          paragraph: {
+            spacing: {
+              line: ONE_AND_A_HALF_LINE_SPACING,
+              lineRule: LineRuleType.AUTO,
+              after: 120,
+            },
+          },
+        },
+        title: {
+          run: { font: ACADEMIC_FONT, size: 36, bold: true, color: '1C1917' },
+          paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 480 }, keepNext: true },
+        },
+        heading1: {
+          run: { font: ACADEMIC_FONT, size: 32, bold: true, color: '1C1917' },
+          paragraph: { spacing: { before: 360, after: 120 }, keepNext: true, outlineLevel: 0 },
+        },
+        heading2: {
+          run: { font: ACADEMIC_FONT, size: 28, bold: true, color: '1C1917' },
+          paragraph: { spacing: { before: 300, after: 120 }, keepNext: true, outlineLevel: 1 },
+        },
+        heading3: {
+          run: { font: ACADEMIC_FONT, size: 24, bold: true, color: '1C1917' },
+          paragraph: { spacing: { before: 240, after: 80 }, keepNext: true, outlineLevel: 2 },
+        },
+        heading4: {
+          run: { font: ACADEMIC_FONT, size: 24, bold: true, italics: true, color: '1C1917' },
+          paragraph: { spacing: { before: 200, after: 80 }, keepNext: true, outlineLevel: 3 },
+        },
+        heading5: {
+          run: { font: ACADEMIC_FONT, size: 24, italics: true, color: '1C1917' },
+          paragraph: { spacing: { before: 160, after: 80 }, keepNext: true, outlineLevel: 4 },
+        },
+        heading6: {
+          run: { font: ACADEMIC_FONT, size: 24, italics: true, color: '1C1917' },
+          paragraph: { spacing: { before: 160, after: 80 }, keepNext: true, outlineLevel: 5 },
+        },
+      },
+      paragraphStyles: [
+        {
+          id: 'BlockQuote',
+          name: 'Block Quote',
+          basedOn: 'Normal',
+          next: 'Normal',
+          quickFormat: true,
+          run: { font: ACADEMIC_FONT, size: ACADEMIC_BODY_SIZE, italics: true, color: '44403C' },
+          paragraph: {
+            indent: { left: 720, right: 720 },
+            spacing: { line: ONE_AND_A_HALF_LINE_SPACING, lineRule: LineRuleType.AUTO, before: 120, after: 120 },
+          },
+        },
+        {
+          id: 'Code',
+          name: 'Code',
+          basedOn: 'Normal',
+          next: 'Normal',
+          quickFormat: true,
+          run: { font: 'Courier New', size: 20, color: '292524' },
+          paragraph: {
+            shading: { fill: 'F5F5F4' },
+            indent: { left: 240, right: 240 },
+            spacing: { line: 240, lineRule: LineRuleType.AUTO, before: 120, after: 120 },
+          },
+        },
+      ],
+    },
     numbering: {
       config: [{
         reference: 'cogdoc-numbering',

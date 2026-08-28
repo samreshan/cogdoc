@@ -1,5 +1,5 @@
 /**
- * Integration tests for GET /api/projects/[id]/export (md/txt/html).
+ * Integration tests for GET /api/projects/[id]/export (md/txt/html/docx).
  *
  * Exercises the format switch and the HTML→Markdown/Text conversion helpers.
  */
@@ -67,6 +67,16 @@ describe('GET /api/projects/[id]/export', () => {
     const text = await res.text()
     expect(text).toContain('<!DOCTYPE html>')
     expect(text).toContain('<p>Body</p>')
+  })
+
+  it('exports a normalized academic Word document with format=docx', async () => {
+    findUnique.mockResolvedValue({ id: 'p1', title: 'Academic Draft', document: { content: '<h1>Findings</h1><p>Body</p>' } })
+    const res = await GET(req('p1', 'docx'), ctx('p1'))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')).toContain('application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    expect(res.headers.get('Content-Disposition')).toContain('academic-draft.docx')
+    const bytes = new Uint8Array(await res.arrayBuffer())
+    expect(Array.from(bytes.slice(0, 4))).toEqual([0x50, 0x4b, 0x03, 0x04])
   })
 
   it('falls back to markdown for unknown formats', async () => {

@@ -154,7 +154,7 @@ export default function EditorShell() {
                 <FileCode className="w-4 h-4 mr-2" /> HTML (.html)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => window.open(`/api/projects/${project.id}/export?format=docx`, '_blank')}>
-                <FileType className="w-4 h-4 mr-2" /> Academic Word (.docx)
+                <FileType className="w-4 h-4 mr-2" /> Normalized academic Word (.docx)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => window.print()}>
                 <FileType className="w-4 h-4 mr-2" /> Print / PDF

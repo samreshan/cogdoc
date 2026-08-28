@@ -67,7 +67,7 @@ export const api = {
     reports?: VerificationReport[]
   } }>(`/api/workspaces/${id}`),
   updateWorkspace: (id: string, patch: Record<string, unknown>) =>
-    jsonFetch<{ workspace: Project }>(`/api/workspaces/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+    jsonFetch<{ workspace: Project; referencesReformatted?: number; referencesNeedingReview?: number }>(`/api/workspaces/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   deleteWorkspace: (id: string) => jsonFetch<{ ok: boolean }>(`/api/workspaces/${id}`, { method: 'DELETE' }),
   importWorkspaceFile: async (id: string, file: File, kind: 'docx' | 'brief' | 'source' | 'code' = 'docx') => {
     const form = new FormData()
@@ -143,8 +143,10 @@ export const api = {
     year?: string | null
     venue?: string | null
     doi?: string | null
-    rawText?: string
-    style?: 'harvard' | 'apa'
+    volume?: string | null
+    issue?: string | null
+    pages?: string | null
+    publisher?: string | null
     provider?: 'openalex' | 'crossref' | 'semantic_scholar' | 'gemini'
   }) => jsonFetch<{ reference: ReferenceSummary; alreadySaved: boolean }>(`/api/workspaces/${projectId}/references`, {
     method: 'POST',

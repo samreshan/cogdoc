@@ -22,6 +22,15 @@ export interface FormattedCitation {
   processor: 'citation-js/citeproc-js'
 }
 
+export interface StoredReferenceCitationInput {
+  title: string | null
+  authorsJson: string
+  year: string | null
+  doi: string | null
+  url: string | null
+  metadataJson?: string | null
+}
+
 const FAMILY_PARTICLES = new Set(['da', 'de', 'del', 'der', 'di', 'du', 'la', 'le', 'van', 'von'])
 
 export function parseDisplayName(value: string): { family: string; given?: string } {
@@ -75,4 +84,59 @@ export function formatCitation(metadata: CitationMetadataInput, style: CitationS
     style,
     processor: 'citation-js/citeproc-js',
   }
+}
+
+/** Re-render a saved metadata-backed reference when its workspace style changes. */
+export function formatStoredReference(
+  reference: StoredReferenceCitationInput,
+  style: CitationStyle,
+): FormattedCitation | null {
+  if (!reference.title || (!reference.url && !reference.doi)) return null
+  let authors: string[] = []
+  try {
+    const parsed = JSON.parse(reference.authorsJson) as unknown
+    if (Array.isArray(parsed)) {
+      authors = parsed.filter((author): author is string => typeof author === 'string' && Boolean(author.trim()))
+    }
+  } catch { /* malformed legacy metadata requires manual review */ }
+
+  let metadata: Record<string, unknown> = {}
+  try {
+    const parsed = JSON.parse(reference.metadataJson ?? '{}') as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) metadata = parsed as Record<string, unknown>
+  } catch { /* metadata is optional */ }
+  const raw = metadata.raw && typeof metadata.raw === 'object' && !Array.isArray(metadata.raw)
+    ? metadata.raw as Record<string, unknown>
+    : {}
+  const containerTitle = Array.isArray(raw['container-title'])
+    ? raw['container-title'].find((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+    : null
+  const venue = typeof metadata.venue === 'string'
+    ? metadata.venue.trim() || null
+    : containerTitle?.trim() || null
+  const stringValue = (key: string, rawKeys: string[] = [key]): string | null => {
+    if (typeof metadata[key] === 'string') return metadata[key].trim() || null
+    for (const rawKey of rawKeys) {
+      const value = raw[rawKey]
+      if (typeof value === 'string') return value.trim() || null
+      if (Array.isArray(value)) {
+        const first = value.find((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+        if (first) return first.trim()
+      }
+    }
+    return null
+  }
+
+  return formatCitation({
+    title: reference.title,
+    authors,
+    year: reference.year,
+    venue,
+    doi: reference.doi,
+    url: reference.url ?? `https://doi.org/${reference.doi}`,
+    volume: stringValue('volume'),
+    issue: stringValue('issue'),
+    pages: stringValue('pages', ['page', 'pages']),
+    publisher: stringValue('publisher'),
+  }, style)
 }

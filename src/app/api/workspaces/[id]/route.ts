@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 import { isCitationStyle, normalizeReviewPace } from '@/lib/workspace'
 import { appendAuditEvent } from '@/lib/workspace-server'
+import { formatStoredReference } from '@/lib/citation-format'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId(req)
@@ -38,14 +39,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId(req)
   const { id } = await params
-  const existing = await db.project.findFirst({ where: { id, userId }, select: { id: true } })
+  const existing = await db.project.findFirst({ where: { id, userId }, select: { id: true, citationStyle: true } })
   if (!existing) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
   const body = await req.json().catch(() => ({}))
+  if (body.citationStyle !== undefined && !isCitationStyle(body.citationStyle)) {
+    return NextResponse.json({ error: 'citationStyle must be harvard or apa' }, { status: 400 })
+  }
   const dueAt = body.dueAt === null ? null : body.dueAt ? new Date(body.dueAt) : undefined
   if (dueAt instanceof Date && Number.isNaN(dueAt.valueOf())) {
     return NextResponse.json({ error: 'dueAt must be a valid date' }, { status: 400 })
   }
-  const workspace = await db.$transaction(async (tx) => {
+  const requestedCitationStyle = isCitationStyle(body.citationStyle) ? body.citationStyle : undefined
+  const citationStyleChanged = Boolean(requestedCitationStyle && requestedCitationStyle !== existing.citationStyle)
+  const result = await db.$transaction(async (tx) => {
     const updated = await tx.project.update({
       where: { id },
       data: {
@@ -53,14 +59,39 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         description: typeof body.description === 'string' ? body.description.trim() || null : undefined,
         dueAt,
         reviewPace: body.reviewPace ? normalizeReviewPace(body.reviewPace) : undefined,
-        citationStyle: body.citationStyle && isCitationStyle(body.citationStyle) ? body.citationStyle : undefined,
+        citationStyle: requestedCitationStyle,
         briefText: typeof body.briefText === 'string' ? body.briefText.trim() || null : undefined,
       },
     })
-    await appendAuditEvent(tx, { projectId: id, userId, type: 'workspace_updated', payload: { fields: Object.keys(body) } })
-    return updated
+    let referencesReformatted = 0
+    let referencesNeedingReview = 0
+    if (citationStyleChanged && requestedCitationStyle) {
+      const references = await tx.reference.findMany({
+        where: { projectId: id },
+        select: { id: true, title: true, authorsJson: true, year: true, doi: true, url: true, metadataJson: true },
+      })
+      for (const reference of references) {
+        const formatted = formatStoredReference(reference, requestedCitationStyle)
+        if (!formatted) {
+          referencesNeedingReview += 1
+          continue
+        }
+        await tx.reference.update({
+          where: { id: reference.id },
+          data: { rawText: formatted.reference, style: requestedCitationStyle },
+        })
+        referencesReformatted += 1
+      }
+    }
+    await appendAuditEvent(tx, {
+      projectId: id,
+      userId,
+      type: citationStyleChanged ? 'citation_style_changed' : 'workspace_updated',
+      payload: { fields: Object.keys(body), referencesReformatted, referencesNeedingReview },
+    })
+    return { workspace: updated, referencesReformatted, referencesNeedingReview }
   })
-  return NextResponse.json({ workspace })
+  return NextResponse.json(result)
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

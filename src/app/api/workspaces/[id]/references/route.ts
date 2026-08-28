@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 import { appendAuditEvent } from '@/lib/workspace-server'
 import { lookupReferenceMetadata, metadataConfidence } from '@/lib/reference-metadata'
+import { formatCitation } from '@/lib/citation-format'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId(req)
@@ -50,13 +51,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const year = typeof body.year === 'string' ? body.year.trim().slice(0, 20) || null : null
   const venue = typeof body.venue === 'string' ? body.venue.trim().slice(0, 500) || null : null
-  const provider = body.provider === 'openalex' || body.provider === 'crossref' || body.provider === 'gemini'
+  const volume = typeof body.volume === 'string' ? body.volume.trim().slice(0, 100) || null : null
+  const issue = typeof body.issue === 'string' ? body.issue.trim().slice(0, 100) || null : null
+  const pages = typeof body.pages === 'string' ? body.pages.trim().slice(0, 100) || null : null
+  const publisher = typeof body.publisher === 'string' ? body.publisher.trim().slice(0, 500) || null : null
+  const provider = body.provider === 'openalex' || body.provider === 'crossref'
+    || body.provider === 'semantic_scholar' || body.provider === 'gemini'
     ? body.provider
     : null
-  const style = body.style === 'apa' || body.style === 'harvard' ? body.style : workspace.citationStyle
-  const rawText = typeof body.rawText === 'string' && body.rawText.trim()
-    ? body.rawText.trim().slice(0, 5_000)
-    : [authors.join(', '), year ? `(${year})` : '', title, venue, doi ? `https://doi.org/${doi}` : url].filter(Boolean).join('. ')
+  const style = workspace.citationStyle === 'apa' ? 'apa' : 'harvard'
+  const rawText = formatCitation({
+    title,
+    authors,
+    year,
+    venue,
+    doi,
+    url,
+    volume,
+    issue,
+    pages,
+    publisher,
+  }, style).reference.slice(0, 5_000)
 
   const reference = await db.$transaction(async (tx) => {
     const saved = await tx.reference.create({
@@ -70,7 +85,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         doi,
         url,
         metadataStatus: 'unverified',
-        metadataJson: JSON.stringify({ provider, venue, savedFromDiscovery: true }),
+        metadataJson: JSON.stringify({
+          provider,
+          venue,
+          volume,
+          issue,
+          pages,
+          publisher,
+          savedFromDiscovery: true,
+        }),
       },
       include: { source: { select: { id: true, filename: true } } },
     })
