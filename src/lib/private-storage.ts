@@ -47,6 +47,10 @@ export async function readPrivateAsset(provider: string, key: string): Promise<B
     return Buffer.from(await data.arrayBuffer())
   }
   const root = process.env.COGDOC_STORAGE_DIR ?? path.join(process.cwd(), '.data', 'assets')
-  return readFile(path.join(root, key))
+  // This path is deliberately resolved at runtime: production deployments may
+  // mount private storage outside the application bundle. Do not make
+  // Turbopack trace that deployment-specific directory into the standalone
+  // server artifact.
+  const fullPath = path.join(/* turbopackIgnore: true */ root, key)
+  return readFile(/* turbopackIgnore: true */ fullPath)
 }
-
