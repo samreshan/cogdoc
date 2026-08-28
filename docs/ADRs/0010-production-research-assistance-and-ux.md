@@ -24,8 +24,9 @@ the student's final prose or making unsupported authorship claims.
 
 ### 1. One intervention model, two complementary views
 
-- The editor underline is the spatial view. Hovering it shows every active
-  intervention anchored to that passage and exposes contextual actions.
+- The editor underline is the spatial view. Hovering, clicking, or
+  keyboard-focusing it shows every active intervention anchored to that passage
+  and exposes contextual actions. Enter and Space activate focused underlines.
 - The right-pane Action queue is the persistent overview. It groups active
   interventions into Evidence checks, Claim clarity, Reasoning prompts, and
   Structure. Clicking an item selects and scrolls to the exact underlined text.
@@ -37,6 +38,11 @@ the student's final prose or making unsupported authorship claims.
 This deviates from the original single Living Margin presentation. The
 conceptual intervention system remains unchanged, but navigation is now usable
 for long documents and keyboard users.
+
+Each decorated passage is a focusable control with an accessible intervention
+count. The popover is exposed as a labelled dialog, and its close and dismiss
+controls have explicit accessible names. This closes the keyboard gap in the
+earlier hover-only implementation while retaining the right-pane route.
 
 ### 2. Selection is the primary research affordance
 

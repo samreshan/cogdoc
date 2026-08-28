@@ -27,7 +27,7 @@ const STEPS = [
   {
     eyebrow: 'Write with guidance',
     title: 'Underlines are invitations, not corrections.',
-    description: 'Hover an underlined passage to see the intervention. The right pane groups every active intervention so you can return to it later.',
+    description: 'Hover, click, or keyboard-focus an underlined passage to see the intervention. The right pane groups every active intervention so you can return to it later.',
     icon: Highlighter,
     points: ['Click a right-pane item to locate its passage', 'Check Assistant in the editor header if model guidance is unavailable', 'You decide every change to the draft'],
   },

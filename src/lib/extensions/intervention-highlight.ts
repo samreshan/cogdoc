@@ -72,6 +72,9 @@ function makeDecoration(from: number, to: number, key: string, ints: Interventio
   const engineTypes = [...new Set(ints.map((i) => i.engineType))] as EngineType[]
   return Decoration.inline(from, to, {
     class: 'cogdoc-mark',
+    role: 'button',
+    tabindex: '0',
+    'aria-label': `Review ${ints.length} intervention${ints.length === 1 ? '' : 's'} for this passage`,
     'data-sentence-key': key,
     'data-engine-types': engineTypes.join(','),
     'data-intervention-ids': ints.map((i) => i.id).join(','),

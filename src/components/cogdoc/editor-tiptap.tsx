@@ -274,14 +274,18 @@ export default function EditorTiptap() {
   }, [])
 
   // ── Hover handling for sentence marks (popovers over underlines) ────────
+  function revealInterventionMark(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false
+    const mark = target.closest<HTMLElement>('.cogdoc-mark')
+    const key = mark?.dataset.sentenceKey
+    if (!mark || !key) return false
+    const rect = mark.getBoundingClientRect()
+    setHovered(key, { top: rect.bottom, left: rect.left })
+    return true
+  }
+
   function handleMouseOver(e: React.MouseEvent) {
-    const target = e.target as HTMLElement
-    if (target.classList?.contains('cogdoc-mark')) {
-      const key = target.dataset.sentenceKey
-      if (!key) return
-      const rect = target.getBoundingClientRect()
-      setHovered(key, { top: rect.bottom, left: rect.left })
-    }
+    revealInterventionMark(e.target)
   }
 
   // Submit a prompt to the Interceptor
@@ -308,6 +312,10 @@ export default function EditorTiptap() {
   // Paragraph completion (Enter) → Scaffold + Blindspot
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!editor) return
+    if ((e.key === 'Enter' || e.key === ' ') && revealInterventionMark(e.target)) {
+      e.preventDefault()
+      return
+    }
     if (e.key === 'Enter' && !e.shiftKey && reviewPace === 'deep') {
       setTimeout(() => {
         const text = editor.getText()
@@ -389,7 +397,7 @@ export default function EditorTiptap() {
           )}
         </div>
         <div className="text-[11px] text-stone-400">
-          Sentences with interventions are <span style={{ textDecoration: 'underline wavy #78716c', textUnderlineOffset: '3px' }}>underlined</span> — hover to see them
+          Sentences with interventions are <span style={{ textDecoration: 'underline wavy #78716c', textUnderlineOffset: '3px' }}>underlined</span> — hover or focus to review
         </div>
       </div>
 
@@ -411,6 +419,8 @@ export default function EditorTiptap() {
           {/* Writing surface — focus mode dims all but the last paragraph */}
           <div
             onMouseOver={handleMouseOver}
+            onFocus={(event) => revealInterventionMark(event.target)}
+            onClick={(event) => revealInterventionMark(event.target)}
             className={`transition-opacity ${focusMode ? 'focus-within:[&_p:not(:last-child)]:opacity-40' : ''}`}
           >
             <EditorContent editor={editor} />

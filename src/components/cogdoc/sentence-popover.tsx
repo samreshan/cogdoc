@@ -193,6 +193,9 @@ export default function SentencePopover() {
           exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.96 }}
           transition={{ duration: reduceMotion ? 0.05 : 0.15, ease: 'easeOut' }}
           className="bg-white/98 backdrop-blur-sm rounded-lg shadow-xl border border-stone-200 overflow-hidden"
+          role="dialog"
+          aria-label="Interventions for selected passage"
+          aria-live="polite"
         >
           {/* Header */}
           <div className="px-3 py-2 border-b border-stone-100 flex items-center justify-between">
@@ -202,6 +205,7 @@ export default function SentencePopover() {
             <button
               onClick={() => setHovered(null, null)}
               className="text-stone-400 hover:text-stone-700"
+              aria-label="Close interventions"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -246,6 +250,7 @@ export default function SentencePopover() {
                       onClick={() => handleDismiss(i.id)}
                       className="ml-auto text-stone-300 hover:text-stone-600"
                       title="Dismiss"
+                      aria-label={`Dismiss ${meta.label} intervention`}
                     >
                       <X className="w-3 h-3" />
                     </button>

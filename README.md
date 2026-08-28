@@ -101,7 +101,7 @@ Open http://localhost:3000.
 
 ### Interventions
 - **Underlined sentences** — wavy underline colored by engine, appears 2.5s after the engine fires
-- **Hover popover** — shows all interventions for the sentence, stacked, each with engine-specific actionable insights
+- **Accessible intervention popover** — hover, click, or keyboard-focus an underline to see stacked, engine-specific actions
 - **Fuzzy matching** — underlines survive minor edits to the sentence
 - **Full audit log** — every intervention is persisted with prompt, response, verdict, cited evidence, user action, timestamps
 
@@ -244,6 +244,7 @@ check and reports whether the configured model is reachable.
 
 - **[Assignment/research workspace implementation](./docs/implementation/assignment-research-workspace.md)** — shipped flow, certificate invariants, deployment, and operational boundaries
 - **[Production research assistance and UX ADR](./docs/ADRs/0010-production-research-assistance-and-ux.md)** — intervention navigation, scholarly search, citation suggestions, onboarding, model strategy, deviations, and SDG 4 boundary
+- **[Release readiness and acceptance](./docs/deployment/release-readiness.md)** — automated evidence, environment setup, provider failover, manual accessibility, operational gates, and honest release posture
 - **[USER_GUIDE.md](./USER_GUIDE.md)** — for writers and examiners (non-technical)
 - **[DEVELOPER.md](./DEVELOPER.md)** — for developers (setup, schema, how to add an engine, how to swap the LLM)
 - **[README-DOCKER.md](./README-DOCKER.md)** — Docker deployment guide
