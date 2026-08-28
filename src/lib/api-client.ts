@@ -2,6 +2,7 @@
  * Typed API client for the Cogdoc frontend.
  */
 import type { Project, Intervention, Analytics, PdfSummary, ReferenceSummary, ReviewItem, ReviewRun, VerificationReport } from '@/lib/types'
+import type { FormattedCitation } from '@/lib/citation-format'
 
 export class ApiError extends Error {
   status: number
@@ -140,6 +141,21 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(input),
   }),
+  verifyReference: (projectId: string, referenceId: string) =>
+    jsonFetch<{
+      reference: ReferenceSummary
+      verified: boolean
+      confidence: number
+      metadata: { provider: 'crossref' | 'datacite'; doi: string; title: string | null; year: string | null; authors: string[]; url: string | null } | null
+    }>(`/api/workspaces/${projectId}/references`, {
+      method: 'PATCH',
+      body: JSON.stringify({ referenceId, verifyMetadata: true }),
+    }),
+  confirmReferenceMetadata: (projectId: string, referenceId: string) =>
+    jsonFetch<{ reference: ReferenceSummary }>(`/api/workspaces/${projectId}/references`, {
+      method: 'PATCH',
+      body: JSON.stringify({ referenceId, confirmMetadata: true }),
+    }),
 
   // AI engines
   interceptor: (
@@ -222,7 +238,17 @@ export const api = {
         relevance: 'high' | 'medium' | 'low'
         openAccessUrl?: string | null
         isOpenAccess?: boolean
-        citation?: { authors: string[]; year: string | null; venue: string | null; doi: string | null }
+        citation?: {
+          authors: string[]
+          year: string | null
+          venue: string | null
+          doi: string | null
+          volume?: string | null
+          issue?: string | null
+          pages?: string | null
+          publisher?: string | null
+          formatted?: FormattedCitation
+        }
       }>
       query?: string
       totalFound?: number

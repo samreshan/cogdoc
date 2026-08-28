@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
+import type { FormattedCitation } from '@/lib/citation-format'
 
 export interface FoundSource {
   title: string
@@ -22,7 +23,17 @@ export interface FoundSource {
   relevance: 'high' | 'medium' | 'low'
   openAccessUrl?: string | null
   isOpenAccess?: boolean
-  citation?: { authors: string[]; year: string | null; venue: string | null; doi: string | null }
+  citation?: {
+    authors: string[]
+    year: string | null
+    venue: string | null
+    doi: string | null
+    volume?: string | null
+    issue?: string | null
+    pages?: string | null
+    publisher?: string | null
+    formatted?: FormattedCitation
+  }
 }
 
 interface Props {
@@ -37,61 +48,8 @@ const RELEVANCE_META = {
   low:    { label: 'Low relevance',    color: 'text-stone-600',   bg: 'bg-stone-50',   border: 'border-stone-200' },
 }
 
-const FAMILY_PARTICLES = new Set(['da', 'de', 'del', 'der', 'di', 'du', 'la', 'le', 'van', 'von'])
-
-function personName(author: string): { family: string; initials: string } {
-  const comma = author.split(',').map((part) => part.trim()).filter(Boolean)
-  if (comma.length > 1) {
-    return { family: comma[0]!, initials: comma.slice(1).join(' ').split(/\s+/).filter(Boolean).map((part) => `${part[0]!.toUpperCase()}.`).join(' ') }
-  }
-  const parts = author.trim().split(/\s+/).filter(Boolean)
-  let familyStart = Math.max(0, parts.length - 1)
-  while (familyStart > 0 && FAMILY_PARTICLES.has(parts[familyStart - 1]!.toLowerCase())) familyStart -= 1
-  const family = parts.slice(familyStart).join(' ') || author
-  const initials = parts.slice(0, familyStart)
-    .flatMap((part) => part.split(/[-–]/))
-    .filter(Boolean)
-    .map((part) => `${part[0]!.toUpperCase()}.`)
-    .join(' ')
-  return { family, initials }
-}
-
-function formattedAuthors(authors: string[], style: 'harvard' | 'apa'): string {
-  const names = authors.map((author) => {
-    const { family, initials } = personName(author)
-    return initials ? `${family}, ${initials}` : family
-  })
-  if (names.length < 2) return names[0] ?? ''
-  const conjunction = style === 'apa' ? '&' : 'and'
-  if (names.length === 2) return `${names[0]}${style === 'apa' ? ',' : ''} ${conjunction} ${names[1]}`
-  return `${names.slice(0, -1).join(', ')}, ${conjunction} ${names.at(-1)}`
-}
-
-function citationIdentifier(source: FoundSource): string {
-  const doi = source.citation?.doi?.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '')
-  return doi ? `https://doi.org/${doi}` : source.url
-}
-
-export function formatCitationSuggestions(source: FoundSource, style: 'harvard' | 'apa' = 'harvard') {
-  if (!source.citation) return null
-  const { authors, year, venue, doi } = source.citation
-  const yearText = year ?? 'n.d.'
-  const authorText = authors.length ? formattedAuthors(authors, style) : source.title
-  const venueText = venue ? ` ${venue}.` : ''
-  const identifier = citationIdentifier(source)
-  const reference = style === 'apa'
-    ? `${authorText} (${yearText}). ${source.title}.${venueText} ${identifier}`.replace(/\s+/g, ' ').trim()
-    : `${authorText} (${yearText}) ‘${source.title}’.${venueText} Available at: ${identifier}`.replace(/\s+/g, ' ').trim()
-
-  const surnames = authors.map((author) => personName(author).family)
-  const authorDate = surnames.length === 0
-    ? `“${source.title}”`
-    : surnames.length === 1
-      ? surnames[0]
-      : surnames.length === 2
-        ? `${surnames[0]} & ${surnames[1]}`
-        : `${surnames[0]} et al.`
-  return { reference, inText: `(${authorDate}, ${yearText})`, doi: doi ?? null }
+export function formatCitationSuggestions(source: FoundSource): FormattedCitation | null {
+  return source.citation?.formatted ?? null
 }
 
 export default function SourcesResults({ open, onOpenChange, claim }: Props) {
@@ -149,7 +107,7 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
     if (!project) return
     setAddingUrl(source.url)
     try {
-      const citation = formatCitationSuggestions(source, project.citationStyle ?? 'harvard')
+      const citation = formatCitationSuggestions(source)
       const res = await api.addReference(project.id, {
         title: source.title,
         url: source.url,
@@ -264,7 +222,7 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
                 const meta = RELEVANCE_META[source.relevance]
                 const isAdded = addedUrls.has(source.url)
                 const isAdding = addingUrl === source.url
-                const citation = formatCitationSuggestions(source, project?.citationStyle ?? 'harvard')
+                const citation = formatCitationSuggestions(source)
                 return (
                   <motion.div
                     key={source.url}
@@ -290,10 +248,10 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
                       {source.snippet}
                     </p>
                     {citation && <div className="mb-2 rounded-md border border-stone-200/80 bg-white/70 p-2.5">
-                      <div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-stone-500">Suggested {project?.citationStyle === 'apa' ? 'APA' : 'Harvard'} reference</p><button type="button" onClick={() => copyCitation(citation.reference, 'Reference')} className="rounded p-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700" aria-label="Copy suggested reference"><Clipboard className="h-3.5 w-3.5" /></button></div>
+                      <div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-stone-500">CSL {citation.style === 'apa' ? 'APA' : 'Harvard'} reference</p><button type="button" onClick={() => copyCitation(citation.reference, 'Reference')} className="rounded p-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700" aria-label="Copy suggested reference"><Clipboard className="h-3.5 w-3.5" /></button></div>
                       <p className="mt-1 text-[11px] leading-4 text-stone-700">{citation.reference}</p>
                       <button type="button" onClick={() => copyCitation(citation.inText, 'In-text citation')} className="mt-2 text-[10px] font-medium text-[#28614f] hover:underline">Copy in-text {citation.inText}</button>
-                      <p className="mt-1 text-[9px] leading-4 text-stone-400">Metadata suggestion—confirm authors, date, and venue against the original.</p>
+                      <p className="mt-1 text-[9px] leading-4 text-stone-400">Rendered with CSL from discovered metadata—confirm authors, date, venue, and locators against the original.</p>
                     </div>}
                     <div className="flex items-center gap-2">
                       {source.openAccessUrl && <a href={source.openAccessUrl} target="_blank" rel="noopener noreferrer" className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[#28614f] hover:underline"><Unlock className="h-3 w-3" />Open copy</a>}

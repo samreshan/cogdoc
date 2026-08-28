@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 import { appendAuditEvent } from '@/lib/workspace-server'
+import { lookupReferenceMetadata, metadataConfidence } from '@/lib/reference-metadata'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId(req)
@@ -90,6 +91,59 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const referenceId = String(body.referenceId ?? '')
   const reference = await db.reference.findFirst({ where: { id: referenceId, projectId: id, project: { userId } } })
   if (!reference) return NextResponse.json({ error: 'Reference not found' }, { status: 404 })
+
+  if (body.verifyMetadata === true) {
+    let authors: string[] = []
+    try {
+      const parsed = JSON.parse(reference.authorsJson) as unknown
+      if (Array.isArray(parsed)) authors = parsed.filter((author): author is string => typeof author === 'string')
+    } catch { /* malformed legacy metadata stays unverified */ }
+    const metadata = await lookupReferenceMetadata({
+      rawText: reference.rawText,
+      authors,
+      year: reference.year,
+      title: reference.title,
+      doi: reference.doi,
+      key: `${authors[0] ?? ''}:${reference.year ?? ''}`,
+    })
+    const confidence = metadata ? metadataConfidence({
+      rawText: reference.rawText,
+      authors,
+      year: reference.year,
+      title: reference.title,
+      doi: reference.doi,
+      key: `${authors[0] ?? ''}:${reference.year ?? ''}`,
+    }, metadata) : 0
+    const status = metadata ? (confidence >= 0.85 ? 'matched' : 'mismatch') : 'unverified'
+    const updated = await db.$transaction(async (tx) => {
+      const saved = await tx.reference.update({
+        where: { id: referenceId },
+        data: {
+          metadataStatus: status,
+          metadataConfidence: confidence,
+          metadataJson: metadata ? JSON.stringify(metadata) : null,
+          doi: reference.doi ?? metadata?.doi ?? null,
+          url: reference.url ?? metadata?.url ?? null,
+        },
+        include: { source: { select: { id: true, filename: true } } },
+      })
+      await appendAuditEvent(tx, {
+        projectId: id, userId, type: 'reference_metadata_checked',
+        payload: { referenceId, provider: metadata?.provider ?? null, confidence, status },
+      })
+      return saved
+    })
+    const publicMetadata = metadata ? {
+      provider: metadata.provider,
+      doi: metadata.doi,
+      title: metadata.title,
+      year: metadata.year,
+      authors: metadata.authors,
+      url: metadata.url,
+    } : null
+    return NextResponse.json({ reference: updated, verified: status === 'matched', confidence, metadata: publicMetadata })
+  }
+
   if (body.sourceId) {
     const source = await db.pdf.findFirst({ where: { id: String(body.sourceId), projectId: id, userId } })
     if (!source) return NextResponse.json({ error: 'Source not found' }, { status: 404 })
@@ -104,8 +158,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         year: typeof body.year === 'string' ? body.year.trim() || null : undefined,
         doi: typeof body.doi === 'string' ? body.doi.trim() || null : undefined,
       },
+      include: { source: { select: { id: true, filename: true } } },
     })
-    await appendAuditEvent(tx, { projectId: id, userId, type: 'reference_updated', payload: { referenceId, sourceId: body.sourceId ?? null, confirmed: body.confirmMetadata === true } })
+    await appendAuditEvent(tx, {
+      projectId: id, userId,
+      type: body.confirmMetadata === true ? 'reference_metadata_confirmed' : 'reference_updated',
+      payload: { referenceId, sourceId: body.sourceId ?? null, confirmed: body.confirmMetadata === true },
+    })
     return saved
   })
   return NextResponse.json({ reference: updated })

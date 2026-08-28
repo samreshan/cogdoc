@@ -13,6 +13,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
+import { formatCitation, type FormattedCitation } from '@/lib/citation-format'
+import type { CitationStyle } from '@/lib/workspace'
 
 export const runtime = 'nodejs'
 export const maxDuration = 45
@@ -27,7 +29,17 @@ interface SearchResult {
   publishedTime?: string
   openAccessUrl?: string | null
   isOpenAccess?: boolean
-  citation?: { authors: string[]; year: string | null; venue: string | null; doi: string | null }
+  citation?: {
+    authors: string[]
+    year: string | null
+    venue: string | null
+    doi: string | null
+    volume?: string | null
+    issue?: string | null
+    pages?: string | null
+    publisher?: string | null
+    formatted?: FormattedCitation
+  }
 }
 
 interface OpenAlexWork {
@@ -41,6 +53,7 @@ interface OpenAlexWork {
   primary_location?: { landing_page_url?: string | null; source?: { display_name?: string | null } | null } | null
   best_oa_location?: { landing_page_url?: string | null; pdf_url?: string | null } | null
   open_access?: { is_oa?: boolean; oa_url?: string | null } | null
+  biblio?: { volume?: string | null; issue?: string | null; first_page?: string | null; last_page?: string | null } | null
 }
 
 export async function POST(req: NextRequest) {
@@ -51,13 +64,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'A claim (10+ chars) is required' }, { status: 400 })
   }
 
+  let citationStyle: CitationStyle = 'harvard'
   // Verify project ownership (if projectId provided)
   if (projectId) {
     const userId = await requireUserId(req)
     const project = await db.project.findFirst({
-      where: { id: projectId, userId },
+      where: { id: projectId, userId }, select: { citationStyle: true },
     })
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    citationStyle = project.citationStyle === 'apa' ? 'apa' : 'harvard'
   }
 
   try {
@@ -95,8 +110,35 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    const formattedSources = sources.map((source) => {
+      if (!source.citation) return source
+      try {
+        return {
+          ...source,
+          citation: {
+            ...source.citation,
+            formatted: formatCitation({
+              title: source.title,
+              authors: source.citation.authors,
+              year: source.citation.year,
+              venue: source.citation.venue,
+              doi: source.citation.doi,
+              url: source.url,
+              volume: source.citation.volume,
+              issue: source.citation.issue,
+              pages: source.citation.pages,
+              publisher: source.citation.publisher,
+            }, citationStyle),
+          },
+        }
+      } catch (error) {
+        console.warn('CSL rendering skipped for source:', source.url, (error as Error).message)
+        return source
+      }
+    })
+
     return NextResponse.json({
-      sources,
+      sources: formattedSources,
       query: searchQuery,
       totalFound: sources.length,
       provider,
@@ -121,7 +163,7 @@ export async function openAlexFindSources(query: string): Promise<SearchResult[]
   const endpoint = new URL('https://api.openalex.org/works')
   endpoint.searchParams.set('search', query)
   endpoint.searchParams.set('per_page', '8')
-  endpoint.searchParams.set('select', 'id,display_name,doi,publication_date,cited_by_count,abstract_inverted_index,authorships,primary_location,best_oa_location,open_access')
+  endpoint.searchParams.set('select', 'id,display_name,doi,publication_date,cited_by_count,abstract_inverted_index,authorships,primary_location,best_oa_location,open_access,biblio')
   const apiKey = process.env.OPENALEX_API_KEY?.trim()
   if (apiKey) endpoint.searchParams.set('api_key', apiKey)
   const mailto = process.env.OPENALEX_MAILTO?.trim()
@@ -153,6 +195,13 @@ export async function openAlexFindSources(query: string): Promise<SearchResult[]
         year: work.publication_date?.slice(0, 4) ?? null,
         venue: work.primary_location?.source?.display_name?.trim() || null,
         doi: work.doi ?? null,
+        volume: work.biblio?.volume ?? null,
+        issue: work.biblio?.issue ?? null,
+        pages: work.biblio?.first_page
+          ? work.biblio.last_page && work.biblio.last_page !== work.biblio.first_page
+            ? `${work.biblio.first_page}–${work.biblio.last_page}`
+            : work.biblio.first_page
+          : null,
       },
     })
   }

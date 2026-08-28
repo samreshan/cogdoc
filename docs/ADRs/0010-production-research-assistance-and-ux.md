@@ -67,21 +67,29 @@ search path deterministic, cheaper, and resilient to model quota. See the
 
 ### 4. Citation suggestions are deterministic and author-controlled
 
-OpenAlex metadata is converted into a visible APA or Harvard reference
-suggestion plus an in-text author-date suggestion. The author may copy either
-value. Cogdoc labels the result as a metadata suggestion and asks the author to
-verify author, year, venue, DOI, and locator against the original source.
+OpenAlex metadata is converted to CSL-JSON and rendered by Citation.js using
+the citeproc-js engine and its built-in APA or Harvard template. Both the
+bibliography entry and in-text citation come from the same processor. The
+author may copy either value. Cogdoc labels the result as metadata-derived and
+asks the author to verify author, year, venue, DOI, and locator against the
+original source. See the [Citation.js CSL plugin](https://citation.js.org/api/0.7/module-%40citation-js_plugin-csl.html)
+and [CSL processor overview](https://citationstyles.org/developers/).
 
 The application never inserts or silently rewrites citations. This is a
 deliberate deviation from conventional "complete assistant" products and
-preserves the Product Specification's human-authorship boundary. Full
-standards-compliant CSL rendering remains a planned extension; the current
-suggestion does not claim to cover every source type or institutional variant.
+preserves the Product Specification's human-authorship boundary. CSL rendering
+is now implemented for the two citation styles supported by the workspace
+model. Institution-specific variants and additional styles remain separate
+product extensions.
 
 Saving a discovered reference stores bibliographic metadata separately from
 indexed full text. It does not scrape DOI landing pages or imply that a
 paywalled paper has been read. The library labels unverified metadata and asks
 the author to upload a lawful PDF copy before passage-level evidence checks.
+The author can check a saved record against Crossref/DataCite; Cogdoc records a
+high-confidence registry match, a mismatch, or no match. **I checked the
+original** is a separate explicit action and creates a distinct audit event, so
+manual confirmation is never confused with an automated registry match.
 
 ### 5. Formatting is visible but document semantics remain canonical
 
@@ -122,6 +130,17 @@ weights remains deferred until supported deployment hardware, quantization,
 context limits, safety evaluation, and latency targets are fixed. This is a
 deliberate deviation from forcing a multi-gigabyte runtime into every install.
 
+### 8. Dependency remediation is part of the release gate
+
+The citation milestone added the MIT-licensed Citation.js core and CSL plugin.
+The same change removed two unused editor/highlighter packages, updated the
+framework/auth dependency graph within compatible ranges, aligned Sharp with
+the installed Next.js release, and moved the Prisma CLI to development tooling.
+`npm audit --omit=dev --omit=optional` is the deployable web-runtime gate and
+reports zero known vulnerabilities at this checkpoint. Prisma CLI advisories
+remain visible in the full development-tool audit; the CLI is used during
+container initialization, not imported by request handlers.
+
 ## Environment variables
 
 | Variable | Requirement | Purpose |
@@ -151,7 +170,7 @@ messaging must distinguish implemented affordances from evaluated impact.
 
 ## Production boundaries still open
 
-- Complete CSL processing and institutional document templates.
+- Additional CSL styles and institution-specific document templates beyond the shipped APA/Harvard processors.
 - Unpaywall full-text resolution and provenance display.
 - Bundled local-model distribution and hardware-specific evaluation (the Ollama adapter itself is implemented).
 - WCAG audit with assistive-technology testing.

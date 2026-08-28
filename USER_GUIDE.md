@@ -105,7 +105,7 @@ The right-side **Action queue** keeps a persistent overview grouped into Evidenc
 1. Highlight a claim or research question in the editor.
 2. Click **Find sources** in the formatting bar. Search begins immediately.
 3. Review the scholarly matches. Open the original record before relying on it.
-4. Copy the suggested in-text citation or reference if useful, then verify its metadata.
+4. Copy the CSL-rendered in-text citation or reference if useful, then verify its metadata.
 5. Choose **Save** to keep the bibliographic record in your workspace library.
 6. If you have a legal full-text copy, upload its PDF for passage-level evidence checks.
 
@@ -117,6 +117,12 @@ Saved references and indexed full text are intentionally distinct. A saved
 record helps organize and format the bibliography; Cogdoc does not claim to
 have checked the paper's contents until full text has been uploaded and
 indexed.
+
+In **Library → Saved references**, choose **Check registry** to compare a
+record with Crossref or DataCite. A registry match is automated evidence about
+the metadata only. Choose **I checked the original** only after opening the
+source and manually comparing the bibliographic details. Cogdoc records those
+two outcomes separately.
 
 ## Formatting the document
 
@@ -157,7 +163,6 @@ Click **Export** in the top bar to download your draft as:
 |---|---|
 | `Cmd/Ctrl + B` | Bold |
 | `Cmd/Ctrl + I` | Italic |
-| `Cmd/Ctrl + U` | Underline |
 | `Esc` | Clear selection / close popover |
 | `Enter` | New paragraph (may trigger Scaffold) |
 | `Shift + Enter` | Line break (no new paragraph) |

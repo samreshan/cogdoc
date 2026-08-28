@@ -18,34 +18,26 @@ const source: FoundSource = {
     year: '2025',
     venue: 'Journal of Learning Research',
     doi: 'https://doi.org/10.1000/example',
+    formatted: {
+      reference: 'Chen, M., & Williams, N. (2025). Learning through deliberate practice. Journal of Learning Research. https://doi.org/10.1000/example',
+      inText: '(Chen & Williams, 2025)',
+      style: 'apa',
+      processor: 'citation-js/citeproc-js',
+    },
   },
 }
 
 describe('formatCitationSuggestions', () => {
-  it('formats a transparent APA suggestion and in-text citation', () => {
-    const result = formatCitationSuggestions(source, 'apa')
+  it('uses the server-rendered CSL reference and in-text citation', () => {
+    const result = formatCitationSuggestions(source)
     expect(result?.reference).toContain('Chen, M., & Williams, N. (2025).')
     expect(result?.reference).toContain('Journal of Learning Research')
     expect(result?.inText).toBe('(Chen & Williams, 2025)')
-  })
-
-  it('formats a Harvard suggestion', () => {
-    const result = formatCitationSuggestions(source, 'harvard')
-    expect(result?.reference).toContain('‘Learning through deliberate practice’')
-    expect(result?.reference).toContain('Available at: https://doi.org/10.1000/example')
+    expect(result?.processor).toBe('citation-js/citeproc-js')
   })
 
   it('does not invent a citation when metadata is unavailable', () => {
-    expect(formatCitationSuggestions({ ...source, citation: undefined }, 'apa')).toBeNull()
-  })
-
-  it('keeps surname particles together in author-date citations', () => {
-    const result = formatCitationSuggestions({
-      ...source,
-      citation: { ...source.citation!, authors: ['Jeroen J. G. van Merriënboer'] },
-    }, 'apa')
-    expect(result?.reference).toContain('van Merriënboer, J. J. G.')
-    expect(result?.inText).toBe('(van Merriënboer, 2025)')
+    expect(formatCitationSuggestions({ ...source, citation: undefined })).toBeNull()
   })
 })
 

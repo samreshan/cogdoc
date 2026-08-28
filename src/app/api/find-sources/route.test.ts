@@ -66,6 +66,7 @@ describe('POST /api/find-sources — pipeline', () => {
       primary_location: { source: { display_name: 'Journal of Research' } },
       open_access: { is_oa: true, oa_url: 'https://repository.example/paper' },
       best_oa_location: { pdf_url: 'https://repository.example/paper.pdf' },
+      biblio: { volume: '12', issue: '3', first_page: '101', last_page: '119' },
       abstract_inverted_index: { Strong: [0], evidence: [1] },
     }]))
 
@@ -79,8 +80,27 @@ describe('POST /api/find-sources — pipeline', () => {
       snippet: 'Strong evidence',
       isOpenAccess: true,
       openAccessUrl: 'https://repository.example/paper.pdf',
-      citation: { authors: ['Maya Chen'], year: '2025', venue: 'Journal of Research' },
+      citation: {
+        authors: ['Maya Chen'], year: '2025', venue: 'Journal of Research',
+        volume: '12', issue: '3', pages: '101–119',
+        formatted: expect.objectContaining({ style: 'harvard', processor: 'citation-js/citeproc-js' }),
+      },
     })
+  })
+
+  it('uses the workspace citation style for CSL rendering', async () => {
+    const { db } = await import('@/lib/db')
+    ;(db.project.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ id: 'p1', citationStyle: 'apa' })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(openAlexResponse([{
+      id: 'https://openalex.org/W2', display_name: 'Paper B', doi: 'https://doi.org/10.1000/b',
+      publication_date: '2024-01-01', authorships: [{ author: { display_name: 'Maya Chen' } }],
+      primary_location: { source: { display_name: 'Journal B' } },
+    }]))
+
+    const res = await POST(req({ claim: 'a sufficiently long claim about another topic', projectId: 'p1' }))
+    const body = await res.json()
+    expect(body.sources[0].citation.formatted.style).toBe('apa')
+    expect(body.sources[0].citation.formatted.reference).toContain('Chen, M. (2024).')
   })
 
   it('returns empty sources with a message when no results', async () => {

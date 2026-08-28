@@ -75,6 +75,8 @@ export interface ReferenceSummary {
   doi: string | null
   url: string | null
   metadataStatus: string
+  metadataConfidence: number
+  metadataJson: string | null
   createdAt: string
   source: { id: string; filename: string } | null
 }

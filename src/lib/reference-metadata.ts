@@ -88,13 +88,19 @@ function words(value: string | null): Set<string> {
   return new Set((value ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 3))
 }
 
+function familyName(value: string): string {
+  const normalized = value.toLowerCase().trim()
+  if (normalized.includes(',')) return normalized.split(',')[0]!.replace(/[^a-z0-9]/g, '')
+  return normalized.split(/\s+/).at(-1)?.replace(/[^a-z0-9]/g, '') ?? ''
+}
+
 export function metadataConfidence(reference: ParsedReference, metadata: NormalizedReferenceMetadata): number {
   const expected = words(reference.title)
   const actual = words(metadata.title)
   const overlap = [...expected].filter((word) => actual.has(word)).length
   const titleScore = expected.size ? overlap / expected.size : 0.5
   const yearScore = !reference.year || !metadata.year ? 0.5 : reference.year.slice(0, 4) === metadata.year ? 1 : 0
-  const authorExpected = reference.authors[0]?.toLowerCase()
-  const authorScore = !authorExpected ? 0.5 : metadata.authors.some((author) => author.toLowerCase().includes(authorExpected)) ? 1 : 0
+  const authorExpected = reference.authors[0] ? familyName(reference.authors[0]) : ''
+  const authorScore = !authorExpected ? 0.5 : metadata.authors.some((author) => familyName(author) === authorExpected) ? 1 : 0
   return Number((titleScore * 0.6 + yearScore * 0.2 + authorScore * 0.2).toFixed(3))
 }

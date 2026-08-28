@@ -28,7 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { FileText, Upload, Trash2, Loader2, FilePlus, BookOpen, Check, AlertCircle, ExternalLink } from 'lucide-react'
+import { FileText, Upload, Trash2, Loader2, FilePlus, BookOpen, Check, AlertCircle, ExternalLink, RefreshCw, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function ResearchLibrary() {
@@ -44,6 +44,8 @@ export default function ResearchLibrary() {
   const [pasteText, setPasteText] = useState('')
   const [pasteFilename, setPasteFilename] = useState('')
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [checkingReferenceId, setCheckingReferenceId] = useState<string | null>(null)
+  const [confirmingReferenceId, setConfirmingReferenceId] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     if (!project) return
@@ -115,6 +117,36 @@ export default function ResearchLibrary() {
       refresh()
     } catch (e) {
       toast.error('Failed to delete', { description: (e as Error).message })
+    }
+  }
+
+  async function verifyReference(reference: ReferenceSummary) {
+    if (!project) return
+    setCheckingReferenceId(reference.id)
+    try {
+      const result = await api.verifyReference(project.id, reference.id)
+      setReferences((rows) => rows.map((row) => row.id === reference.id ? result.reference : row))
+      if (result.verified) toast.success('Reference metadata matched the registry', { description: `Confidence ${Math.round(result.confidence * 100)}%.` })
+      else if (result.metadata) toast.warning('Reference metadata needs review', { description: 'The title, year, or lead author differs from the registry record.' })
+      else toast.warning('No registry match found', { description: 'Open the original source and confirm the metadata manually.' })
+    } catch (error) {
+      toast.error('Metadata check failed', { description: (error as Error).message })
+    } finally {
+      setCheckingReferenceId(null)
+    }
+  }
+
+  async function confirmReference(reference: ReferenceSummary) {
+    if (!project) return
+    setConfirmingReferenceId(reference.id)
+    try {
+      const result = await api.confirmReferenceMetadata(project.id, reference.id)
+      setReferences((rows) => rows.map((row) => row.id === reference.id ? result.reference : row))
+      toast.success('Manual metadata check recorded')
+    } catch (error) {
+      toast.error('Could not confirm the reference', { description: (error as Error).message })
+    } finally {
+      setConfirmingReferenceId(null)
     }
   }
 
@@ -263,10 +295,14 @@ export default function ResearchLibrary() {
                     <p className="text-sm font-medium leading-5 text-stone-800">{reference.title ?? reference.rawText}</p>
                     <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-stone-500">{reference.rawText}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px]">
-                      <span className={reference.metadataStatus === 'confirmed' || reference.metadataStatus === 'matched' ? 'text-emerald-700' : 'text-amber-700'}>{reference.metadataStatus === 'confirmed' || reference.metadataStatus === 'matched' ? 'Metadata verified' : 'Metadata needs verification'}</span>
+                      <span className={reference.metadataStatus === 'confirmed' || reference.metadataStatus === 'matched' ? 'text-emerald-700' : 'text-amber-700'}>{reference.metadataStatus === 'confirmed' ? 'Author confirmed' : reference.metadataStatus === 'matched' ? `Registry match${reference.metadataConfidence ? ` · ${Math.round(reference.metadataConfidence * 100)}%` : ''}` : reference.metadataStatus === 'mismatch' ? 'Registry mismatch' : 'Metadata needs verification'}</span>
                       {reference.source && <span className="text-[#28614f]">Linked to {reference.source.filename}</span>}
                       {reference.url && <a href={reference.url} target="_blank" rel="noopener noreferrer" className="ml-auto flex items-center gap-1 text-stone-500 hover:text-stone-800"><ExternalLink className="h-3 w-3" />Original</a>}
                     </div>
+                    {reference.metadataStatus !== 'confirmed' && <div className="mt-2 flex flex-wrap gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={() => verifyReference(reference)} disabled={checkingReferenceId === reference.id} className="h-7 border-stone-300 px-2 text-[10px]">{checkingReferenceId === reference.id ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}Check registry</Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => confirmReference(reference)} disabled={confirmingReferenceId === reference.id} className="h-7 px-2 text-[10px] text-stone-600">{confirmingReferenceId === reference.id ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <ShieldCheck className="mr-1 h-3 w-3" />}I checked the original</Button>
+                    </div>}
                   </div>
                 </div>
               </article>)}
