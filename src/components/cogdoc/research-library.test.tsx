@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api-client'
 import { useCogdoc } from '@/lib/store'
 import type { Project, ReferenceSummary } from '@/lib/types'
-import ResearchLibrary from './research-library'
+import ResearchLibrary, { buildReferenceList } from './research-library'
 
 const reference: ReferenceSummary = {
   id: 'ref-1', rawText: 'Chen, M. (2025). Learning through practice.', style: 'apa',
@@ -54,5 +54,35 @@ describe('ResearchLibrary reference verification', () => {
 
     await waitFor(() => expect(confirm).toHaveBeenCalledWith('project-1', 'ref-1'))
     expect(await screen.findByText('Author confirmed')).toBeInTheDocument()
+  })
+
+  it('copies an alphabetized list while keeping insertion author-controlled', async () => {
+    const clipboard = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: clipboard }, configurable: true })
+    vi.spyOn(api, 'listReferences').mockResolvedValue({
+      references: [
+        { ...reference, id: 'ref-z', rawText: 'Williams, N. (2024). Later alphabetically.' },
+        { ...reference, id: 'ref-a', rawText: 'Chen, M. (2025). Earlier alphabetically.' },
+      ],
+    })
+
+    render(<ResearchLibrary />)
+    const button = await screen.findByRole('button', { name: 'Copy reference list' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+
+    await waitFor(() => expect(clipboard).toHaveBeenCalledWith(
+      'Chen, M. (2025). Earlier alphabetically.\n\nWilliams, N. (2024). Later alphabetically.',
+    ))
+  })
+})
+
+describe('buildReferenceList', () => {
+  it('sorts formatted entries case-insensitively and skips empty legacy rows', () => {
+    expect(buildReferenceList([
+      { ...reference, id: '2', rawText: 'zoe, A. (2025). Z.' },
+      { ...reference, id: '3', rawText: '   ' },
+      { ...reference, id: '1', rawText: 'Adams, B. (2024). A.' },
+    ])).toBe('Adams, B. (2024). A.\n\nzoe, A. (2025). Z.')
   })
 })

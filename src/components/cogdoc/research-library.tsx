@@ -28,8 +28,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { FileText, Upload, Trash2, Loader2, FilePlus, BookOpen, Check, AlertCircle, ExternalLink, RefreshCw, ShieldCheck } from 'lucide-react'
+import { FileText, Upload, Trash2, Loader2, FilePlus, BookOpen, Check, AlertCircle, ExternalLink, RefreshCw, ShieldCheck, Copy } from 'lucide-react'
 import { toast } from 'sonner'
+
+export function buildReferenceList(references: ReferenceSummary[]): string {
+  return references
+    .map((reference) => reference.rawText.trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }))
+    .join('\n\n')
+}
 
 export default function ResearchLibrary() {
   const project = useCogdoc((s) => s.activeProject)
@@ -150,12 +158,31 @@ export default function ResearchLibrary() {
     }
   }
 
+  async function copyText(text: string, label: string, description?: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success(`${label} copied`, { description })
+    } catch {
+      toast.error('Could not access the clipboard')
+    }
+  }
+
+  function copyReferenceList() {
+    const list = buildReferenceList(references)
+    if (!list) return
+    void copyText(
+      list,
+      'Reference list',
+      'Includes every saved record. Remove uncited works and verify each entry before submitting.',
+    )
+  }
+
   if (!project) return null
 
   return (
     <div className="h-full flex flex-col">
       <div className="p-4 border-b border-stone-200 bg-white">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div>
             <h3 className="text-sm font-semibold text-stone-900">Research Library</h3>
             <p className="text-[11px] text-stone-500">{references.length} saved reference{references.length === 1 ? '' : 's'} · {pdfs.length} full text{pdfs.length === 1 ? '' : 's'} indexed</p>
@@ -214,6 +241,10 @@ export default function ResearchLibrary() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+            <Button size="sm" variant="ghost" onClick={copyReferenceList} disabled={references.length === 0} className="h-7 text-xs">
+              <Copy className="mr-1 h-3 w-3" />
+              Copy reference list
+            </Button>
           </div>
         </div>
       </div>
@@ -297,7 +328,8 @@ export default function ResearchLibrary() {
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px]">
                       <span className={reference.metadataStatus === 'confirmed' || reference.metadataStatus === 'matched' ? 'text-emerald-700' : 'text-amber-700'}>{reference.metadataStatus === 'confirmed' ? 'Author confirmed' : reference.metadataStatus === 'matched' ? `Registry match${reference.metadataConfidence ? ` · ${Math.round(reference.metadataConfidence * 100)}%` : ''}` : reference.metadataStatus === 'mismatch' ? 'Registry mismatch' : 'Metadata needs verification'}</span>
                       {reference.source && <span className="text-[#28614f]">Linked to {reference.source.filename}</span>}
-                      {reference.url && <a href={reference.url} target="_blank" rel="noopener noreferrer" className="ml-auto flex items-center gap-1 text-stone-500 hover:text-stone-800"><ExternalLink className="h-3 w-3" />Original</a>}
+                      <button type="button" onClick={() => void copyText(reference.rawText, 'Reference', 'Verify this entry against the original source before submitting.')} className="ml-auto flex items-center gap-1 text-stone-500 hover:text-stone-800" aria-label="Copy saved reference"><Copy className="h-3 w-3" />Copy</button>
+                      {reference.url && <a href={reference.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-stone-500 hover:text-stone-800"><ExternalLink className="h-3 w-3" />Original</a>}
                     </div>
                     {reference.metadataStatus !== 'confirmed' && <div className="mt-2 flex flex-wrap gap-2">
                       <Button type="button" size="sm" variant="outline" onClick={() => verifyReference(reference)} disabled={checkingReferenceId === reference.id} className="h-7 border-stone-300 px-2 text-[10px]">{checkingReferenceId === reference.id ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}Check registry</Button>

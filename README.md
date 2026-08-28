@@ -111,6 +111,7 @@ Open http://localhost:3000.
 - **Scholarly discovery** — OpenAlex first, then Crossref and Semantic Scholar, with optional grounded-web fallback
 - **Open-access resolution** — OpenAlex and Unpaywall links are labeled separately from indexed metadata
 - **CSL citation suggestions** — APA 7 or Harvard Cite Them Right references and in-text citations from the same deterministic processor
+- **Reference-list convenience** — copy one saved citation or an alphabetized list, with an explicit reminder to remove uncited works and verify metadata
 - **Citation provenance** — every Citation Sentinel verdict links to the cited chunks with similarity score and page number
 
 ### Export

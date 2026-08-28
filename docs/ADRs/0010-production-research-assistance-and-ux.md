@@ -113,6 +113,12 @@ high-confidence registry match, a mismatch, or no match. **I checked the
 original** is a separate explicit action and creates a distinct audit event, so
 manual confirmation is never confused with an automated registry match.
 
+The library can copy one formatted reference or an alphabetized list of all
+saved references. It explicitly warns that saved records are not necessarily
+cited records, so the author must remove unused works and verify the remaining
+metadata. Cogdoc does not append the list to the draft automatically because it
+cannot infer that every research candidate was used.
+
 ### 5. Formatting is visible but document semantics remain canonical
 
 The Tiptap toolbar supports paragraph and three heading levels, bold, italic,
