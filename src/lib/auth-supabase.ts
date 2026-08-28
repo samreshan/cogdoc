@@ -5,11 +5,9 @@
  * authentication via @supabase/ssr. Routes call getAuthenticatedUserId(req) to
  * resolve the current user from the request cookies; absence throws AuthError(401).
  *
- * Migration strategy: getDefaultUser() in auth.ts is KEPT for the transition so
- * routes can migrate one at a time behind a flag without breaking the gate.
- * The app-level isolation (filtering by userId) works today against the SQLite
- * DB; full Row-Level Security lands when the data store moves to Supabase
- * Postgres (needs the database connection string, not just the publishable key).
+ * getDefaultUser() remains available for local development and deliberately
+ * configured, private single-user installations. Production otherwise fails
+ * closed when Supabase auth is absent.
  */
 import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
@@ -65,16 +63,24 @@ export async function getSession(req: NextRequest) {
   return data.session
 }
 
+/** Validate the access token with Supabase and return its user. */
+export async function getAuthenticatedUser(req: NextRequest) {
+  const supabase = createSupabaseClient(req)
+  const { data, error } = await supabase.auth.getUser()
+  if (error) return null
+  return data.user
+}
+
 /**
  * Resolve the authenticated user's id from the request.
  * Throws AuthError(401) if there is no valid session.
  */
 export async function getAuthenticatedUserId(req: NextRequest): Promise<string> {
-  const session = await getSession(req)
-  if (!session?.user?.id) {
+  const user = await getAuthenticatedUser(req)
+  if (!user?.id) {
     throw new AuthError('Authentication required', 401)
   }
-  return session.user.id
+  return user.id
 }
 
 /**
@@ -82,6 +88,15 @@ export async function getAuthenticatedUserId(req: NextRequest): Promise<string> 
  */
 export function isSupabaseAuthConfigured(): boolean {
   return Boolean(SUPABASE_URL() && SUPABASE_KEY())
+}
+
+/**
+ * Whether the operator deliberately chose a private, single-user deployment.
+ * This is separate from COGDOC_DEV_FALLBACK because it is permitted in
+ * production and therefore must be an explicit operational decision.
+ */
+export function isExplicitSingleUserMode(): boolean {
+  return ['1', 'true'].includes((process.env.COGDOC_SINGLE_USER_MODE ?? '').toLowerCase())
 }
 
 /**
@@ -110,8 +125,10 @@ export async function authed(
  *
  * - When Supabase auth is configured AND COGDOC_DEV_FALLBACK is unset (or
  *   ignored in production): requires a valid session (throws 401).
- * - When Supabase is unconfigured, OR COGDOC_DEV_FALLBACK is set in NON-
- *   PRODUCTION local dev: falls back to the default user.
+ * - In non-production development, an unconfigured Supabase instance or an
+ *   explicit COGDOC_DEV_FALLBACK uses the seeded default user.
+ * - In production without Supabase, only COGDOC_SINGLE_USER_MODE=1 permits
+ *   the seeded user. Every other configuration fails closed with HTTP 503.
  *
  * COGDOC_DEV_FALLBACK is LOCAL-DEV ONLY. It is hard-ignored when NODE_ENV is
  * 'production' so a stray env var can never silently bypass auth in prod.
@@ -120,8 +137,8 @@ export async function authed(
  * would 401/500 before you can reach the app. Set it to "1" or "true" in
  * .env.local to use the default user locally; leave it unset in production.
  *
- * Routes call this instead of getDefaultUser directly. Once the data store
- * moves to Supabase Postgres + RLS, the fallback is removed.
+ * Single-user mode is intended only for a private, non-shared installation. It
+ * must never be used to expose multiple people's workspaces through one user.
  */
 export async function requireUserId(req: NextRequest): Promise<string> {
   // The dev fallback is LOCAL-DEV ONLY. It is hard-ignored in production so a
@@ -132,6 +149,12 @@ export async function requireUserId(req: NextRequest): Promise<string> {
     (process.env.COGDOC_DEV_FALLBACK === 'true' || process.env.COGDOC_DEV_FALLBACK === '1')
   if (isSupabaseAuthConfigured() && !devFallback) {
     return getAuthenticatedUserId(req)
+  }
+  if (isProduction && !isExplicitSingleUserMode()) {
+    throw new AuthError(
+      'Authentication is not configured for this production deployment',
+      503,
+    )
   }
   const user = await getDefaultUser()
   return user.id

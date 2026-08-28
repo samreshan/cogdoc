@@ -51,9 +51,9 @@ describe('GET /api/user (Supabase-configured path)', () => {
   })
 
   it('returns the session user when authenticated', async () => {
-    // Stub the auth-supabase module's getSession for this test
+    // Stub the server-validated Supabase user for this test.
     const authSupa = await import('@/lib/auth-supabase')
-    vi.spyOn(authSupa, 'getSession').mockResolvedValue({ user: { id: 'sb-1', email: 'sb@x.co' } } as any)
+    vi.spyOn(authSupa, 'getAuthenticatedUser').mockResolvedValue({ id: 'sb-1', email: 'sb@x.co', user_metadata: {} } as any)
     userUpsert.mockResolvedValue({ id: 'sb-1', email: 'sb@x.co', displayName: null, dailyTokenBudget: 100000, onboardingCompletedAt: null })
     const res = await getUser(makeReq('sb-token=abc'))
     expect(res.status).toBe(200)
@@ -64,7 +64,7 @@ describe('GET /api/user (Supabase-configured path)', () => {
 
   it('returns 401 when unauthenticated', async () => {
     const authSupa = await import('@/lib/auth-supabase')
-    vi.spyOn(authSupa, 'getSession').mockResolvedValue(null as any)
+    vi.spyOn(authSupa, 'getAuthenticatedUser').mockResolvedValue(null as any)
     const res = await getUser(makeReq())
     expect(res.status).toBe(401)
   })

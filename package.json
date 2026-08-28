@@ -14,6 +14,7 @@
     "db:reset": "prisma migrate reset",
     "seed": "node scripts/seed.js",
     "cleanup:retention": "node scripts/purge-deleted-workspaces.js",
+    "security:verify": "node scripts/verify-security-policies.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

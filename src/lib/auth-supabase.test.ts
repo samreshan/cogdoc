@@ -9,23 +9,26 @@
  * The Supabase server client is mocked — these are pure contract tests for the
  * auth module's branching logic, not live network calls.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { NextRequest } from 'next/server'
 
 // Stub the @supabase/ssr createServerClient so no network is hit.
 const getSessionMock = vi.fn()
+const getUserMock = vi.fn()
 vi.mock('@supabase/ssr', () => ({
   createServerClient: vi.fn(() => ({
-    auth: { getSession: getSessionMock },
+    auth: { getSession: getSessionMock, getUser: getUserMock },
   })),
 }))
 
 import {
   getSession,
+  getAuthenticatedUser,
   getAuthenticatedUserId,
   requireUserId,
   authed,
   isSupabaseAuthConfigured,
+  isExplicitSingleUserMode,
   AuthError,
   createSupabaseClient,
 } from '@/lib/auth-supabase'
@@ -41,9 +44,23 @@ vi.mock('@/lib/auth', () => ({
 import { getDefaultUser } from '@/lib/auth'
 const getDefaultUserMock = getDefaultUser as ReturnType<typeof vi.fn>
 
+const originalEnv = { ...process.env }
+
 beforeEach(() => {
+  process.env = { ...originalEnv }
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL
+  delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  delete process.env.COGDOC_DEV_FALLBACK
+  delete process.env.COGDOC_SINGLE_USER_MODE
+  process.env.NODE_ENV = 'test'
   getSessionMock.mockReset()
+  getUserMock.mockReset()
   getDefaultUserMock.mockReset()
+})
+
+afterEach(() => {
+  process.env = { ...originalEnv }
 })
 
 function makeReq(cookieHeader = ''): NextRequest {
@@ -79,8 +96,8 @@ describe('getSession', () => {
 
 describe('getAuthenticatedUserId', () => {
   it('returns the user id when a session exists', async () => {
-    getSessionMock.mockResolvedValue({
-      data: { session: { user: { id: 'user-1' } } },
+    getUserMock.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
       error: null,
     })
     const id = await getAuthenticatedUserId(makeReq('sb-token=abc'))
@@ -88,7 +105,7 @@ describe('getAuthenticatedUserId', () => {
   })
 
   it('throws AuthError (401) when there is no session', async () => {
-    getSessionMock.mockResolvedValue({ data: { session: null }, error: null })
+    getUserMock.mockResolvedValue({ data: { user: null }, error: null })
     await expect(getAuthenticatedUserId(makeReq())).rejects.toThrow(AuthError)
     try {
       await getAuthenticatedUserId(makeReq())
@@ -98,8 +115,15 @@ describe('getAuthenticatedUserId', () => {
   })
 
   it('throws AuthError when the session lookup errors', async () => {
-    getSessionMock.mockResolvedValue({ data: { session: null }, error: { message: 'bad token' } })
+    getUserMock.mockResolvedValue({ data: { user: null }, error: { message: 'bad token' } })
     await expect(getAuthenticatedUserId(makeReq())).rejects.toThrow(AuthError)
+  })
+})
+
+describe('getAuthenticatedUser', () => {
+  it('returns null instead of trusting an invalid cookie session', async () => {
+    getUserMock.mockResolvedValue({ data: { user: null }, error: { message: 'invalid JWT' } })
+    await expect(getAuthenticatedUser(makeReq('sb-token=forged'))).resolves.toBeNull()
   })
 })
 
@@ -130,12 +154,24 @@ describe('isSupabaseAuthConfigured', () => {
   })
 })
 
+describe('isExplicitSingleUserMode', () => {
+  it.each(['1', 'true', 'TRUE'])('accepts the explicit value %s', (value) => {
+    process.env.COGDOC_SINGLE_USER_MODE = value
+    expect(isExplicitSingleUserMode()).toBe(true)
+  })
+
+  it.each(['', '0', 'false', 'yes'])('rejects the value %s', (value) => {
+    process.env.COGDOC_SINGLE_USER_MODE = value
+    expect(isExplicitSingleUserMode()).toBe(false)
+  })
+})
+
 describe('requireUserId', () => {
   it('uses Supabase auth when configured, returns the session user id', async () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://x.supabase.co'
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'key'
-    getSessionMock.mockResolvedValue({
-      data: { session: { user: { id: 'supabase-user' } } },
+    getUserMock.mockResolvedValue({
+      data: { user: { id: 'supabase-user' } },
       error: null,
     })
     const id = await requireUserId(makeReq('sb-token=abc'))
@@ -146,7 +182,7 @@ describe('requireUserId', () => {
   it('throws AuthError when configured but no session', async () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://x.supabase.co'
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'key'
-    getSessionMock.mockResolvedValue({ data: { session: null }, error: null })
+    getUserMock.mockResolvedValue({ data: { user: null }, error: null })
     await expect(requireUserId(makeReq())).rejects.toThrow(AuthError)
   })
 
@@ -170,7 +206,7 @@ describe('requireUserId', () => {
     getDefaultUserMock.mockResolvedValue({ id: 'default-user' })
     const id = await requireUserId(makeReq())
     expect(id).toBe('default-user')
-    expect(getSessionMock).not.toHaveBeenCalled()
+    expect(getUserMock).not.toHaveBeenCalled()
     delete process.env.COGDOC_DEV_FALLBACK
   })
 
@@ -181,11 +217,29 @@ describe('requireUserId', () => {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'key'
     process.env.COGDOC_DEV_FALLBACK = '1'
     process.env.NODE_ENV = 'production'
-    getSessionMock.mockResolvedValue({ data: { session: null }, error: null })
+    getUserMock.mockResolvedValue({ data: { user: null }, error: null })
     await expect(requireUserId(makeReq())).rejects.toThrow(AuthError)
     expect(getDefaultUserMock).not.toHaveBeenCalled()
-    delete process.env.COGDOC_DEV_FALLBACK
-    delete process.env.NODE_ENV
+  })
+
+  it('fails closed in production when neither Supabase nor single-user mode is configured', async () => {
+    process.env.NODE_ENV = 'production'
+    process.env.COGDOC_DEV_FALLBACK = '1'
+
+    await expect(requireUserId(makeReq())).rejects.toMatchObject({
+      statusCode: 503,
+      message: 'Authentication is not configured for this production deployment',
+    })
+    expect(getDefaultUserMock).not.toHaveBeenCalled()
+  })
+
+  it('allows a deliberately configured private single-user production deployment', async () => {
+    process.env.NODE_ENV = 'production'
+    process.env.COGDOC_SINGLE_USER_MODE = '1'
+    getDefaultUserMock.mockResolvedValue({ id: 'private-user' })
+
+    await expect(requireUserId(makeReq())).resolves.toBe('private-user')
+    expect(getDefaultUserMock).toHaveBeenCalledOnce()
   })
 })
 
@@ -193,8 +247,8 @@ describe('authed (route handler wrapper)', () => {
   it('passes the resolved userId to the handler and returns its response', async () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://x.supabase.co'
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'key'
-    getSessionMock.mockResolvedValue({
-      data: { session: { user: { id: 'sb-user' } } },
+    getUserMock.mockResolvedValue({
+      data: { user: { id: 'sb-user' } },
       error: null,
     })
     const res = await authed(makeReq('sb-token=abc'), async (userId) => {
@@ -207,10 +261,21 @@ describe('authed (route handler wrapper)', () => {
   it('returns 401 JSON when auth fails', async () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://x.supabase.co'
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'key'
-    getSessionMock.mockResolvedValue({ data: { session: null }, error: null })
+    getUserMock.mockResolvedValue({ data: { user: null }, error: null })
     const handler = vi.fn()
     const res = await authed(makeReq(), handler)
     expect(res.status).toBe(401)
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('returns 503 JSON when production auth is not configured', async () => {
+    process.env.NODE_ENV = 'production'
+    const handler = vi.fn()
+    const res = await authed(makeReq(), handler)
+    expect(res.status).toBe(503)
+    expect(await res.json()).toEqual({
+      error: 'Authentication is not configured for this production deployment',
+    })
     expect(handler).not.toHaveBeenCalled()
   })
 })

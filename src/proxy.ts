@@ -6,6 +6,32 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
 const mutationWindows = new Map<string, { count: number; resetAt: number }>()
 
+function explicitSingleUserMode(): boolean {
+  return ['1', 'true'].includes((process.env.COGDOC_SINGLE_USER_MODE ?? '').toLowerCase())
+}
+
+function isPublicPath(pathname: string): boolean {
+  return pathname === '/'
+    || pathname === '/api/auth/config'
+    || pathname.startsWith('/verify/')
+    || pathname.startsWith('/api/verify/')
+}
+
+function productionAuthConfigurationError(req: NextRequest): NextResponse | null {
+  if (process.env.NODE_ENV !== 'production' || SUPABASE_URL && SUPABASE_KEY || explicitSingleUserMode()) return null
+  if (isPublicPath(req.nextUrl.pathname)) return null
+  if (req.nextUrl.pathname.startsWith('/api/')) {
+    return NextResponse.json({
+      error: 'Authentication is not configured for this production deployment',
+      code: 'auth_not_configured',
+    }, { status: 503 })
+  }
+  const url = req.nextUrl.clone()
+  url.pathname = '/'
+  url.searchParams.set('configuration', 'auth')
+  return NextResponse.redirect(url)
+}
+
 function mutationLimit(req: NextRequest): NextResponse | null {
   if (!req.nextUrl.pathname.startsWith('/api/') || !['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return null
   const address = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? req.headers.get('x-real-ip') ?? 'local'
@@ -28,6 +54,8 @@ function mutationLimit(req: NextRequest): NextResponse | null {
 }
 
 export async function proxy(req: NextRequest) {
+  const configurationError = productionAuthConfigurationError(req)
+  if (configurationError) return configurationError
   const limited = mutationLimit(req)
   if (limited) return limited
   if (!SUPABASE_URL || !SUPABASE_KEY) return NextResponse.next()
@@ -41,14 +69,15 @@ export async function proxy(req: NextRequest) {
       },
     },
   })
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
   const devFallback = process.env.NODE_ENV !== 'production' && ['true', '1'].includes(process.env.COGDOC_DEV_FALLBACK ?? '')
-  if (!session && !devFallback && !req.nextUrl.pathname.startsWith('/api/')) {
-    if (req.nextUrl.pathname !== '/' && !req.nextUrl.pathname.startsWith('/verify/')) {
-      const url = req.nextUrl.clone()
-      url.pathname = '/'
-      return NextResponse.redirect(url)
+  if (!user && !devFallback && !isPublicPath(req.nextUrl.pathname)) {
+    if (req.nextUrl.pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Authentication required', code: 'unauthenticated' }, { status: 401 })
     }
+    const url = req.nextUrl.clone()
+    url.pathname = '/'
+    return NextResponse.redirect(url)
   }
   return res
 }

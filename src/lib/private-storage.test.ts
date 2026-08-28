@@ -25,11 +25,19 @@ describe('private filesystem storage', () => {
 
     expect(stored.provider).toBe('filesystem')
     expect(stored.key).toMatch(/^project-1\/[a-f0-9-]+-Research-notes--final-\.pdf$/)
-    await expect(readPrivateAsset(stored.provider, stored.key)).resolves.toEqual(content)
+    await expect(readPrivateAsset(stored.provider, stored.key, 'project-1')).resolves.toEqual(content)
   })
 
   it('rejects traversal and malformed storage keys before reading', async () => {
-    await expect(readPrivateAsset('filesystem', 'project-1/../../.env')).rejects.toThrow('Invalid storage key')
-    await expect(readPrivateAsset('filesystem', '/absolute/path')).rejects.toThrow('Invalid storage key')
+    await expect(readPrivateAsset('filesystem', 'project-1/../../.env', 'project-1')).rejects.toThrow('Invalid storage key')
+    await expect(readPrivateAsset('filesystem', '/absolute/path', 'project-1')).rejects.toThrow('Invalid storage key')
+  })
+
+  it('rejects a valid key from a different workspace before reading', async () => {
+    await expect(readPrivateAsset(
+      'filesystem',
+      'project-2/certificate.pdf',
+      'project-1',
+    )).rejects.toThrow('Storage key does not belong to the requested workspace')
   })
 })

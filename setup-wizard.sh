@@ -71,7 +71,7 @@ while true; do
     1)
       AI_PROVIDER="gemini"
       AI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai"
-      DEFAULT_MODEL="gemini-2.0-flash"
+      DEFAULT_MODEL="gemini-3.5-flash-lite"
       say "${GREEN}✓${RESET} Google Gemini selected."
       ask_s "${BOLD}Enter your Gemini API key (AIza...): ${RESET}" AI_API_KEY
       if [ -z "$AI_API_KEY" ]; then
@@ -161,22 +161,24 @@ done
 hdr "3/4  Supabase Auth (optional)"
 
 say "If you want to use Supabase for authentication (JWT verification), provide your project keys."
-say "${DIM}Leave blank to skip — Cogdoc will use its default single-user mode.${RESET}"
+say "${DIM}Leave blank only for a private one-person installation; the wizard records that explicit choice.${RESET}"
 say ""
 
-SUPABASE_URL=""
-SUPABASE_ANON_KEY=""
+NEXT_PUBLIC_SUPABASE_URL=""
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=""
 SUPABASE_SERVICE_ROLE_KEY=""
 SUPABASE_JWT_SECRET=""
+COGDOC_SINGLE_USER_MODE="false"
 
-ask "${BOLD}Supabase Project URL (https://xxx.supabase.co) [blank to skip]: ${RESET}" SUPABASE_URL
-if [ -n "$SUPABASE_URL" ]; then
-  ask_s "${BOLD}Supabase anon (public) key: ${RESET}" SUPABASE_ANON_KEY
+ask "${BOLD}Supabase Project URL (https://xxx.supabase.co) [blank for private single-user mode]: ${RESET}" NEXT_PUBLIC_SUPABASE_URL
+if [ -n "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+  ask_s "${BOLD}Supabase publishable (or legacy anon) key: ${RESET}" NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
   ask_s "${BOLD}Supabase service_role key: ${RESET}" SUPABASE_SERVICE_ROLE_KEY
   ask_s "${BOLD}Supabase JWT secret: ${RESET}" SUPABASE_JWT_SECRET
   say "${GREEN}✓${RESET} Supabase auth configured."
 else
-  say "${DIM}Skipping Supabase auth — Cogdoc runs in single-user mode.${RESET}"
+  COGDOC_SINGLE_USER_MODE="true"
+  say "${YELLOW}!${RESET} Explicit private single-user mode selected. Do not expose this deployment to multiple users."
 fi
 
 # ── 4. App settings ──────────────────────────────────────────────────────────
@@ -222,14 +224,15 @@ hdr "Writing configuration"
   fi
   echo ""
   echo "# ── Supabase Auth (optional) ──"
-  if [ -n "$SUPABASE_URL" ]; then
-    echo "SUPABASE_URL=\"${SUPABASE_URL}\""
-    echo "SUPABASE_ANON_KEY=\"${SUPABASE_ANON_KEY}\""
+  if [ -n "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+    echo "NEXT_PUBLIC_SUPABASE_URL=\"${NEXT_PUBLIC_SUPABASE_URL}\""
+    echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=\"${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}\""
     echo "SUPABASE_SERVICE_ROLE_KEY=\"${SUPABASE_SERVICE_ROLE_KEY}\""
     echo "SUPABASE_JWT_SECRET=\"${SUPABASE_JWT_SECRET}\""
   else
-    echo "# (Supabase auth not configured — single-user mode)"
+    echo "# Explicit private single-user mode; never use for a public/shared deployment."
   fi
+  echo "COGDOC_SINGLE_USER_MODE=\"${COGDOC_SINGLE_USER_MODE}\""
   echo ""
   echo "# ── App Settings ──"
   echo "DAILY_TOKEN_BUDGET=\"${DAILY_TOKEN_BUDGET}\""
@@ -262,9 +265,9 @@ fi
 hdr "Setup complete"
 say ""
 say "  ${BOLD}Provider:${RESET}  ${AI_PROVIDER:-skip}  ${DIM}(${AI_MODEL:-no model})${RESET}"
-say "  ${BOLD}Database:${RESET}  ${DB_PROVIDER}  ${DIM}(${DATABASE_URL})${RESET}"
-if [ -n "$SUPABASE_URL" ]; then
-  say "  ${BOLD}Auth:${RESET}      Supabase (${SUPABASE_URL})"
+say "  ${BOLD}Database:${RESET}  ${DB_PROVIDER}  ${DIM}(connection saved; credential hidden)${RESET}"
+if [ -n "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+  say "  ${BOLD}Auth:${RESET}      Supabase (${NEXT_PUBLIC_SUPABASE_URL})"
 else
   say "  ${BOLD}Auth:${RESET}      single-user (no auth)"
 fi

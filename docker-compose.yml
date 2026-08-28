@@ -29,12 +29,13 @@ services:
       # GROQ_API_KEY: "gsk_..."
       # AI_PROVIDER: "gemini"
       # AI_BASE_URL: "https://generativelanguage.googleapis.com/v1beta/openai"
-      # AI_MODEL: "gemini-2.0-flash"
+      # AI_MODEL: "gemini-3.5-flash-lite"
       # DATABASE_URL: "file:/data/cogdoc.db"
-      # SUPABASE_URL: ""
-      # SUPABASE_ANON_KEY: ""
+      # NEXT_PUBLIC_SUPABASE_URL: ""
+      # NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ""
       # SUPABASE_SERVICE_ROLE_KEY: ""
       # SUPABASE_JWT_SECRET: ""
+      # COGDOC_SINGLE_USER_MODE: "1" # private one-user deployment only
       # DAILY_TOKEN_BUDGET: "100000"
       # IDLE_THRESHOLD: "2"
       - COGDOC_SKIP_WIZARD=${COGDOC_SKIP_WIZARD:-}

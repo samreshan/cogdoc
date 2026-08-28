@@ -16,6 +16,14 @@ const SUPABASE_KEY = () =>
 type BrowserClient = ReturnType<typeof createBrowserClient>
 
 let client: BrowserClient | null = null
+let runtimeConfiguration: { url: string; key: string } | null = null
+
+/** Configure browser auth from the server's secret-free runtime endpoint. */
+export function configureSupabaseBrowser(url: string, key: string): void {
+  if (!url || !key) throw new Error('Supabase browser configuration is incomplete')
+  if (runtimeConfiguration?.url !== url || runtimeConfiguration.key !== key) client = null
+  runtimeConfiguration = { url, key }
+}
 
 /**
  * Constructed on first use, not at import time: createBrowserClient throws when
@@ -24,7 +32,10 @@ let client: BrowserClient | null = null
  * Callers gate on NEXT_PUBLIC_SUPABASE_URL before touching the client.
  */
 function getClient(): BrowserClient {
-  if (!client) client = createBrowserClient(SUPABASE_URL(), SUPABASE_KEY())
+  const url = runtimeConfiguration?.url ?? SUPABASE_URL()
+  const key = runtimeConfiguration?.key ?? SUPABASE_KEY()
+  if (!url || !key) throw new Error('Supabase browser authentication is not configured')
+  if (!client) client = createBrowserClient(url, key)
   return client
 }
 

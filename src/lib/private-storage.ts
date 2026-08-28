@@ -35,9 +35,12 @@ export async function putPrivateAsset(projectId: string, filename: string, data:
   return { provider: 'filesystem', key }
 }
 
-export async function readPrivateAsset(provider: string, key: string): Promise<Buffer> {
+export async function readPrivateAsset(provider: string, key: string, expectedProjectId: string): Promise<Buffer> {
   if (!/^[a-zA-Z0-9_-]+\/[a-zA-Z0-9._/-]+$/.test(key) || key.includes('..')) {
     throw new Error('Invalid storage key')
+  }
+  if (!/^[a-zA-Z0-9_-]+$/.test(expectedProjectId) || !key.startsWith(`${expectedProjectId}/`)) {
+    throw new Error('Storage key does not belong to the requested workspace')
   }
   if (provider === 'supabase') {
     const remote = supabaseStorage()

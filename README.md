@@ -183,10 +183,18 @@ All env vars (set via Docker wizard or directly):
 | `UNPAYWALL_EMAIL` | — | Contact email required for legal open-access DOI resolution |
 | `IDLE_THRESHOLD` | `2` | Seconds of idle before Socratic fires |
 | `DAILY_TOKEN_BUDGET` | `100000` | Per-user daily LLM token budget |
-| `SUPABASE_URL` | — | Optional Supabase auth |
-| `SUPABASE_JWT_SECRET` | — | Optional JWT verification |
+| `NEXT_PUBLIC_SUPABASE_URL` | — | Supabase project URL for shared deployments |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | — | Browser-safe Supabase publishable key |
+| `SUPABASE_SERVICE_ROLE_KEY` | — | Server-only private-storage credential; never expose to browsers |
+| `SUPABASE_JWT_SECRET` | — | Optional server-side JWT verification |
+| `COGDOC_SINGLE_USER_MODE` | — | Explicit private one-user production mode; never use for a shared deployment |
 
 See `.env.example` for the full template.
+
+Shared production deployments must configure Supabase auth and apply the RLS
+and private-storage migrations. See [Production authentication, RLS, and
+private storage](docs/deployment/security.md) for deployment order,
+verification, service-role boundaries, and rollback guidance.
 
 For local Postgres, `docker-compose.dev.yml` enables pgvector automatically on
 new database volumes. If the volume predates that initializer, run this once
