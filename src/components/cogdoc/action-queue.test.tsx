@@ -60,6 +60,26 @@ describe('groupActiveInterventions', () => {
 })
 
 describe('ActionQueue navigation', () => {
+  it('exposes a labelled source query and named review control', async () => {
+    useCogdoc.setState({
+      activeProject: {
+        id: 'project-1', title: 'Research', description: null, archived: false,
+        createdAt: '2026-08-28T00:00:00.000Z', updatedAt: '2026-08-28T00:00:00.000Z',
+        document: null, pdfs: [], interventions: [], _count: { pdfs: 0, interventions: 0 },
+      },
+      activeInterventions: [],
+      editorFocusQuote: null,
+    })
+    const list = vi.spyOn(api, 'listReviewItems').mockResolvedValue({ reviewItems: [], reviewRunId: null, stale: false })
+
+    render(<ActionQueue />)
+    await waitFor(() => expect(list).toHaveBeenCalledWith('project-1'))
+
+    expect(screen.getByRole('textbox', { name: 'Claim or research question' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Run document review' })).toBeInTheDocument()
+    list.mockRestore()
+  })
+
   it('groups a signal and sends its exact passage to the editor when clicked', async () => {
     const signal = intervention('item-1', 'citation', { promptText: 'This exact claim needs supporting evidence.' })
     useCogdoc.setState({

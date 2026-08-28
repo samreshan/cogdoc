@@ -244,6 +244,7 @@ check and reports whether the configured model is reachable.
 
 - **[Assignment/research workspace implementation](./docs/implementation/assignment-research-workspace.md)** — shipped flow, certificate invariants, deployment, and operational boundaries
 - **[Production research assistance and UX ADR](./docs/ADRs/0010-production-research-assistance-and-ux.md)** — intervention navigation, scholarly search, citation suggestions, onboarding, model strategy, deviations, and SDG 4 boundary
+- **[Production-readiness objective audit](./docs/implementation/production-readiness-audit.md)** — requirement-by-requirement implementation evidence and the rendered, deployment, and evaluation gates that remain
 - **[Release readiness and acceptance](./docs/deployment/release-readiness.md)** — automated evidence, environment setup, provider failover, manual accessibility, operational gates, and honest release posture
 - **[USER_GUIDE.md](./USER_GUIDE.md)** — for writers and examiners (non-technical)
 - **[DEVELOPER.md](./DEVELOPER.md)** — for developers (setup, schema, how to add an engine, how to swap the LLM)

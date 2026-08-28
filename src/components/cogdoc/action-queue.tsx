@@ -25,6 +25,7 @@ import { api } from '@/lib/api-client'
 import type { Intervention, ReviewItem } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import SourcesResults from './sources-results'
 
@@ -263,8 +264,9 @@ export default function ActionQueue() {
           {uploading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <FileUp className="mr-1.5 h-3.5 w-3.5" />}Upload PDF source
         </Button>
         <input ref={uploadInputRef} type="file" accept="application/pdf" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void uploadSource(file) }} />
-        <div className="mt-2 flex gap-2">
-          <Input value={sourceQuery} onChange={(event) => setSourceQuery(event.target.value)} placeholder="Claim or research question" className="h-8 text-xs" />
+        <Label htmlFor="action-queue-source-query" className="mt-3 text-[11px] text-stone-700">Claim or research question</Label>
+        <div className="mt-1.5 flex gap-2">
+          <Input id="action-queue-source-query" value={sourceQuery} onChange={(event) => setSourceQuery(event.target.value)} placeholder="Paste or write a claim" className="h-8 text-xs" />
           <Button size="sm" onClick={() => setSourcesOpen(true)} disabled={sourceQuery.trim().length < 10} className="h-8 bg-[#173f35] px-2 hover:bg-[#245548]" aria-label="Find sources"><Search className="h-3.5 w-3.5" /></Button>
         </div>
       </section>
@@ -304,7 +306,7 @@ export default function ActionQueue() {
           })}
         </section>}
 
-        {loading ? <div className="space-y-2 p-4">{[0, 1, 2].map((key) => <div key={key} className="h-16 animate-pulse rounded bg-stone-200" />)}</div> : openItems.length === 0 ? <div className="p-6 text-center"><ScanSearch className="mx-auto h-7 w-7 text-[#386c5c]" /><p className="mt-4 text-sm font-medium">Ready when the draft is</p><p className="mt-2 text-xs leading-5 text-stone-500">Run one scan to create calm, prioritized review actions.</p><Button size="sm" onClick={() => startReview()} disabled={scanning} className="mt-5 bg-[#173f35] hover:bg-[#245548]">Review document</Button></div> : <section>
+        {loading ? <div role="status" className="space-y-2 p-4"><span className="sr-only">Loading review actions…</span>{[0, 1, 2].map((key) => <div key={key} className="h-16 animate-pulse rounded bg-stone-200 motion-reduce:animate-none" />)}</div> : openItems.length === 0 ? <div className="p-6 text-center"><ScanSearch className="mx-auto h-7 w-7 text-[#386c5c]" /><p className="mt-4 text-sm font-medium">Ready when the draft is</p><p className="mt-2 text-xs leading-5 text-stone-500">Run one scan to create calm, prioritized review actions.</p><Button size="sm" onClick={() => startReview()} disabled={scanning} className="mt-5 bg-[#173f35] hover:bg-[#245548]">Review document</Button></div> : <section>
           <div className="px-4 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-amber-700">Review actions · {openItems.length}</div>
           {openItems.map((item) => {
             const quote = quoteForReviewItem(item)
@@ -329,7 +331,7 @@ export default function ActionQueue() {
         {!needsEvidenceLink && !needsDocumentRecheck && <Textarea value={response} onChange={(event) => setResponse(event.target.value)} rows={3} className="mt-3 resize-none text-xs" placeholder="Optional note about what you changed or confirmed…" />}
         <div className="mt-3 flex gap-2">
           {needsDocumentRecheck ? <Button size="sm" onClick={() => startReview('changed_blocks')} disabled={acting || scanning} className="flex-1 bg-[#173f35] hover:bg-[#245548]"><RefreshCw className="mr-1 h-3 w-3" />Recheck after editing</Button> : !needsEvidenceLink && <Button size="sm" onClick={() => resolveItem('resolve')} disabled={acting} className="flex-1 bg-[#173f35] hover:bg-[#245548]">{acting ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}Record action</Button>}
-          <Button size="sm" variant="ghost" onClick={() => resolveItem('dismiss')} disabled={acting} title={selected.blocksCertification ? 'Keeps this item unresolved' : 'Dismiss advisory'}><AlertTriangle className="h-3.5 w-3.5" /></Button>
+          <Button size="sm" variant="ghost" onClick={() => resolveItem('dismiss')} disabled={acting} title={selected.blocksCertification ? 'Keeps this item unresolved' : 'Dismiss advisory'} aria-label={selected.blocksCertification ? 'Dismiss response without resolving blocker' : 'Dismiss advisory'}><AlertTriangle className="h-3.5 w-3.5" /></Button>
         </div>
       </footer>}
 

@@ -164,6 +164,14 @@ implementation. Existing `AI_MODEL=gemini-2.0-flash` configurations are mapped
 to the current default because the old model is retired. Explicit
 `GEMINI_MODEL` configuration always wins.
 
+Google's official model catalog and Flash-Lite model page were rechecked on
+2026-08-28. Google describes the stable model as optimized for high-throughput,
+low-cost execution and lists Search grounding as supported. Its rate-limit
+documentation now directs developers to their project-specific limits in AI
+Studio and says capacity varies by model, tier, and account status. Cogdoc
+therefore uses a stable model ID but does not advertise a fixed free allowance
+or infer remaining quota from a successful model-list request.
+
 The same `AIService` can use `AI_PROVIDER=ollama` against Ollama's local
 OpenAI-compatible endpoint, or a configured Groq/custom compatible endpoint.
 Ollama does not require an API key and defaults to `qwen3:8b` when the existing
@@ -230,6 +238,11 @@ unsupported performance claims.
 | `CROSSREF_MAILTO` | Recommended | Contact identity for DOI metadata requests |
 | `SEMANTIC_SCHOLAR_API_KEY` | Optional | Dedicated Semantic Scholar request allowance; anonymous access remains available |
 | `UNPAYWALL_EMAIL` | Recommended | Contact identity required for legal open-access DOI resolution |
+
+Official model and quota references:
+[model catalog](https://ai.google.dev/gemini-api/docs/models),
+[Gemini 3.5 Flash-Lite](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite),
+and [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits).
 
 ## SDG 4 contribution boundary
 
