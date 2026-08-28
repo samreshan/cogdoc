@@ -26,7 +26,7 @@ vi.mock('@/lib/retrieval', () => ({
 // Mock the gateway so the vector path is testable without a live FastAPI.
 vi.mock('@/lib/ai-gateway', () => ({
   retrieveVectorChunks: vi.fn(),
-  useVectorRetrieval: vi.fn(() => false), // keyword path by default in tests
+  isVectorRetrievalEnabled: vi.fn(() => false), // keyword path by default in tests
 }))
 
 import { POST } from '@/app/api/citation-sentinel/route'
@@ -34,7 +34,7 @@ import { db } from '@/lib/db'
 import { getDefaultUser } from '@/lib/auth'
 import { getAIService } from '@/lib/ai-service'
 import { retrieveTopK } from '@/lib/retrieval'
-import { retrieveVectorChunks, useVectorRetrieval } from '@/lib/ai-gateway'
+import { isVectorRetrievalEnabled, retrieveVectorChunks } from '@/lib/ai-gateway'
 import { makeReq, fakeAI, DEFAULT_USER, DEFAULT_PROJECT } from '@/app/api/_test-helpers'
 import type { RetrievedChunk } from '@/lib/retrieval'
 import { SPARK_GAP_FALLBACK } from '@/lib/engine-guard'
@@ -45,7 +45,7 @@ const getUser = getDefaultUser as ReturnType<typeof vi.fn>
 const getService = getAIService as ReturnType<typeof vi.fn>
 const retrieve = retrieveTopK as ReturnType<typeof vi.fn>
 const retrieveVector = retrieveVectorChunks as ReturnType<typeof vi.fn>
-const flagOn = useVectorRetrieval as ReturnType<typeof vi.fn>
+const flagOn = isVectorRetrievalEnabled as ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   findProject.mockReset(); createIntervention.mockReset(); getUser.mockReset(); getService.mockReset(); retrieve.mockReset(); retrieveVector.mockReset(); flagOn.mockReset()

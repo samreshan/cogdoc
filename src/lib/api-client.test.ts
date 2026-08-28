@@ -141,5 +141,6 @@ describe('find-sources + add-source', () => {
     fetchMock.mockResolvedValue(mockJsonResponse({ ok: true }))
     await api.addSource('p1', 'https://x.com', 'Title')
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ url: 'https://x.com', title: 'Title' })
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/projects/p1/add-source')
   })
 })

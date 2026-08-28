@@ -13,7 +13,7 @@ import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 import { getAIService } from '@/lib/ai-service'
 import { retrieveTopK } from '@/lib/retrieval'
-import { retrieveVectorChunks, useVectorRetrieval } from '@/lib/ai-gateway'
+import { isVectorRetrievalEnabled, retrieveVectorChunks } from '@/lib/ai-gateway'
 import { applyGenerationGuard } from '@/lib/engine-guard'
 import type { FrictionMode } from '@/lib/friction'
 
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   // Step 1: Retrieve top-k chunks (RAG)
   // Vector retrieval (FastAPI + pgvector) when the flag is set; otherwise the
   // keyword-overlap baseline. Both return the same RetrievedChunk[] shape.
-  const retrieved = useVectorRetrieval()
+  const retrieved = isVectorRetrievalEnabled()
     ? await retrieveVectorChunks(projectId, claim, 5)
     : await retrieveTopK(projectId, claim, 5, 0.05)
 

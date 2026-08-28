@@ -78,12 +78,19 @@ describe('view navigation', () => {
 })
 
 describe('active project', () => {
-  it('sets the active project and clears interventions', () => {
+  it('sets the active project and replaces stale interventions', () => {
     useCogdoc.getState().pushIntervention(makeIntervention())
     const project = makeProject({ id: 'p2' })
     useCogdoc.getState().setActiveProject(project)
     expect(useCogdoc.getState().activeProject?.id).toBe('p2')
     expect(useCogdoc.getState().activeInterventions).toHaveLength(0)
+  })
+
+  it('rehydrates active server interventions when reopening a project', () => {
+    const active = makeIntervention({ id: 'active-1' })
+    const resolved = makeIntervention({ id: 'resolved-1', status: 'resolved' })
+    useCogdoc.getState().setActiveProject(makeProject({ interventions: [active, resolved] }))
+    expect(useCogdoc.getState().activeInterventions.map((item) => item.id)).toEqual(['active-1'])
   })
 
   it('updates document content without replacing the project', () => {

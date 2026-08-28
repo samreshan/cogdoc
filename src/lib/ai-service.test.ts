@@ -15,12 +15,15 @@ import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest'
 // ── Mocks ──────────────────────────────────────────────────────────────────
 // Gemini fetch stub — mockLLM resolves to the raw text the "model" returns.
 const mockLLM = vi.fn<() => Promise<string>>()
-const fetchMock = vi.fn(async () => ({
-  ok: true,
-  json: async () => ({
-    candidates: [{ content: { parts: [{ text: await mockLLM() }] } }],
-  }),
-}))
+const fetchMock = vi.fn(async (input: string | URL | Request) => {
+  const text = await mockLLM()
+  return {
+    ok: true,
+    json: async () => String(input).includes('generateContent')
+      ? { candidates: [{ content: { parts: [{ text }] } }] }
+      : { choices: [{ message: { content: text } }] },
+  }
+})
 vi.stubGlobal('fetch', fetchMock)
 
 vi.mock('@/lib/db', () => ({
@@ -33,6 +36,9 @@ import {
   fillTemplate,
   isHeuristicDelegative,
   parseVerdictJSON,
+  geminiModel,
+  configuredAIProvider,
+  compatibleModel,
   GeminiAdapter,
   getAIService,
 } from '@/lib/ai-service'
@@ -45,6 +51,40 @@ beforeEach(() => {
   fetchMock.mockClear()
   templateMock.mockReset()
   process.env.GEMINI_API_KEY = 'test-key'
+  delete process.env.GEMINI_MODEL
+  delete process.env.AI_MODEL
+  delete process.env.AI_PROVIDER
+  delete process.env.AI_BASE_URL
+})
+
+describe('geminiModel', () => {
+  it('uses the current Flash-Lite baseline', () => {
+    expect(geminiModel()).toBe('gemini-3.5-flash-lite')
+  })
+
+  it('upgrades the retired generic 2.0 default', () => {
+    process.env.AI_MODEL = 'gemini-2.0-flash'
+    expect(geminiModel()).toBe('gemini-3.5-flash-lite')
+  })
+
+  it('respects an explicit provider-specific model', () => {
+    process.env.GEMINI_MODEL = 'gemini-custom'
+    expect(geminiModel()).toBe('gemini-custom')
+  })
+})
+
+describe('provider configuration', () => {
+  it('uses Gemini by default and accepts a local Ollama provider', () => {
+    expect(configuredAIProvider()).toBe('gemini')
+    process.env.AI_PROVIDER = 'ollama'
+    expect(configuredAIProvider()).toBe('ollama')
+    expect(compatibleModel('ollama')).toBe('qwen3:8b')
+  })
+
+  it('uses an explicit local model instead of the default', () => {
+    process.env.AI_MODEL = 'gemma3:12b'
+    expect(compatibleModel('ollama')).toBe('gemma3:12b')
+  })
 })
 
 afterAll(() => {
@@ -190,6 +230,24 @@ describe('GeminiAdapter.generateSocratic', () => {
     await expect(ai.generateSocratic('Provocation', 'ctx')).rejects.toThrow(
       /No active prompt template/,
     )
+  })
+
+  it('uses the local OpenAI-compatible endpoint without an API key', async () => {
+    process.env.AI_PROVIDER = 'ollama'
+    process.env.AI_BASE_URL = 'http://localhost:11434/v1'
+    process.env.AI_MODEL = 'qwen3:8b'
+    delete process.env.AI_API_KEY
+    delete process.env.GEMINI_API_KEY
+    mockLLM.mockResolvedValue('QUESTION: What evidence would change your conclusion?')
+    templateMock.mockResolvedValue({ template: 'ask about {context}' })
+
+    const result = await new GeminiAdapter().generateSocratic('Provocation', 'the argument')
+
+    expect(result.question).toBe('What evidence would change your conclusion?')
+    expect(fetchMock).toHaveBeenLastCalledWith('http://localhost:11434/v1/chat/completions', expect.objectContaining({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    }))
   })
 })
 

@@ -11,6 +11,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     where: { id, userId, archived: false, deletedAt: null },
     include: {
       document: true,
+      interventions: {
+        where: { status: 'active' },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        include: {
+          evidences: { include: { chunk: { include: { pdf: { select: { filename: true } } } } } },
+        },
+      },
       pdfs: { orderBy: { uploadedAt: 'desc' }, include: { _count: { select: { chunks: true } } } },
       requirements: { orderBy: { createdAt: 'asc' } },
       reviewRuns: { orderBy: { createdAt: 'desc' }, take: 5 },
@@ -20,7 +28,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       assets: { orderBy: { createdAt: 'desc' }, take: 20 },
       reports: { orderBy: { createdAt: 'desc' }, take: 5 },
       certificates: { orderBy: { createdAt: 'desc' }, take: 5, include: { shares: true } },
-      _count: { select: { pdfs: true, reviewItems: true, codeSnapshots: true } },
+      _count: { select: { pdfs: true, interventions: true, reviewItems: true, codeSnapshots: true } },
     },
   })
   if (!workspace) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })

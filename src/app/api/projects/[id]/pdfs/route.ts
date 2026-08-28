@@ -117,7 +117,7 @@ export async function POST(
   // the source of truth; this push is best-effort and MUST NOT fail the upload
   // — if FastAPI is down the keyword retrieval path keeps the app usable.
   //
-  // We always push (not only when useVectorRetrieval() is true) so the store is
+  // We always push (not only when isVectorRetrievalEnabled() is true) so the store is
   // warm the moment the flag flips — consistent with how retrieveVectorChunks
   // is gated (the retrieve side only reads the flag, never the ingest side).
   let vectorIngest: 'ok' | 'skipped' | 'failed' = 'ok'

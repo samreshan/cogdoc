@@ -2,10 +2,10 @@
  * POST /api/find-sources
  * Body: { claim, projectId }
  *
- * Searches the internet for evidence related to the claim using the Gemini
- * generateContent API with the google_search grounding tool. When the Gemini
- * provider is temporarily unavailable or quota-limited, falls back to the
- * public OpenAlex scholarly index so source discovery remains available.
+ * Searches the OpenAlex scholarly index first. Gemini search grounding is a
+ * secondary broad-web fallback when the scholarly query returns no records or
+ * OpenAlex is unavailable, keeping research discovery outside the LLM quota
+ * critical path.
  *
  * This makes Cogdoc a SMART writing assistant — it proactively finds
  * evidence for your claims without you having to manually search.
@@ -25,6 +25,9 @@ interface SearchResult {
   snippet: string
   relevance: 'high' | 'medium' | 'low'
   publishedTime?: string
+  openAccessUrl?: string | null
+  isOpenAccess?: boolean
+  citation?: { authors: string[]; year: string | null; venue: string | null; doi: string | null }
 }
 
 interface OpenAlexWork {
@@ -34,7 +37,10 @@ interface OpenAlexWork {
   publication_date?: string | null
   cited_by_count?: number
   abstract_inverted_index?: Record<string, number[]> | null
+  authorships?: Array<{ author?: { display_name?: string | null } | null }>
   primary_location?: { landing_page_url?: string | null; source?: { display_name?: string | null } | null } | null
+  best_oa_location?: { landing_page_url?: string | null; pdf_url?: string | null } | null
+  open_access?: { is_oa?: boolean; oa_url?: string | null } | null
 }
 
 export async function POST(req: NextRequest) {
@@ -57,21 +63,28 @@ export async function POST(req: NextRequest) {
   try {
     const searchQuery = buildSearchQuery(claim)
 
-    let sources: SearchResult[]
-    let provider: 'gemini' | 'openalex' = 'gemini'
+    let sources: SearchResult[] = []
+    let provider: 'gemini' | 'openalex' = 'openalex'
+    let openAlexFailed = false
     try {
-      sources = await geminiFindSources(claim, searchQuery)
+      sources = await openAlexFindSources(searchQuery)
     } catch (e) {
-      console.warn('Gemini source search unavailable; trying OpenAlex:', (e as Error).message)
+      openAlexFailed = true
+      console.warn('OpenAlex source search unavailable; trying grounded web search:', (e as Error).message)
+    }
+
+    if (sources.length === 0) {
       try {
-        sources = await openAlexFindSources(searchQuery)
-        provider = 'openalex'
-      } catch (fallbackError) {
-        console.error('Source search failed:', fallbackError)
-        return NextResponse.json({
-          error: 'Source search failed. Both Gemini and the scholarly index were unavailable.',
-          detail: (fallbackError as Error).message,
-        }, { status: 502 })
+        sources = await geminiFindSources(claim, searchQuery)
+        provider = 'gemini'
+      } catch (geminiError) {
+        if (openAlexFailed) {
+          console.error('Source search failed:', geminiError)
+          return NextResponse.json({
+            error: 'Source search failed. Both the scholarly index and grounded web search were unavailable.',
+            detail: (geminiError as Error).message,
+          }, { status: 502 })
+        }
       }
     }
 
@@ -87,7 +100,7 @@ export async function POST(req: NextRequest) {
       query: searchQuery,
       totalFound: sources.length,
       provider,
-      ...(provider === 'openalex' ? { message: 'Gemini was unavailable; showing matching scholarly records from OpenAlex.' } : {}),
+      ...(provider === 'gemini' ? { message: 'No scholarly-index match was found; showing grounded web results.' } : {}),
     })
   } catch (e) {
     console.error('Find-sources failed:', e)
@@ -99,7 +112,7 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * No-key academic fallback for source discovery. OpenAlex ranks works by the
+ * Free academic source discovery. OpenAlex ranks works by the
  * search query and provides stable DOI or landing-page links. It intentionally
  * returns neutral relevance because it does not infer whether a work proves a
  * particular claim.
@@ -107,8 +120,10 @@ export async function POST(req: NextRequest) {
 export async function openAlexFindSources(query: string): Promise<SearchResult[]> {
   const endpoint = new URL('https://api.openalex.org/works')
   endpoint.searchParams.set('search', query)
-  endpoint.searchParams.set('per-page', '8')
-  endpoint.searchParams.set('select', 'id,display_name,doi,publication_date,cited_by_count,abstract_inverted_index,primary_location')
+  endpoint.searchParams.set('per_page', '8')
+  endpoint.searchParams.set('select', 'id,display_name,doi,publication_date,cited_by_count,abstract_inverted_index,authorships,primary_location,best_oa_location,open_access')
+  const apiKey = process.env.OPENALEX_API_KEY?.trim()
+  if (apiKey) endpoint.searchParams.set('api_key', apiKey)
   const mailto = process.env.OPENALEX_MAILTO?.trim()
   if (mailto) endpoint.searchParams.set('mailto', mailto)
 
@@ -119,18 +134,29 @@ export async function openAlexFindSources(query: string): Promise<SearchResult[]
   if (!res.ok) throw new Error(`OpenAlex search failed: ${res.status}`)
 
   const data = await res.json() as { results?: OpenAlexWork[] }
-  return (data.results ?? [])
-    .map((work) => {
-      const url = work.doi || work.primary_location?.landing_page_url || work.id
-      if (!url || !work.display_name) return null
-      return {
-        title: work.display_name,
-        url,
-        snippet: openAlexSnippet(work),
-        relevance: 'medium' as const,
-      }
+  const sources: SearchResult[] = []
+  for (const work of data.results ?? []) {
+    const url = work.doi || work.primary_location?.landing_page_url || work.id
+    if (!url || !work.display_name) continue
+    sources.push({
+      title: work.display_name,
+      url,
+      snippet: openAlexSnippet(work),
+      relevance: 'medium',
+      isOpenAccess: Boolean(work.open_access?.is_oa),
+      openAccessUrl: work.best_oa_location?.pdf_url
+        || work.best_oa_location?.landing_page_url
+        || work.open_access?.oa_url
+        || null,
+      citation: {
+        authors: (work.authorships ?? []).map((authorship) => authorship.author?.display_name?.trim() ?? '').filter(Boolean),
+        year: work.publication_date?.slice(0, 4) ?? null,
+        venue: work.primary_location?.source?.display_name?.trim() || null,
+        doi: work.doi ?? null,
+      },
     })
-    .filter((work): work is SearchResult => work !== null)
+  }
+  return sources
 }
 
 function openAlexSnippet(work: OpenAlexWork): string {

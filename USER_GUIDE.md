@@ -11,8 +11,9 @@ This guide explains how to use it.
 ## Getting started
 
 1. **Open Cogdoc** in your browser (http://localhost:3000 if running locally).
-2. **Create a project** — click "New Project", enter a title (e.g. "Literature Review — AI and Cognitive Offloading"), and click "Create project".
-3. **Start writing** in the editor. The text auto-saves every 1.5 seconds.
+2. Follow the first-login tutorial. You can reopen it at any time with the **Tutorial** button in the lower-left corner.
+3. Create an **Assignment** or **Research** workspace, or import an existing DOCX.
+4. Start writing in the editor. The text auto-saves every 1.5 seconds.
 
 That's it. As you write, Cogdoc's four AI engines will analyze your sentences and intervene.
 
@@ -96,6 +97,33 @@ When an engine fires on a sentence, that sentence gets a **colored wavy underlin
 The underline appears about 2.5 seconds after the engine fires (a debounce to avoid interfering with your typing).
 
 **Hover** over an underlined sentence to see a popover with all interventions for that sentence, stacked vertically. Each intervention has its own actionable insights.
+
+The right-side **Action queue** keeps a persistent overview grouped into Evidence checks, Claim clarity, Reasoning prompts, and Structure. Click any item to scroll to and select its underlined passage. From the detail panel you can locate it again, find sources, mark it addressed, or dismiss it.
+
+## Finding sources from your draft
+
+1. Highlight a claim or research question in the editor.
+2. Click **Find sources** in the formatting bar. Search begins immediately.
+3. Review the scholarly matches. Open the original record before relying on it.
+4. Copy the suggested in-text citation or reference if useful, then verify its metadata.
+5. Choose **Save** to keep the bibliographic record in your workspace library.
+6. If you have a legal full-text copy, upload its PDF for passage-level evidence checks.
+
+Cogdoc searches OpenAlex first and may use grounded web search when no
+scholarly record is found. Citation text is a suggestion, not an authoritative
+replacement for your institution's guidance.
+
+Saved references and indexed full text are intentionally distinct. A saved
+record helps organize and format the bibliography; Cogdoc does not claim to
+have checked the paper's contents until full text has been uploaded and
+indexed.
+
+## Formatting the document
+
+The editor bar includes paragraph and heading styles, bold, italic,
+strikethrough, inline code, bulleted and numbered lists, block quotes,
+horizontal dividers, tables, clear formatting, undo, and redo. Intervention
+underlines are interface decorations and are not exported into the document.
 
 ---
 

@@ -18,6 +18,7 @@ model User {
   frictionMode    String   @default("socratic") // socratic | coach | assistant (PRODUCT.md §9)
   createdAt       DateTime @default(now())
   lastLogin       DateTime?
+  onboardingCompletedAt DateTime?
   projects        Project[]
   interventions   Intervention[]
   pdfs            Pdf[]

@@ -6,9 +6,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn() }))
-vi.mock('@/lib/db', () => ({ db: { pdf: { findFirst: vi.fn(), delete: vi.fn() }, user: { findUnique: vi.fn() } } }))
+vi.mock('@/lib/db', () => ({ db: { pdf: { findFirst: vi.fn(), delete: vi.fn() }, user: { findUnique: vi.fn(), upsert: vi.fn(), update: vi.fn() } } }))
 
-import { GET as getUser } from '@/app/api/user/route'
+import { GET as getUser, PATCH as patchUser } from '@/app/api/user/route'
 import { GET as getSettings } from '@/app/api/settings/route'
 import { DELETE as deletePdf } from '@/app/api/pdfs/[id]/route'
 import { GET as getRoot } from '@/app/api/route'
@@ -19,6 +19,8 @@ const user = getDefaultUser as ReturnType<typeof vi.fn>
 const pdfDelete = db.pdf.delete as ReturnType<typeof vi.fn>
 const pdfFindFirst = db.pdf.findFirst as ReturnType<typeof vi.fn>
 const userFindUnique = db.user.findUnique as ReturnType<typeof vi.fn>
+const userUpsert = db.user.upsert as ReturnType<typeof vi.fn>
+const userUpdate = db.user.update as ReturnType<typeof vi.fn>
 
 function makeReq(cookie = '') {
   return new NextRequest('http://localhost/api/user', {
@@ -27,18 +29,18 @@ function makeReq(cookie = '') {
 }
 
 beforeEach(() => {
-  user.mockReset(); pdfFindFirst.mockReset(); pdfDelete.mockReset(); userFindUnique.mockReset()
+  user.mockReset(); pdfFindFirst.mockReset(); pdfDelete.mockReset(); userFindUnique.mockReset(); userUpsert.mockReset(); userUpdate.mockReset()
   user.mockResolvedValue({ id: 'u1' })
 })
 
 describe('GET /api/user (fallback path — Supabase not configured)', () => {
   it('returns the default user profile fields', async () => {
     // Global setup ensures Supabase env is unset here.
-    user.mockResolvedValue({ id: 'u1', email: 'w@c.local', displayName: 'Writer', dailyTokenBudget: 100000 })
+    user.mockResolvedValue({ id: 'u1', email: 'w@c.local', displayName: 'Writer', dailyTokenBudget: 100000, onboardingCompletedAt: null })
     const res = await getUser(makeReq())
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body.user).toEqual({ id: 'u1', email: 'w@c.local', displayName: 'Writer', dailyTokenBudget: 100000 })
+    expect(body.user).toEqual({ id: 'u1', email: 'w@c.local', displayName: 'Writer', dailyTokenBudget: 100000, onboardingCompletedAt: null })
   })
 })
 
@@ -52,6 +54,7 @@ describe('GET /api/user (Supabase-configured path)', () => {
     // Stub the auth-supabase module's getSession for this test
     const authSupa = await import('@/lib/auth-supabase')
     vi.spyOn(authSupa, 'getSession').mockResolvedValue({ user: { id: 'sb-1', email: 'sb@x.co' } } as any)
+    userUpsert.mockResolvedValue({ id: 'sb-1', email: 'sb@x.co', displayName: null, dailyTokenBudget: 100000, onboardingCompletedAt: null })
     const res = await getUser(makeReq('sb-token=abc'))
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -64,6 +67,27 @@ describe('GET /api/user (Supabase-configured path)', () => {
     vi.spyOn(authSupa, 'getSession').mockResolvedValue(null as any)
     const res = await getUser(makeReq())
     expect(res.status).toBe(401)
+  })
+})
+
+describe('PATCH /api/user onboarding state', () => {
+  it('persists tutorial completion for the acting user', async () => {
+    userUpdate.mockResolvedValue({ onboardingCompletedAt: new Date('2026-08-28T00:00:00.000Z') })
+    const res = await patchUser(new NextRequest('http://localhost/api/user', {
+      method: 'PATCH', body: JSON.stringify({ onboardingCompleted: true }),
+    }))
+    expect(res.status).toBe(200)
+    expect(userUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'u1' },
+      data: { onboardingCompletedAt: expect.any(Date) },
+    }))
+  })
+
+  it('rejects an invalid onboarding value', async () => {
+    const res = await patchUser(new NextRequest('http://localhost/api/user', {
+      method: 'PATCH', body: JSON.stringify({ onboardingCompleted: 'yes' }),
+    }))
+    expect(res.status).toBe(400)
   })
 })
 

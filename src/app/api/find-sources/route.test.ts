@@ -1,9 +1,8 @@
 /**
- * Integration tests for POST /api/find-sources (grounded Gemini web search).
+ * Integration tests for POST /api/find-sources (scholarly-first source search).
  *
- * Mocks global fetch with Gemini generateContent response shapes. Covers
- * validation, the assessed-JSON path, the grounding-chunk fallback, the
- * no-results path, OpenAlex fallback, and the API-failure path.
+ * Mocks OpenAlex and Gemini response shapes. Covers scholarly metadata,
+ * grounded fallback, no-results, and dual-provider failure.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
@@ -57,23 +56,37 @@ describe('POST /api/find-sources — validation', () => {
 })
 
 describe('POST /api/find-sources — pipeline', () => {
-  it('returns sources with assessed relevance from the model JSON', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(geminiResponse(
-      '[{"title":"Paper A","url":"https://a","snippet":"good","relevance":"high"},' +
-      '{"title":"Paper B","url":"https://b","snippet":"weak","relevance":"low"}]',
-    ))
+  it('returns scholarly sources with citation metadata from OpenAlex first', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(openAlexResponse([{
+      id: 'https://openalex.org/W1',
+      display_name: 'Paper A',
+      doi: 'https://doi.org/10.1000/a',
+      publication_date: '2025-03-01',
+      authorships: [{ author: { display_name: 'Maya Chen' } }],
+      primary_location: { source: { display_name: 'Journal of Research' } },
+      open_access: { is_oa: true, oa_url: 'https://repository.example/paper' },
+      best_oa_location: { pdf_url: 'https://repository.example/paper.pdf' },
+      abstract_inverted_index: { Strong: [0], evidence: [1] },
+    }]))
 
     const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body.sources).toHaveLength(2)
-    expect(body.sources[0].relevance).toBe('high')
-    expect(body.sources[0].snippet).toBe('good')
-    expect(body.totalFound).toBe(2)
+    expect(body.provider).toBe('openalex')
+    expect(body.sources).toHaveLength(1)
+    expect(body.sources[0]).toMatchObject({
+      title: 'Paper A',
+      snippet: 'Strong evidence',
+      isOpenAccess: true,
+      openAccessUrl: 'https://repository.example/paper.pdf',
+      citation: { authors: ['Maya Chen'], year: '2025', venue: 'Journal of Research' },
+    })
   })
 
   it('returns empty sources with a message when no results', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(geminiResponse('[]'))
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(openAlexResponse([]))
+      .mockResolvedValueOnce(geminiResponse('[]'))
     const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -81,40 +94,32 @@ describe('POST /api/find-sources — pipeline', () => {
     expect(body.message).toMatch(/No sources found/)
   })
 
-  it('falls back to OpenAlex scholarly records when Gemini is quota-limited', async () => {
+  it('falls back to grounded web search when OpenAlex is unavailable', async () => {
     vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce({ ok: false, status: 429, text: async () => 'quota' } as Response)
-      .mockResolvedValueOnce(openAlexResponse([{
-        id: 'https://openalex.org/W1',
-        display_name: 'A relevant research paper',
-        doi: 'https://doi.org/10.1000/example',
-        abstract_inverted_index: { Relevant: [0], evidence: [1], findings: [2] },
-      }]))
+      .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
+      .mockResolvedValueOnce(geminiResponse('[{"title":"Web report","url":"https://example.org/report","snippet":"Relevant findings","relevance":"high"}]'))
     const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body.provider).toBe('openalex')
-    expect(body.sources).toEqual([expect.objectContaining({
-      title: 'A relevant research paper',
-      url: 'https://doi.org/10.1000/example',
-      snippet: 'Relevant evidence findings',
-      relevance: 'medium',
-    })])
+    expect(body.provider).toBe('gemini')
+    expect(body.sources[0]).toMatchObject({ title: 'Web report', relevance: 'high' })
   })
 
-  it('returns 502 only when Gemini and OpenAlex both fail', async () => {
+  it('returns 502 only when OpenAlex and Gemini both fail', async () => {
     vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce({ ok: false, status: 429, text: async () => 'quota' } as Response)
       .mockResolvedValueOnce({ ok: false, status: 503 } as Response)
+      .mockResolvedValueOnce({ ok: false, status: 429, text: async () => 'quota' } as Response)
     const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
     expect(res.status).toBe(502)
   })
 
   it('falls back to grounding chunks at medium relevance when the JSON is unparseable', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(geminiResponse(
-      'I found some sources but forgot to format them.',
-      [{ web: { uri: 'https://x', title: 'X' } }],
-    ))
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(openAlexResponse([]))
+      .mockResolvedValueOnce(geminiResponse(
+        'I found some sources but forgot to format them.',
+        [{ web: { uri: 'https://x', title: 'X' } }],
+      ))
     const res = await POST(req({ claim: 'a sufficiently long claim about something' }))
     expect(res.status).toBe(200)
     const body = await res.json()

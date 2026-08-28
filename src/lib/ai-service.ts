@@ -1,11 +1,9 @@
 /**
  * AI Service Layer — Provider Abstraction (ADR-03)
  *
- * Defines the AIService interface and a single concrete adapter (GeminiAdapter)
- * backed by the Gemini generateContent REST API (same GEMINI_API_KEY as the
- * embedding path). The engines (Interceptor, Socratic Spacer, Citation
- * Sentinel, Scaffold) call this layer; they never touch the API directly.
- * Swapping to OpenAI or a local LLM is a single new adapter class.
+ * Defines the AIService interface and a configured adapter backed by Gemini
+ * generateContent or an OpenAI-compatible endpoint (including local Ollama).
+ * The engines call this layer; they never touch a provider directly.
  */
 import { db } from '@/lib/db'
 
@@ -132,18 +130,28 @@ export function parseVerdictJSON(
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models'
 
+export type AIProvider = 'gemini' | 'ollama' | 'groq' | 'custom'
+
+export function configuredAIProvider(): AIProvider {
+  const value = process.env.AI_PROVIDER?.trim().toLowerCase()
+  if (value === 'ollama' || value === 'groq' || value === 'custom') return value
+  return 'gemini'
+}
+
 /**
- * The generation model. gemini-3.1-flash-lite is the tier with a workable
- * free-quota on this key (see fastapi/app/eval_harness.py) — override with
- * GEMINI_MODEL when running on a paid key.
+ * The generation model. Provider-specific configuration wins, followed by the
+ * existing generic AI_MODEL variable. The retired 2.0 default is upgraded to
+ * the current Flash-Lite baseline so older local env files keep working.
  */
-function geminiModel(): string {
-  return process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite'
+export function geminiModel(): string {
+  const configured = process.env.GEMINI_MODEL ?? process.env.AI_MODEL
+  if (!configured || configured === 'gemini-2.0-flash') return 'gemini-3.5-flash-lite'
+  return configured
 }
 
 async function geminiGenerate(prompt: string): Promise<string> {
-  const key = process.env.GEMINI_API_KEY
-  if (!key) throw new Error('GEMINI_API_KEY is not set')
+  const key = process.env.GEMINI_API_KEY || process.env.AI_API_KEY
+  if (!key) throw new Error('GEMINI_API_KEY or AI_API_KEY is not set')
   const res = await fetch(`${GEMINI_ENDPOINT}/${geminiModel()}:generateContent?key=${key}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -168,20 +176,65 @@ async function geminiGenerate(prompt: string): Promise<string> {
   return data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
 }
 
+function compatibleBaseUrl(provider: Exclude<AIProvider, 'gemini'>): string {
+  const configured = process.env.AI_BASE_URL?.trim().replace(/\/$/, '')
+  if (configured) return configured
+  if (provider === 'ollama') return 'http://127.0.0.1:11434/v1'
+  if (provider === 'groq') return 'https://api.groq.com/openai/v1'
+  throw new Error('AI_BASE_URL is required when AI_PROVIDER=custom')
+}
+
+export function compatibleModel(provider: Exclude<AIProvider, 'gemini'>): string {
+  const configured = process.env.AI_MODEL?.trim()
+  if (provider === 'ollama' && (!configured || configured.startsWith('gemini-'))) return 'qwen3:8b'
+  if (!configured) throw new Error(`AI_MODEL is required when AI_PROVIDER=${provider}`)
+  return configured
+}
+
+async function compatibleGenerate(prompt: string, provider: Exclude<AIProvider, 'gemini'>): Promise<string> {
+  const key = process.env.AI_API_KEY?.trim()
+  if (provider !== 'ollama' && !key) throw new Error(`AI_API_KEY is required when AI_PROVIDER=${provider}`)
+  const res = await fetch(`${compatibleBaseUrl(provider)}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(key ? { Authorization: `Bearer ${key}` } : {}),
+    },
+    body: JSON.stringify({
+      model: compatibleModel(provider),
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.4,
+      max_tokens: 1024,
+    }),
+    signal: AbortSignal.timeout(45_000),
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`${provider} chat completion failed: ${res.status} ${detail.slice(0, 200)}`)
+  }
+  const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> }
+  return data.choices?.[0]?.message?.content ?? ''
+}
+
+async function generateConfigured(prompt: string): Promise<string> {
+  const provider = configuredAIProvider()
+  return provider === 'gemini' ? geminiGenerate(prompt) : compatibleGenerate(prompt, provider)
+}
+
 async function callLLM(systemPrompt: string): Promise<string> {
   try {
-    return await geminiGenerate(systemPrompt)
+    return await generateConfigured(systemPrompt)
   } catch (e) {
     // If rate-limited (429), wait 2s and retry once
     if ((e as Error).message.includes('429')) {
       await new Promise((r) => setTimeout(r, 2000))
-      return await geminiGenerate(systemPrompt)
+      return await generateConfigured(systemPrompt)
     }
     throw e
   }
 }
 
-// ─── GeminiAdapter (concrete implementation) ──────────────────────────────
+// ─── Configured adapter ───────────────────────────────────────────────────
 
 export class GeminiAdapter implements AIService {
   async classifyPrompt(prompt: string, context: string): Promise<ClassifyResult> {

@@ -1,7 +1,7 @@
 /**
  * Typed API client for the Cogdoc frontend.
  */
-import type { Project, Intervention, Analytics, PdfSummary, ReviewItem, ReviewRun, VerificationReport } from '@/lib/types'
+import type { Project, Intervention, Analytics, PdfSummary, ReferenceSummary, ReviewItem, ReviewRun, VerificationReport } from '@/lib/types'
 
 export class ApiError extends Error {
   status: number
@@ -27,6 +27,19 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getUser: () => jsonFetch<{ user: {
+    id: string
+    email: string | null
+    displayName: string | null
+    dailyTokenBudget: number | null
+    onboardingCompletedAt: string | null
+  } }>('/api/user'),
+  setOnboardingCompleted: (onboardingCompleted: boolean) =>
+    jsonFetch<{ onboardingCompletedAt: string | null }>('/api/user', {
+      method: 'PATCH',
+      body: JSON.stringify({ onboardingCompleted }),
+    }),
+
   // Real-world workspaces (projects remain as compatibility routes)
   listWorkspaces: () => jsonFetch<{ workspaces: Project[] }>('/api/workspaces'),
   createWorkspace: (input: {
@@ -111,6 +124,22 @@ export const api = {
       body: JSON.stringify({ filename, text }),
     }),
   deletePdf: (id: string) => jsonFetch<{ ok: boolean }>(`/api/pdfs/${id}`, { method: 'DELETE' }),
+  listReferences: (projectId: string) =>
+    jsonFetch<{ references: ReferenceSummary[] }>(`/api/workspaces/${projectId}/references`),
+  addReference: (projectId: string, input: {
+    title: string
+    url: string
+    authors?: string[]
+    year?: string | null
+    venue?: string | null
+    doi?: string | null
+    rawText?: string
+    style?: 'harvard' | 'apa'
+    provider?: 'openalex' | 'gemini'
+  }) => jsonFetch<{ reference: ReferenceSummary; alreadySaved: boolean }>(`/api/workspaces/${projectId}/references`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  }),
 
   // AI engines
   interceptor: (
@@ -183,7 +212,7 @@ export const api = {
   getAnalytics: (projectId: string) =>
     jsonFetch<Analytics>(`/api/analytics?projectId=${projectId}`),
 
-  // Find sources (web search)
+  // Find sources (scholarly index, with grounded-web fallback)
   findSources: (claim: string, projectId?: string) =>
     jsonFetch<{
       sources: Array<{
@@ -191,9 +220,13 @@ export const api = {
         url: string
         snippet: string
         relevance: 'high' | 'medium' | 'low'
+        openAccessUrl?: string | null
+        isOpenAccess?: boolean
+        citation?: { authors: string[]; year: string | null; venue: string | null; doi: string | null }
       }>
       query?: string
       totalFound?: number
+      provider?: 'openalex' | 'gemini'
       message?: string
       error?: string
       detail?: string
@@ -209,7 +242,7 @@ export const api = {
       source?: { id: string; filename: string; url: string; chunkCount: number; sizeBytes: number }
       error?: string
       detail?: string
-    }>('/api/projects/${projectId}/add-source', {
+    }>(`/api/projects/${projectId}/add-source`, {
       method: 'POST',
       body: JSON.stringify({ url, title }),
     }),

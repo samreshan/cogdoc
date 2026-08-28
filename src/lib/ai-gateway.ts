@@ -65,7 +65,7 @@ export async function retrieveVectorChunks(
  * Off by default; the citation route flips to vector retrieval when true.
  * The keyword path stays as the ablation baseline (PRODUCT.md §14.3).
  */
-export function useVectorRetrieval(): boolean {
+export function isVectorRetrievalEnabled(): boolean {
   return process.env.USE_VECTOR_RETRIEVAL === 'true' || process.env.USE_VECTOR_RETRIEVAL === '1'
 }
 

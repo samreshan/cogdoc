@@ -65,6 +65,20 @@ export interface PdfSummary {
   _count: { chunks: number }
 }
 
+export interface ReferenceSummary {
+  id: string
+  rawText: string
+  style: string
+  authorsJson: string
+  year: string | null
+  title: string | null
+  doi: string | null
+  url: string | null
+  metadataStatus: string
+  createdAt: string
+  source: { id: string; filename: string } | null
+}
+
 export interface Project {
   id: string
   title: string

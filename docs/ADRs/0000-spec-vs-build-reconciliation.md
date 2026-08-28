@@ -17,20 +17,21 @@ purposes; the per-sprint ADRs retain the detail.
 
 | IR §2.3 commitment | Final state | Decision |
 |---|---|---|
-| **React + Tiptap frontend** | Tiptap dependencies + `WavyUnderline`/`IdleDetector` extensions built and tested (Sprint 2); full `editor.tsx` surface swap deferred | **Partial remedy** — see ADR-0006. contentEditable remains the default; the extension layer is in place. |
+| **React + Tiptap frontend** | Tiptap/ProseMirror is now the only document editor. Autosave, formatting, intervention/review decorations, exact-range navigation, tables, DOCX import, and selection-aware research actions use the Tiptap state model. | **Remedied** — see ADR-0006 and ADR-0009. The legacy contentEditable editor has been removed. |
 | **FastAPI backend** | FastAPI service shipped (Sprint 1) owning `/api/rag/*` and `/api/ai/citation` | **Remedied** — the scientifically-important half runs on FastAPI as specified. |
 | **Supabase + pgvector** | pgvector-ready retrieval interface + in-memory store shipped (Sprint 1); Postgres+pgvector wired in `docker-compose.dev.yml`; in-memory store used in tests/dev | **Partially remedied** — the interface is provider-agnostic; the pgvector adapter is the remaining drop-in. Eval harness proved the retrieval mechanism. |
-| **Gemini API** | Routed through an OpenAI-compatible gateway (`z-ai-web-dev-sdk`); Gemini reachable through it | **Justified** — one-line swap to direct Gemini; documented in Sprint 0 ADR. |
+| **Gemini API** | Core intervention engines use the provider-neutral `AIService` with direct Gemini and OpenAI-compatible adapters. `GEMINI_API_KEY` and the documented `AI_API_KEY` alias are supported. The current test default is `gemini-3.5-flash-lite`; Ollama is an opt-in local provider. | **Remedied with provider abstraction** — Gemini remains the test default while a local runtime can be selected without changing engine code. |
 | **SSE streaming** | `sse.ts` parser + `streamIntervention()` async consumer shipped (Sprint 2) implementing the §12.3 schema | **Remedied** at the contract layer; producer endpoints are the remaining wiring. |
 | **Multi-user auth** | Supabase Auth + `requireUserId`/`authed` across all routes (Sprint 2); publishable key configured | **Remedied** at the app layer; DB-level RLS lands with the Postgres migration. |
 | **Decoupled architecture** | Next.js BFF + FastAPI service + Postgres, wired in `docker-compose.dev.yml` | **Remedied.** |
 
 ## What this means for the viva
 
-Three of the six IR commitments are fully remedied (FastAPI, SSE contract, auth,
-decoupled architecture). Two are partially remedied with the irreducible
-interface layer in place and a single drop-in remaining (pgvector adapter,
-Tiptap surface swap). One is justified as-is (Gemini via gateway).
+The editor and direct Gemini deviations described in the original capstone
+snapshot have since been remedied. Pgvector deployment, production RLS/storage,
+and continuous-worker rollout remain environment and operations work rather
+than editor gaps. ADR-0010 records the post-capstone research-assistance and UX
+decisions.
 
 The deviations that remain are **documented engineering decisions**, not gaps.
 Each has a written ADR with rationale and a follow-up action.
@@ -48,6 +49,6 @@ Each has a written ADR with rationale and a follow-up action.
 ## Follow-ups beyond the FYP
 
 1. pgvector adapter (drop-in implementing `VectorStoreBase`).
-2. Tiptap `editor.tsx` surface swap (ADR-0006).
-3. Grow the eval corpus to ~50 claims / ~10 PDFs for a differentiated ablation.
-4. Swap `HashingEmbedder` for a trained embedding model.
+2. Grow the eval corpus to ~50 claims / ~10 PDFs for a differentiated ablation.
+3. Swap `HashingEmbedder` for a trained embedding model.
+4. Evaluate the shipped Ollama-compatible `AIService` path on fixed hardware targets before choosing bundled model weights.

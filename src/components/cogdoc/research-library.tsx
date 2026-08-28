@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
-import type { PdfSummary } from '@/lib/types'
+import type { PdfSummary, ReferenceSummary } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -28,7 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { FileText, Upload, Trash2, Loader2, FilePlus, BookOpen, Check, AlertCircle } from 'lucide-react'
+import { FileText, Upload, Trash2, Loader2, FilePlus, BookOpen, Check, AlertCircle, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function ResearchLibrary() {
@@ -36,6 +36,7 @@ export default function ResearchLibrary() {
   const libraryVersion = useCogdoc((s) => s.libraryVersion)
   const bumpLibrary = useCogdoc((s) => s.bumpLibrary)
   const [pdfs, setPdfs] = useState<PdfSummary[]>([])
+  const [references, setReferences] = useState<ReferenceSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [pasteOpen, setPasteOpen] = useState(false)
@@ -48,8 +49,12 @@ export default function ResearchLibrary() {
     if (!project) return
     setLoading(true)
     try {
-      const { pdfs } = await api.listPdfs(project.id)
-      setPdfs(pdfs)
+      const [pdfResult, referenceResult] = await Promise.all([
+        api.listPdfs(project.id),
+        api.listReferences(project.id),
+      ])
+      setPdfs(pdfResult.pdfs)
+      setReferences(referenceResult.references)
     } catch (e) {
       toast.error('Failed to load library', { description: (e as Error).message })
     } finally {
@@ -121,7 +126,7 @@ export default function ResearchLibrary() {
         <div className="flex items-center justify-between mb-3">
           <div>
             <h3 className="text-sm font-semibold text-stone-900">Research Library</h3>
-            <p className="text-[11px] text-stone-500">{pdfs.length} source{pdfs.length === 1 ? '' : 's'} indexed</p>
+            <p className="text-[11px] text-stone-500">{references.length} saved reference{references.length === 1 ? '' : 's'} · {pdfs.length} full text{pdfs.length === 1 ? '' : 's'} indexed</p>
           </div>
           <div className="flex items-center gap-1.5">
             <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
@@ -185,13 +190,18 @@ export default function ResearchLibrary() {
         <div className="p-4 space-y-2">
           {loading ? (
             <div className="text-center py-8 text-stone-400 text-xs">Loading library...</div>
-          ) : pdfs.length === 0 ? (
+          ) : pdfs.length === 0 && references.length === 0 ? (
             <div className="text-center py-12">
               <BookOpen className="w-10 h-10 mx-auto text-stone-300 mb-3" />
               <p className="text-sm text-stone-600 font-medium mb-1">No sources yet</p>
               <p className="text-xs text-stone-500 max-w-xs mx-auto">
                 Upload research PDFs or paste article text. The Citation Sentinel will retrieve relevant passages when you verify a claim.
               </p>
+            </div>
+          ) : pdfs.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-stone-300 bg-stone-50 p-4 text-center">
+              <p className="text-xs font-medium text-stone-700">No full text indexed yet</p>
+              <p className="mt-1 text-[11px] leading-4 text-stone-500">Saved references provide citation metadata. Upload a legal PDF copy when you want passage-level evidence checks.</p>
             </div>
           ) : (
             pdfs.map((pdf) => (
@@ -242,6 +252,26 @@ export default function ResearchLibrary() {
               </div>
             ))
           )}
+
+          {!loading && references.length > 0 && <section className="pt-4" aria-label="Saved references">
+            <div className="mb-2 flex items-center justify-between"><h4 className="font-mono text-[10px] uppercase tracking-[0.15em] text-stone-500">Saved references</h4><span className="text-[10px] text-stone-400">Verify before submitting</span></div>
+            <div className="space-y-2">
+              {references.map((reference) => <article key={reference.id} className="rounded-lg border border-stone-200 bg-white p-3">
+                <div className="flex items-start gap-2">
+                  <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-[#386c5c]" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium leading-5 text-stone-800">{reference.title ?? reference.rawText}</p>
+                    <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-stone-500">{reference.rawText}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px]">
+                      <span className={reference.metadataStatus === 'confirmed' || reference.metadataStatus === 'matched' ? 'text-emerald-700' : 'text-amber-700'}>{reference.metadataStatus === 'confirmed' || reference.metadataStatus === 'matched' ? 'Metadata verified' : 'Metadata needs verification'}</span>
+                      {reference.source && <span className="text-[#28614f]">Linked to {reference.source.filename}</span>}
+                      {reference.url && <a href={reference.url} target="_blank" rel="noopener noreferrer" className="ml-auto flex items-center gap-1 text-stone-500 hover:text-stone-800"><ExternalLink className="h-3 w-3" />Original</a>}
+                    </div>
+                  </div>
+                </div>
+              </article>)}
+            </div>
+          </section>}
         </div>
       </ScrollArea>
 

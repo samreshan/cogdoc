@@ -80,7 +80,9 @@ export const useCogdoc = create<CogdocState>((set) => ({
   setActiveProject: (p) =>
     set({
       activeProject: p,
-      activeInterventions: [],
+      activeInterventions: (p?.interventions ?? [])
+        .filter((intervention) => intervention.status === 'active')
+        .slice(-30),
       hoveredSentenceKey: null,
       editorFocusQuote: null,
       reviewHighlightQuotes: [],

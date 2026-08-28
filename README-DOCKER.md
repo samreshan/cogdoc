@@ -33,6 +33,24 @@ docker run -d -p 3000:3000 -v cogdoc_data:/data cogdoc:latest
 
 Then open **http://localhost:3000**.
 
+When using `docker-compose.dev.yml`, new Postgres volumes enable pgvector
+automatically. If `cogdoc_pgdata` was created before that initializer existed,
+run this once before `npm run db:push`:
+
+```bash
+docker compose -f docker-compose.dev.yml exec -T postgres \
+  psql -U cogdoc -d cogdoc -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+```
+
+For optional local inference with Ollama running on the Docker host, set:
+
+```env
+AI_PROVIDER=ollama
+AI_BASE_URL=http://host.docker.internal:11434/v1
+AI_MODEL=qwen3:8b
+AI_API_KEY=
+```
+
 ---
 
 ## Non-interactive deployment
@@ -44,7 +62,7 @@ docker run -d -p 3000:3000 -v cogdoc_data:/data \
   -e AI_PROVIDER=gemini \
   -e AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai \
   -e AI_API_KEY=AIza... \
-  -e AI_MODEL=gemini-2.0-flash \
+  -e AI_MODEL=gemini-3.5-flash-lite \
   -e DATABASE_URL=file:/data/cogdoc.db \
   cogdoc:latest
 ```
@@ -124,10 +142,10 @@ All configurable env vars (any of these can be set via `-e` or in your `.env`):
 ### AI Provider (pick one set)
 | Variable | Required | Description |
 |---|---|---|
-| `AI_PROVIDER` | no | `gemini` / `groq` / `custom` / `skip` |
+| `AI_PROVIDER` | no | `gemini` / `ollama` / `groq` / `custom` / `skip` |
 | `AI_BASE_URL` | yes* | OpenAI-compatible base URL |
 | `AI_API_KEY` | yes* | API key for the chosen provider |
-| `AI_MODEL` | no | Default model name (e.g. `gemini-2.0-flash`) |
+| `AI_MODEL` | no | Default model name (e.g. `gemini-3.5-flash-lite`) |
 | `GEMINI_API_KEY` | no | Alias — if set, used as AI_API_KEY with Gemini's URL |
 | `GROQ_API_KEY` | no | Alias — if set, used as AI_API_KEY with Groq's URL |
 

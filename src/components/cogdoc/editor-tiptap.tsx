@@ -56,6 +56,8 @@ import RunningPets, { IdlePetBadge } from './running-pets'
 import { ApiError } from '@/lib/api-client'
 import { clearRecoveryDraft, loadRecoveryDraft, saveRecoveryDraft } from '@/lib/draft-recovery'
 import { findEditorTextRange } from '@/lib/editor-focus'
+import EditorToolbar from './editor-toolbar'
+import SourcesResults from './sources-results'
 
 export default function EditorTiptap() {
   const project = useCogdoc((s) => s.activeProject)
@@ -73,6 +75,10 @@ export default function EditorTiptap() {
   const frictionMode = useCogdoc((s) => s.frictionMode)
 
   const [promptInput, setPromptInput] = useState('')
+  const [selectedText, setSelectedText] = useState('')
+  const [researchClaim, setResearchClaim] = useState('')
+  const [sourcesOpen, setSourcesOpen] = useState(false)
+  const [, setToolbarVersion] = useState(0)
   const [wordCount, setWordCount] = useState(0)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'offline' | 'recovering' | 'conflict'>('idle')
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(
@@ -168,6 +174,25 @@ export default function EditorTiptap() {
     editor.on('update', handleUpdate)
     return () => { editor.off('update', handleUpdate) }
   }, [editor, scheduleSave, fireEngine, project, reviewPace])
+
+  // Keep research actions and formatting state in sync with the editor's
+  // current selection. The selected text remains author-controlled and is
+  // only sent when they explicitly open the source finder.
+  useEffect(() => {
+    if (!editor) return
+    const handleSelection = () => {
+      const { from, to } = editor.state.selection
+      setSelectedText(from === to ? '' : editor.state.doc.textBetween(from, to, ' ').trim().slice(0, 2_000))
+      setToolbarVersion((version) => version + 1)
+    }
+    editor.on('selectionUpdate', handleSelection)
+    editor.on('transaction', handleSelection)
+    handleSelection()
+    return () => {
+      editor.off('selectionUpdate', handleSelection)
+      editor.off('transaction', handleSelection)
+    }
+  }, [editor])
 
   // ── Idle detector at the friction-scaled 45s (IR §2.3.6) ────────────────
   useEffect(() => {
@@ -375,17 +400,14 @@ export default function EditorTiptap() {
         </div>
       )}
 
+      <EditorToolbar editor={editor} selectedText={selectedText} onFindSources={() => {
+        setResearchClaim(selectedText)
+        setSourcesOpen(true)
+      }} />
+
       {/* Scrollable writing surface */}
       <div className="flex-1 overflow-y-auto">
         <div className="relative w-full max-w-[1000px] mx-auto px-8 py-16">
-          {/* Title */}
-          <h1
-            contentEditable
-            suppressContentEditableWarning
-            className="text-4xl font-bold text-stone-900 mb-8 outline-none focus:outline-none text-center"
-            style={{ fontFamily: 'var(--font-newsreader), Georgia, serif' }}
-            data-placeholder="Untitled"
-          />
           {/* Writing surface — focus mode dims all but the last paragraph */}
           <div
             onMouseOver={handleMouseOver}
@@ -431,6 +453,8 @@ export default function EditorTiptap() {
       <div data-sentence-popover>
         <SentencePopover />
       </div>
+
+      <SourcesResults open={sourcesOpen} onOpenChange={setSourcesOpen} claim={researchClaim} />
 
       {/* Running pixelated pets — animate across the screen when engines fire */}
       <RunningPets />

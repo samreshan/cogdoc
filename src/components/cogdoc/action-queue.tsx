@@ -1,7 +1,24 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, BookOpen, Check, CircleDot, FileUp, Loader2, MapPin, RefreshCw, ScanSearch, Search, X } from 'lucide-react'
+import {
+  AlertTriangle,
+  BookOpen,
+  Check,
+  ChevronDown,
+  CircleDot,
+  FileUp,
+  ListTree,
+  Loader2,
+  MapPin,
+  MessageCircleQuestion,
+  RefreshCw,
+  ScanSearch,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  X,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
@@ -11,11 +28,42 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import SourcesResults from './sources-results'
 
-const ENGINE_LABELS: Record<Intervention['engineType'], string> = {
-  interceptor: 'Spark Gap',
-  socratic: 'Socratic Spacer',
-  citation: 'Citation Sentinel',
-  scaffold: 'Scaffold',
+const ENGINE_META: Record<Intervention['engineType'], {
+  label: string
+  description: string
+  icon: typeof Sparkles
+}> = {
+  citation: {
+    label: 'Evidence checks',
+    description: 'Claims, citations, and source support',
+    icon: ShieldCheck,
+  },
+  interceptor: {
+    label: 'Claim clarity',
+    description: 'Statements that need your judgement',
+    icon: Sparkles,
+  },
+  socratic: {
+    label: 'Reasoning prompts',
+    description: 'Questions that deepen the argument',
+    icon: MessageCircleQuestion,
+  },
+  scaffold: {
+    label: 'Structure',
+    description: 'Organisation and next-step guidance',
+    icon: ListTree,
+  },
+}
+
+const ENGINE_ORDER: Intervention['engineType'][] = ['citation', 'interceptor', 'socratic', 'scaffold']
+
+export function groupActiveInterventions(interventions: Intervention[]) {
+  return ENGINE_ORDER.map((engineType) => ({
+    engineType,
+    items: interventions
+      .filter((item) => item.engineType === engineType && item.status === 'active' && item.promptText)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+  })).filter((group) => group.items.length > 0)
 }
 
 function quoteForReviewItem(item: ReviewItem): string | null {
@@ -41,8 +89,11 @@ export default function ActionQueue() {
   const focusEditorText = useCogdoc((state) => state.focusEditorText)
   const setReviewHighlightQuotes = useCogdoc((state) => state.setReviewHighlightQuotes)
   const bumpLibrary = useCogdoc((state) => state.bumpLibrary)
+  const removeIntervention = useCogdoc((state) => state.removeIntervention)
+  const bumpAnalytics = useCogdoc((state) => state.bumpAnalytics)
   const [items, setItems] = useState<ReviewItem[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null)
   const [response, setResponse] = useState('')
   const [loading, setLoading] = useState(true)
   const [scanning, setScanning] = useState(false)
@@ -72,15 +123,17 @@ export default function ActionQueue() {
 
   useEffect(() => { void refresh().catch(() => {}) }, [workspace?.id])
 
-  const liveSignals = useMemo(
-    () => activeInterventions.filter((item) => item.status === 'active' && item.promptText).slice(-6).reverse(),
+  const interventionGroups = useMemo(
+    () => groupActiveInterventions(activeInterventions),
     [activeInterventions],
   )
+  const liveSignalCount = interventionGroups.reduce((count, group) => count + group.items.length, 0)
   const openItems = useMemo(
     () => items.filter((item) => !['resolved', 'dismissed'].includes(item.state)),
     [items],
   )
   const selected = items.find((item) => item.id === selectedId) ?? null
+  const selectedSignal = activeInterventions.find((item) => item.id === selectedSignalId && item.status === 'active') ?? null
   const selectedQuote = selected ? quoteForReviewItem(selected) : null
   const needsEvidenceLink = Boolean(selected && ['claim_needs_evidence', 'evidence_passage_required'].includes(selected.type))
   const needsDocumentRecheck = Boolean(selected && ['citation_missing_reference', 'bibliography_missing', 'quotation_locator_missing'].includes(selected.type))
@@ -99,8 +152,30 @@ export default function ActionQueue() {
 
   function selectItem(item: ReviewItem) {
     setSelectedId(item.id)
+    setSelectedSignalId(null)
     setResponse('')
     focusQuote(quoteForReviewItem(item))
+  }
+
+  function selectSignal(signal: Intervention) {
+    setSelectedSignalId(signal.id)
+    setSelectedId(null)
+    focusQuote(signal.promptText)
+  }
+
+  async function resolveSignal(signal: Intervention, userAction: 'engaged' | 'dismissed') {
+    setActing(true)
+    try {
+      await api.patchIntervention(signal.id, { userAction, status: 'resolved' })
+      removeIntervention(signal.id)
+      bumpAnalytics()
+      setSelectedSignalId(null)
+      toast.success(userAction === 'engaged' ? 'Intervention marked addressed' : 'Intervention dismissed')
+    } catch (error) {
+      toast.error('Could not update this intervention', { description: (error as Error).message })
+    } finally {
+      setActing(false)
+    }
   }
 
   async function startReview(scope: 'full' | 'changed_blocks' = 'full') {
@@ -195,11 +270,38 @@ export default function ActionQueue() {
       </section>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {liveSignals.length > 0 && <section className="border-b border-stone-300" aria-label="Writing signals">
-          <div className="px-4 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#28614f]">Writing signals · {liveSignals.length}</div>
-          {liveSignals.map((signal) => <button key={signal.id} onClick={() => focusQuote(signal.promptText)} className="w-full border-l-2 border-[#386c5c] px-3 py-3 text-left hover:bg-[#eef3ef] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#386c5c]">
-            <div className="flex items-start gap-2"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#386c5c]" /><div className="min-w-0"><p className="text-xs font-medium text-stone-800">{ENGINE_LABELS[signal.engineType]}</p><p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-stone-500">{signal.responseText ?? signal.promptText}</p><span className="mt-1 block text-[10px] text-[#28614f]">Open underlined passage</span></div></div>
-          </button>)}
+        {interventionGroups.length > 0 && <section className="border-b border-stone-300" aria-label="Interventions by category">
+          <div className="flex items-center justify-between px-4 py-2">
+            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#28614f]">Interventions</span>
+            <span className="rounded bg-[#e4ece7] px-1.5 py-0.5 font-mono text-[10px] text-[#28614f]">{liveSignalCount}</span>
+          </div>
+          {interventionGroups.map((group) => {
+            const meta = ENGINE_META[group.engineType]
+            const Icon = meta.icon
+            return <details key={group.engineType} open className="group border-t border-stone-200 bg-white">
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 transition-colors hover:bg-[#f3f6f3] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#386c5c]">
+                <Icon className="h-3.5 w-3.5 shrink-0 text-[#386c5c]" />
+                <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-stone-800">{meta.label}</p><p className="truncate text-[10px] text-stone-500">{meta.description}</p></div>
+                <span className="font-mono text-[10px] tabular-nums text-stone-500">{group.items.length}</span>
+                <ChevronDown className="h-3.5 w-3.5 text-stone-400 transition-transform duration-200 group-open:rotate-180" />
+              </summary>
+              <div className="border-t border-stone-100">
+                {group.items.map((signal) => {
+                  const isSelected = selectedSignalId === signal.id
+                  return <button key={signal.id} onClick={() => selectSignal(signal)} aria-current={isSelected ? 'true' : undefined} className={'w-full border-l-2 px-4 py-3 text-left transition-all active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#386c5c] ' + (isSelected ? 'border-[#386c5c] bg-[#eef3ef]' : 'border-transparent hover:border-[#9bb5aa] hover:bg-[#f7f8f5]')}>
+                    <div className="flex items-start gap-2">
+                      <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#386c5c]" />
+                      <div className="min-w-0 flex-1">
+                        {signal.promptText && <p className="line-clamp-1 font-serif text-xs font-medium leading-5 text-stone-800">“{signal.promptText}”</p>}
+                        <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-stone-500">{signal.responseText ?? 'Open this passage to review the guidance.'}</p>
+                        <span className="mt-1 block text-[10px] font-medium text-[#28614f]">Locate and act</span>
+                      </div>
+                    </div>
+                  </button>
+                })}
+              </div>
+            </details>
+          })}
         </section>}
 
         {loading ? <div className="space-y-2 p-4">{[0, 1, 2].map((key) => <div key={key} className="h-16 animate-pulse rounded bg-stone-200" />)}</div> : openItems.length === 0 ? <div className="p-6 text-center"><ScanSearch className="mx-auto h-7 w-7 text-[#386c5c]" /><p className="mt-4 text-sm font-medium">Ready when the draft is</p><p className="mt-2 text-xs leading-5 text-stone-500">Run one scan to create calm, prioritized review actions.</p><Button size="sm" onClick={() => startReview()} disabled={scanning} className="mt-5 bg-[#173f35] hover:bg-[#245548]">Review document</Button></div> : <section>
@@ -228,6 +330,21 @@ export default function ActionQueue() {
         <div className="mt-3 flex gap-2">
           {needsDocumentRecheck ? <Button size="sm" onClick={() => startReview('changed_blocks')} disabled={acting || scanning} className="flex-1 bg-[#173f35] hover:bg-[#245548]"><RefreshCw className="mr-1 h-3 w-3" />Recheck after editing</Button> : !needsEvidenceLink && <Button size="sm" onClick={() => resolveItem('resolve')} disabled={acting} className="flex-1 bg-[#173f35] hover:bg-[#245548]">{acting ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}Record action</Button>}
           <Button size="sm" variant="ghost" onClick={() => resolveItem('dismiss')} disabled={acting} title={selected.blocksCertification ? 'Keeps this item unresolved' : 'Dismiss advisory'}><AlertTriangle className="h-3.5 w-3.5" /></Button>
+        </div>
+      </footer>}
+
+      {selectedSignal && <footer className="max-h-[48vh] overflow-y-auto border-t border-stone-300 bg-white p-4" aria-label="Selected intervention">
+        <div className="flex items-start justify-between gap-3">
+          <div><span className="font-mono text-[9px] uppercase tracking-[0.15em] text-[#28614f]">{ENGINE_META[selectedSignal.engineType].label}</span><h3 className="mt-1 font-serif text-sm font-semibold text-stone-900">Review this passage</h3></div>
+          <button onClick={() => setSelectedSignalId(null)} aria-label="Close intervention details" className="rounded p-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700"><X className="h-4 w-4" /></button>
+        </div>
+        {selectedSignal.promptText && <blockquote className="mt-3 border-l-2 border-[#9bb5aa] pl-3 font-serif text-xs leading-5 text-stone-600">“{selectedSignal.promptText}”</blockquote>}
+        {selectedSignal.responseText && <p className="mt-3 text-xs leading-5 text-stone-700">{selectedSignal.responseText}</p>}
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <Button size="sm" variant="outline" onClick={() => focusQuote(selectedSignal.promptText)} className="h-8 border-stone-300 text-xs"><MapPin className="mr-1.5 h-3.5 w-3.5" />Locate</Button>
+          <Button size="sm" variant="outline" onClick={() => { if (selectedSignal.promptText) { setSourceQuery(selectedSignal.promptText); setSourcesOpen(true) } }} disabled={!selectedSignal.promptText || selectedSignal.promptText.trim().length < 10} className="h-8 border-stone-300 text-xs"><Search className="mr-1.5 h-3.5 w-3.5" />Find sources</Button>
+          <Button size="sm" onClick={() => resolveSignal(selectedSignal, 'engaged')} disabled={acting} className="h-8 bg-[#173f35] text-xs hover:bg-[#245548]"><Check className="mr-1.5 h-3.5 w-3.5" />Mark addressed</Button>
+          <Button size="sm" variant="ghost" onClick={() => resolveSignal(selectedSignal, 'dismissed')} disabled={acting} className="h-8 text-xs text-stone-500 hover:text-stone-800"><X className="mr-1.5 h-3.5 w-3.5" />Dismiss</Button>
         </div>
       </footer>}
 
