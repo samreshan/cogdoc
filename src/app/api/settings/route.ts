@@ -1,8 +1,9 @@
 /**
  * GET/PUT /api/settings — runtime settings + friction-mode persistence.
  *
- * GET returns the public env-derived settings (idle threshold, token budget) and
- * the acting user's frictionMode.
+ * GET returns public env-derived settings, a secret-free assistant summary,
+ * and the acting user's frictionMode. `checkAssistant=1` performs a bounded,
+ * non-generating provider check.
  *
  * PUT validates and persists a friction-mode change on the User row
  * (PRODUCT.md §9 friction calibration). The mode flows client (store) → request
@@ -12,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 import { FRICTION_MODES, type FrictionMode } from '@/lib/friction'
+import { checkAIReadiness, publicAIConfiguration } from '@/lib/ai-service'
 
 export const runtime = 'nodejs'
 
@@ -19,10 +21,14 @@ export async function GET(req: NextRequest) {
   const userId = await requireUserId(req)
   const user = await db.user.findUnique({ where: { id: userId }, select: { frictionMode: true } })
   const frictionMode = (user?.frictionMode as FrictionMode | undefined) ?? 'socratic'
+  const assistant = req.nextUrl.searchParams.get('checkAssistant') === '1'
+    ? await checkAIReadiness()
+    : publicAIConfiguration()
   return NextResponse.json({
     idleThresholdSeconds: Number(process.env.IDLE_THRESHOLD ?? 2),
     dailyTokenBudget: Number(process.env.DAILY_TOKEN_BUDGET ?? 100000),
     frictionMode,
+    assistant,
   })
 }
 

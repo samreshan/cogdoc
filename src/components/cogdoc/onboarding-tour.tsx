@@ -29,14 +29,14 @@ const STEPS = [
     title: 'Underlines are invitations, not corrections.',
     description: 'Hover an underlined passage to see the intervention. The right pane groups every active intervention so you can return to it later.',
     icon: Highlighter,
-    points: ['Click a right-pane item to locate its passage', 'Mark it addressed or dismiss it', 'You decide every change to the draft'],
+    points: ['Click a right-pane item to locate its passage', 'Check Assistant in the editor header if model guidance is unavailable', 'You decide every change to the draft'],
   },
   {
     eyebrow: 'Research in context',
     title: 'Select a claim and find sources in one step.',
     description: 'Highlight text in the editor, then choose Find sources. Add useful records to the library or upload a PDF for passage-level evidence checks.',
     icon: FileSearch,
-    points: ['Search scholarly records from selected text', 'Upload and index PDF sources', 'Review source evidence before citing it'],
+    points: ['Search OpenAlex and Crossref from selected text', 'Copy a CSL citation or open a legal full-text link', 'Review source evidence before citing it'],
   },
   {
     eyebrow: 'Finish with confidence',

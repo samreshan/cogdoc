@@ -4,6 +4,15 @@
 import type { Project, Intervention, Analytics, PdfSummary, ReferenceSummary, ReviewItem, ReviewRun, VerificationReport } from '@/lib/types'
 import type { FormattedCitation } from '@/lib/citation-format'
 
+export interface AssistantReadiness {
+  provider: 'gemini' | 'ollama' | 'groq' | 'custom'
+  model: string
+  configured: boolean
+  local: boolean
+  status: 'configured' | 'reachable' | 'missing_configuration' | 'authentication_failed' | 'quota_limited' | 'model_unavailable' | 'unreachable'
+  message: string
+}
+
 export class ApiError extends Error {
   status: number
   payload: Record<string, unknown>
@@ -286,7 +295,11 @@ export const api = {
       idleThresholdSeconds: number
       dailyTokenBudget: number
       frictionMode: 'socratic' | 'coach' | 'assistant'
+      assistant: AssistantReadiness
     }>('/api/settings'),
+  checkAssistant: () =>
+    jsonFetch<{ assistant: AssistantReadiness }>('/api/settings?checkAssistant=1')
+      .then(({ assistant }) => assistant),
   setFrictionMode: (frictionMode: 'socratic' | 'coach' | 'assistant') =>
     jsonFetch<{ frictionMode: string }>('/api/settings', {
       method: 'PUT',

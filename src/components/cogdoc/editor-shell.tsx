@@ -13,6 +13,7 @@ import EditorTiptap from './editor-tiptap'
 import ResearchLibrary from './research-library'
 import AnalyticsPanel from './analytics-panel'
 import ReviewPaceSelector from './review-pace-selector'
+import AssistantStatus from './assistant-status'
 import ActionQueue from './action-queue'
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api-client'
@@ -90,6 +91,7 @@ export default function EditorShell() {
         </div>
 
         <div className="flex items-center gap-1">
+          <AssistantStatus />
           <ReviewPaceSelector />
           <Button
             variant="ghost" size="sm"

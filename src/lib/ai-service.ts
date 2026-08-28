@@ -131,6 +131,31 @@ export function parseVerdictJSON(
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 export type AIProvider = 'gemini' | 'ollama' | 'groq' | 'custom'
+export type AssistantReadinessStatus =
+  | 'configured'
+  | 'reachable'
+  | 'missing_configuration'
+  | 'authentication_failed'
+  | 'quota_limited'
+  | 'model_unavailable'
+  | 'unreachable'
+
+export interface AssistantReadiness {
+  provider: AIProvider
+  model: string
+  configured: boolean
+  local: boolean
+  status: AssistantReadinessStatus
+  message: string
+}
+
+const ASSISTANT_ISSUE_TTL_MS = 10 * 60 * 1000
+let recentAssistantIssue: {
+  provider: AIProvider
+  status: Exclude<AssistantReadinessStatus, 'configured' | 'reachable' | 'missing_configuration'>
+  message: string
+  expiresAt: number
+} | null = null
 
 export function configuredAIProvider(): AIProvider {
   const value = process.env.AI_PROVIDER?.trim().toLowerCase()
@@ -191,6 +216,133 @@ export function compatibleModel(provider: Exclude<AIProvider, 'gemini'>): string
   return configured
 }
 
+/** Public, secret-free configuration summary for readiness UI. */
+export function publicAIConfiguration(): AssistantReadiness {
+  const provider = configuredAIProvider()
+  const local = provider === 'ollama'
+  let model = ''
+  let configured = false
+  try {
+    model = provider === 'gemini' ? geminiModel() : compatibleModel(provider)
+    if (provider === 'gemini') {
+      configured = Boolean((process.env.GEMINI_API_KEY || process.env.AI_API_KEY)?.trim())
+    } else if (provider === 'ollama') {
+      compatibleBaseUrl(provider)
+      configured = true
+    } else {
+      compatibleBaseUrl(provider)
+      configured = Boolean(process.env.AI_API_KEY?.trim())
+    }
+  } catch {
+    configured = false
+  }
+
+  return {
+    provider,
+    model: model || 'not configured',
+    configured,
+    local,
+    status: configured ? 'configured' : 'missing_configuration',
+    message: configured
+      ? `${providerDisplayName(provider)} is configured. Check availability to verify the model connection.`
+      : missingConfigurationMessage(provider),
+  }
+}
+
+/**
+ * Perform a bounded, non-generating provider check. This never returns keys or
+ * internal endpoint URLs and does not consume a completion request.
+ */
+export async function checkAIReadiness(): Promise<AssistantReadiness> {
+  const configured = publicAIConfiguration()
+  if (!configured.configured) return configured
+  if (
+    recentAssistantIssue
+    && recentAssistantIssue.provider === configured.provider
+    && recentAssistantIssue.expiresAt > Date.now()
+  ) {
+    return readinessResult(configured, recentAssistantIssue.status, recentAssistantIssue.message)
+  }
+
+  try {
+    const provider = configured.provider
+    const res = provider === 'gemini'
+      ? await fetch(`${GEMINI_ENDPOINT}/${encodeURIComponent(configured.model)}?key=${encodeURIComponent((process.env.GEMINI_API_KEY || process.env.AI_API_KEY)!)}`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(3_500),
+      })
+      : await fetch(`${compatibleBaseUrl(provider)}/models`, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          ...(process.env.AI_API_KEY?.trim()
+            ? { Authorization: `Bearer ${process.env.AI_API_KEY.trim()}` }
+            : {}),
+        },
+        signal: AbortSignal.timeout(3_500),
+      })
+
+    if (res.status === 401 || res.status === 403 || (provider === 'gemini' && res.status === 400)) {
+      return readinessResult(configured, 'authentication_failed', `${providerDisplayName(provider)} rejected the configured credential.`)
+    }
+    if (res.status === 429) {
+      return readinessResult(configured, 'quota_limited', `${providerDisplayName(provider)} is reachable, but its current quota is limited.`)
+    }
+    if (res.status === 404) {
+      return readinessResult(configured, 'model_unavailable', `The configured model “${configured.model}” was not found.`)
+    }
+    if (!res.ok) {
+      return readinessResult(configured, 'unreachable', `${providerDisplayName(provider)} returned status ${res.status}.`)
+    }
+
+    if (provider !== 'gemini') {
+      const data = await res.json().catch(() => ({})) as { data?: Array<{ id?: string }> }
+      const models = (data.data ?? []).map((entry) => entry.id).filter(Boolean)
+      if (models.length > 0 && !models.includes(configured.model)) {
+        return readinessResult(configured, 'model_unavailable', `The provider is reachable, but “${configured.model}” is not installed or available.`)
+      }
+    }
+
+    return readinessResult(
+      configured,
+      'reachable',
+      configured.local
+        ? 'The local service and configured model are reachable.'
+        : `${providerDisplayName(provider)} and the configured model are reachable. Remaining generation quota is checked when guidance is requested.`,
+    )
+  } catch {
+    return readinessResult(
+      configured,
+      'unreachable',
+      configured.local
+        ? 'The local assistant is not reachable. Start Ollama and check the configured model.'
+        : `${providerDisplayName(configured.provider)} could not be reached.`,
+    )
+  }
+}
+
+function readinessResult(
+  configured: AssistantReadiness,
+  status: AssistantReadinessStatus,
+  message: string,
+): AssistantReadiness {
+  return { ...configured, status, message }
+}
+
+function providerDisplayName(provider: AIProvider): string {
+  if (provider === 'ollama') return 'Ollama'
+  if (provider === 'groq') return 'Groq'
+  if (provider === 'custom') return 'Custom assistant'
+  return 'Gemini'
+}
+
+function missingConfigurationMessage(provider: AIProvider): string {
+  if (provider === 'gemini') return 'Add AI_API_KEY or GEMINI_API_KEY, then restart Cogdoc.'
+  if (provider === 'ollama') return 'Set an Ollama model and start the local Ollama service.'
+  return `Complete AI_BASE_URL, AI_MODEL, and AI_API_KEY for ${providerDisplayName(provider)}.`
+}
+
 async function compatibleGenerate(prompt: string, provider: Exclude<AIProvider, 'gemini'>): Promise<string> {
   const key = process.env.AI_API_KEY?.trim()
   if (provider !== 'ollama' && !key) throw new Error(`AI_API_KEY is required when AI_PROVIDER=${provider}`)
@@ -222,15 +374,43 @@ async function generateConfigured(prompt: string): Promise<string> {
 }
 
 async function callLLM(systemPrompt: string): Promise<string> {
-  try {
-    return await generateConfigured(systemPrompt)
-  } catch (e) {
-    // If rate-limited (429), wait 2s and retry once
-    if ((e as Error).message.includes('429')) {
-      await new Promise((r) => setTimeout(r, 2000))
-      return await generateConfigured(systemPrompt)
+  const provider = configuredAIProvider()
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const result = await generateConfigured(systemPrompt)
+      recentAssistantIssue = null
+      return result
+    } catch (error) {
+      const message = (error as Error).message
+      if (attempt === 0 && message.includes('429')) {
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+        continue
+      }
+      rememberAssistantIssue(provider, message)
+      throw error
     }
-    throw e
+  }
+  throw new Error('Assistant request failed')
+}
+
+function rememberAssistantIssue(provider: AIProvider, detail: string): void {
+  let status: NonNullable<typeof recentAssistantIssue>['status'] = 'unreachable'
+  let message = `${providerDisplayName(provider)} could not complete the latest guidance request.`
+  if (detail.includes('429')) {
+    status = 'quota_limited'
+    message = `${providerDisplayName(provider)} rejected the latest guidance request because its quota is currently limited.`
+  } else if (/\b(401|403)\b/.test(detail)) {
+    status = 'authentication_failed'
+    message = `${providerDisplayName(provider)} rejected the configured credential during the latest guidance request.`
+  } else if (/\b404\b/.test(detail)) {
+    status = 'model_unavailable'
+    message = 'The configured model was not available during the latest guidance request.'
+  }
+  recentAssistantIssue = {
+    provider,
+    status,
+    message,
+    expiresAt: Date.now() + ASSISTANT_ISSUE_TTL_MS,
   }
 }
 

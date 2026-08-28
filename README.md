@@ -218,6 +218,8 @@ AI_API_KEY=""
 When Cogdoc itself runs inside Docker and Ollama runs on the host, use
 `http://host.docker.internal:11434/v1` as `AI_BASE_URL`. Model weights are not
 downloaded automatically because hardware capacity and deployment policy vary.
+The editor's **Assistant** control performs a bounded, non-generating readiness
+check and reports whether the configured model is reachable.
 
 ---
 

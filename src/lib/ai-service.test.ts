@@ -39,6 +39,8 @@ import {
   geminiModel,
   configuredAIProvider,
   compatibleModel,
+  publicAIConfiguration,
+  checkAIReadiness,
   GeminiAdapter,
   getAIService,
 } from '@/lib/ai-service'
@@ -55,6 +57,7 @@ beforeEach(() => {
   delete process.env.AI_MODEL
   delete process.env.AI_PROVIDER
   delete process.env.AI_BASE_URL
+  delete process.env.AI_API_KEY
 })
 
 describe('geminiModel', () => {
@@ -84,6 +87,88 @@ describe('provider configuration', () => {
   it('uses an explicit local model instead of the default', () => {
     process.env.AI_MODEL = 'gemma3:12b'
     expect(compatibleModel('ollama')).toBe('gemma3:12b')
+  })
+})
+
+describe('assistant readiness', () => {
+  it('reports missing Gemini credentials without making a network request', async () => {
+    delete process.env.GEMINI_API_KEY
+    const configured = publicAIConfiguration()
+    const readiness = await checkAIReadiness()
+
+    expect(configured).toMatchObject({
+      provider: 'gemini', model: 'gemini-3.5-flash-lite', local: false,
+      configured: false, status: 'missing_configuration',
+    })
+    expect(readiness.status).toBe('missing_configuration')
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(JSON.stringify(readiness)).not.toContain('test-key')
+  })
+
+  it('distinguishes a Gemini quota limit from invalid configuration', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 429 } as Response)
+    const readiness = await checkAIReadiness()
+    expect(readiness).toMatchObject({
+      provider: 'gemini', configured: true, status: 'quota_limited', local: false,
+    })
+  })
+
+  it('reports a rejected Gemini credential without returning provider details', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 400 } as Response)
+    const readiness = await checkAIReadiness()
+    expect(readiness.status).toBe('authentication_failed')
+    expect(JSON.stringify(readiness)).not.toContain(process.env.GEMINI_API_KEY)
+  })
+
+  it('checks that the configured Ollama model is locally available', async () => {
+    process.env.AI_PROVIDER = 'ollama'
+    process.env.AI_MODEL = 'qwen3:8b'
+    delete process.env.GEMINI_API_KEY
+    fetchMock.mockResolvedValueOnce({
+      ok: true, status: 200,
+      json: async () => ({ data: [{ id: 'qwen3:8b' }, { id: 'nomic-embed-text' }] }),
+    } as Response)
+
+    const readiness = await checkAIReadiness()
+    expect(readiness).toMatchObject({
+      provider: 'ollama', model: 'qwen3:8b', configured: true,
+      status: 'reachable', local: true,
+    })
+    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:11434/v1/models', expect.objectContaining({
+      headers: { Accept: 'application/json' },
+    }))
+  })
+
+  it('reports when Ollama is running but the requested model is absent', async () => {
+    process.env.AI_PROVIDER = 'ollama'
+    process.env.AI_MODEL = 'qwen3:8b'
+    delete process.env.GEMINI_API_KEY
+    fetchMock.mockResolvedValueOnce({
+      ok: true, status: 200,
+      json: async () => ({ data: [{ id: 'gemma3:4b' }] }),
+    } as Response)
+
+    await expect(checkAIReadiness()).resolves.toMatchObject({ status: 'model_unavailable' })
+  })
+
+  it('surfaces a recent real generation quota failure without another provider call', async () => {
+    vi.useFakeTimers()
+    try {
+      templateMock.mockResolvedValue({ template: 'ask about {context}' })
+      fetchMock
+        .mockResolvedValueOnce({ ok: false, status: 429, text: async () => 'quota' } as Response)
+        .mockResolvedValueOnce({ ok: false, status: 429, text: async () => 'quota' } as Response)
+      const generation = new GeminiAdapter().generateSocratic('Provocation', 'the argument')
+      const rejection = expect(generation).rejects.toThrow(/429/)
+      await vi.advanceTimersByTimeAsync(2_000)
+      await rejection
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+
+      await expect(checkAIReadiness()).resolves.toMatchObject({ status: 'quota_limited' })
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

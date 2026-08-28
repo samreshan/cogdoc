@@ -8,12 +8,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
+const aiMocks = vi.hoisted(() => ({
+  publicAIConfiguration: vi.fn(),
+  checkAIReadiness: vi.fn(),
+}))
+
 vi.mock('@/lib/db', () => ({
   db: {
     user: { findUnique: vi.fn(), update: vi.fn() },
   },
 }))
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn() }))
+vi.mock('@/lib/ai-service', () => aiMocks)
 
 import { GET, PUT } from '@/app/api/settings/route'
 import { db } from '@/lib/db'
@@ -28,6 +34,12 @@ beforeEach(() => {
   userUpdate.mockReset()
   getUser.mockReset()
   getUser.mockResolvedValue({ id: 'u1' })
+  aiMocks.publicAIConfiguration.mockReset()
+  aiMocks.publicAIConfiguration.mockReturnValue({
+    provider: 'gemini', model: 'gemini-3.5-flash-lite', configured: true,
+    local: false, status: 'configured', message: 'Gemini is configured.',
+  })
+  aiMocks.checkAIReadiness.mockReset()
 })
 
 describe('GET /api/settings', () => {
@@ -42,6 +54,19 @@ describe('GET /api/settings', () => {
     expect(body.idleThresholdSeconds).toBe(2)
     expect(body.dailyTokenBudget).toBe(100000)
     expect(body.frictionMode).toBe('coach')
+    expect(body.assistant.status).toBe('configured')
+  })
+
+  it('performs a bounded readiness check only when explicitly requested', async () => {
+    userFindUnique.mockResolvedValue({ id: 'u1', frictionMode: 'coach' })
+    aiMocks.checkAIReadiness.mockResolvedValue({
+      provider: 'gemini', model: 'gemini-3.5-flash-lite', configured: true,
+      local: false, status: 'quota_limited', message: 'Gemini quota is currently limited.',
+    })
+
+    const res = await GET(new NextRequest('http://localhost/api/settings?checkAssistant=1'))
+    expect((await res.json()).assistant.status).toBe('quota_limited')
+    expect(aiMocks.checkAIReadiness).toHaveBeenCalledOnce()
   })
 
   it('defaults to socratic when the user row has no frictionMode', async () => {

@@ -15,11 +15,23 @@ This guide explains how to use it.
 3. Create an **Assignment** or **Research** workspace, or import an existing DOCX.
 4. Start writing in the editor. The text auto-saves every 1.5 seconds.
 
-That's it. As you write, Cogdoc's four AI engines will analyze your sentences and intervene.
+That's it. As you write, Cogdoc's review engines analyze your sentences and intervene.
+
+### Checking the assistant
+
+The **Assistant** control in the editor header checks the configured model
+without asking it to generate content. A green dot means the provider and model
+are reachable. Open the control to see the provider and model, refresh the
+check, or follow setup guidance for a missing key, exhausted quota, unavailable
+local model, or unreachable service. No API key or internal endpoint is shown.
+
+Model-backed guidance and scholarly discovery are independent. If Gemini or a
+local model is unavailable, **Find sources** still searches OpenAlex and
+Crossref, and rule-based document review continues to work.
 
 ---
 
-## The four AI engines
+## The four review engines
 
 ### 1. Interceptor (amber underline)
 

@@ -141,6 +141,17 @@ weights remains deferred until supported deployment hardware, quantization,
 context limits, safety evaluation, and latency targets are fixed. This is a
 deliberate deviation from forcing a multi-gigabyte runtime into every install.
 
+The editor header exposes an **Assistant** readiness control. Its explicit
+check uses the provider's model-list or model-metadata endpoint with a 3.5
+second timeout; it never sends draft content or requests a completion. The
+public response contains only provider, model, local/hosted mode, and a bounded
+status such as reachable, quota limited, model unavailable, or unreachable.
+The connectivity probe does not claim that hosted generation quota remains;
+recent real generation failures are retained in-process for ten minutes and
+override the connectivity result. Keys and base URLs are never returned.
+Research discovery remains available through OpenAlex and Crossref when
+model-backed interventions are unavailable.
+
 ### 8. Dependency remediation is part of the release gate
 
 The citation milestone added the MIT-licensed Citation.js core and CSL plugin.
