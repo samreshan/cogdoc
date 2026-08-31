@@ -30,7 +30,7 @@ npm run build
 git diff --check
 ```
 
-At the 2026-08-28 checkpoint, the gate passed with 68 Vitest files and 488
+At the 2026-08-31 checkpoint, the gate passed with 69 Vitest files and 492
 tests. Later releases must record their own output instead of relying on that
 historical count.
 

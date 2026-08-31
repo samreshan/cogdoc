@@ -25,6 +25,11 @@ export const metadata: Metadata = {
   description: "An assignment and research workspace that checks citations, evidence, reasoning and code snapshots without claiming to prove authorship.",
   keywords: ["Cogdoc", "academic writing", "assignment review", "research workspace", "citation verification"],
   authors: [{ name: "Samreshan Sahani" }],
+  icons: {
+    icon: "/logo.svg",
+    shortcut: "/logo.svg",
+    apple: "/logo.svg",
+  },
 };
 
 export default function RootLayout({

@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -195,8 +196,9 @@ export default function LivingMargin() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-emerald-700" />
-              Citation Sentinel — full evidence
+              Citation Sentinel: full evidence
             </DialogTitle>
+            <DialogDescription>Inspect the saved source passages used to evaluate this citation.</DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh] pr-2">
             <div className="space-y-3">

@@ -7,7 +7,7 @@ import type { Project } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { ArrowRight, BookOpen, CalendarClock, FileInput, FlaskConical, Loader2, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -179,7 +179,10 @@ export default function Dashboard() {
 
       <Dialog open={createType !== null} onOpenChange={(open) => !open && setCreateType(null)}>
         <DialogContent className="rounded-xl sm:max-w-lg">
-          <DialogHeader><DialogTitle className="font-serif text-2xl">New {createType} workspace</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="font-serif text-2xl">New {createType} workspace</DialogTitle>
+            <DialogDescription>Choose the settings that will guide review, sources, citations, and export.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4 py-2">
             <div><label className="mb-1.5 block text-sm font-medium" htmlFor="workspace-title">Title</label><Input id="workspace-title" autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder={createType === 'assignment' ? 'e.g. Software engineering assignment' : 'e.g. Cognitive offloading literature review'} /></div>
             {createType === 'assignment' && <div><label className="mb-1.5 block text-sm font-medium" htmlFor="due-at">Deadline</label><Input id="due-at" type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /><p className="mt-1 text-xs text-stone-500">Optional. It changes prioritization, never verification standards.</p></div>}

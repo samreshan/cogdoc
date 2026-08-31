@@ -16,13 +16,6 @@
  * src/lib/editor-orchestration.ts; this component is wiring + presentation.
  */
 import { useEditor, EditorContent } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import { Table } from '@tiptap/extension-table'
-import TableRow from '@tiptap/extension-table-row'
-import TableHeader from '@tiptap/extension-table-header'
-import TableCell from '@tiptap/extension-table-cell'
-import Image from '@tiptap/extension-image'
-import Link from '@tiptap/extension-link'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
@@ -35,14 +28,11 @@ import {
   extractContext,
   isParagraphComplete,
 } from '@/lib/editor-orchestration'
-import { WavyUnderline } from '@/lib/extensions/wavy-underline'
 import { IdleDetector } from '@/lib/extensions/idle-detector'
 import {
-  InterventionHighlight,
   interventionHighlightKey,
 } from '@/lib/extensions/intervention-highlight'
 import {
-  ReviewItemHighlight,
   reviewItemHighlightKey,
 } from '@/lib/extensions/review-item-highlight'
 import { useEngineFiring } from '@/lib/use-engine-firing'
@@ -58,6 +48,7 @@ import { clearRecoveryDraft, loadRecoveryDraft, saveRecoveryDraft } from '@/lib/
 import { findEditorTextRange } from '@/lib/editor-focus'
 import EditorToolbar from './editor-toolbar'
 import SourcesResults from './sources-results'
+import { createEditorExtensions } from '@/lib/editor-extensions'
 
 export default function EditorTiptap() {
   const project = useCogdoc((s) => s.activeProject)
@@ -92,12 +83,8 @@ export default function EditorTiptap() {
   const reviewPace = project?.reviewPace ?? 'deep'
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Table.configure({ resizable: true }), TableRow, TableHeader, TableCell,
-      Image.configure({ allowBase64: true }), Link.configure({ openOnClick: false }),
-      WavyUnderline, InterventionHighlight, ReviewItemHighlight,
-    ],
+    extensions: createEditorExtensions(),
+    immediatelyRender: true,
     content: parseStoredContent(project?.document?.content),
     editorProps: {
       attributes: {

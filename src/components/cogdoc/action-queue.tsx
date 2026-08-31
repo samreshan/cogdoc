@@ -58,6 +58,52 @@ const ENGINE_META: Record<Intervention['engineType'], {
 
 const ENGINE_ORDER: Intervention['engineType'][] = ['citation', 'interceptor', 'socratic', 'scaffold']
 
+type ReviewGroupKey = 'evidence' | 'references' | 'understanding' | 'requirements' | 'other'
+
+const REVIEW_GROUPS: Array<{
+  key: ReviewGroupKey
+  label: string
+  description: string
+  icon: typeof Sparkles
+  types: string[]
+}> = [
+  {
+    key: 'evidence',
+    label: 'Evidence and citations',
+    description: 'Claims, passages, citations, and locators',
+    icon: ShieldCheck,
+    types: ['claim_needs_evidence', 'evidence_passage_required', 'citation_missing_reference', 'bibliography_missing', 'quotation_locator_missing'],
+  },
+  {
+    key: 'references',
+    label: 'Reference list',
+    description: 'Metadata matches and unused entries',
+    icon: BookOpen,
+    types: ['reference_metadata_unverified', 'reference_metadata_mismatch', 'reference_not_cited'],
+  },
+  {
+    key: 'understanding',
+    label: 'Understanding checks',
+    description: 'Explain the reasoning in your own words',
+    icon: MessageCircleQuestion,
+    types: ['comprehension_check'],
+  },
+  {
+    key: 'requirements',
+    label: 'Assignment requirements',
+    description: 'Brief and rubric coverage',
+    icon: ListTree,
+    types: ['rubric_gap'],
+  },
+  {
+    key: 'other',
+    label: 'Other actions',
+    description: 'Additional review findings',
+    icon: CircleDot,
+    types: [],
+  },
+]
+
 export function groupActiveInterventions(interventions: Intervention[]) {
   return ENGINE_ORDER.map((engineType) => ({
     engineType,
@@ -77,6 +123,39 @@ function quoteForReviewItem(item: ReviewItem): string | null {
   }
 }
 
+export function reviewItemContext(item: ReviewItem): string | null {
+  const quote = quoteForReviewItem(item)
+  if (quote) return quote
+  try {
+    const evidence = JSON.parse(item.evidenceJson) as {
+      reference?: { title?: unknown; rawText?: unknown; doi?: unknown }
+      requirement?: unknown
+    }
+    const reference = evidence.reference
+    for (const value of [reference?.title, reference?.rawText, reference?.doi, evidence.requirement]) {
+      if (typeof value === 'string' && value.trim()) return value.trim()
+    }
+  } catch {
+    // Older review records may contain malformed evidence. Keep the item usable.
+  }
+  return null
+}
+
+export function groupOpenReviewItems(items: ReviewItem[]) {
+  const open = items.filter((item) => !['resolved', 'dismissed'].includes(item.state))
+  const knownTypes = new Set(REVIEW_GROUPS.flatMap((group) => group.types))
+  return REVIEW_GROUPS.map((group) => ({
+    ...group,
+    items: open.filter((item) => group.key === 'other'
+      ? !knownTypes.has(item.type)
+      : group.types.includes(item.type)),
+  })).filter((group) => group.items.length > 0)
+}
+
+function isReferenceReview(item: ReviewItem): boolean {
+  return ['reference_metadata_unverified', 'reference_metadata_mismatch', 'reference_not_cited', 'citation_missing_reference', 'bibliography_missing'].includes(item.type)
+}
+
 function quotesForReviewItems(items: ReviewItem[]): string[] {
   return items
     .filter((item) => !['resolved', 'dismissed'].includes(item.state))
@@ -92,6 +171,7 @@ export default function ActionQueue() {
   const bumpLibrary = useCogdoc((state) => state.bumpLibrary)
   const removeIntervention = useCogdoc((state) => state.removeIntervention)
   const bumpAnalytics = useCogdoc((state) => state.bumpAnalytics)
+  const setActiveModal = useCogdoc((state) => state.setActiveModal)
   const [items, setItems] = useState<ReviewItem[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null)
@@ -101,6 +181,7 @@ export default function ActionQueue() {
   const [acting, setActing] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [scanStale, setScanStale] = useState(false)
+  const [openReviewGroups, setOpenReviewGroups] = useState<Set<ReviewGroupKey>>(new Set())
   const [sourceQuery, setSourceQuery] = useState('')
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const uploadInputRef = useRef<HTMLInputElement>(null)
@@ -129,15 +210,28 @@ export default function ActionQueue() {
     [activeInterventions],
   )
   const liveSignalCount = interventionGroups.reduce((count, group) => count + group.items.length, 0)
-  const openItems = useMemo(
-    () => items.filter((item) => !['resolved', 'dismissed'].includes(item.state)),
+  const reviewGroups = useMemo(
+    () => groupOpenReviewItems(items),
     [items],
   )
+  const openItems = reviewGroups.flatMap((group) => group.items)
   const selected = items.find((item) => item.id === selectedId) ?? null
   const selectedSignal = activeInterventions.find((item) => item.id === selectedSignalId && item.status === 'active') ?? null
   const selectedQuote = selected ? quoteForReviewItem(selected) : null
+  const selectedContext = selected ? reviewItemContext(selected) : null
   const needsEvidenceLink = Boolean(selected && ['claim_needs_evidence', 'evidence_passage_required'].includes(selected.type))
   const needsDocumentRecheck = Boolean(selected && ['citation_missing_reference', 'bibliography_missing', 'quotation_locator_missing'].includes(selected.type))
+  const needsReferenceReview = Boolean(selected && isReferenceReview(selected))
+
+  useEffect(() => {
+    if (!reviewGroups.length) return
+    setOpenReviewGroups((current) => {
+      const available = new Set(reviewGroups.map((group) => group.key))
+      const next = new Set([...current].filter((key) => available.has(key)))
+      if (!next.size) next.add(reviewGroups[0].key)
+      return next
+    })
+  }, [reviewGroups])
 
   useEffect(() => {
     setCandidates(null)
@@ -306,20 +400,41 @@ export default function ActionQueue() {
           })}
         </section>}
 
-        {loading ? <div role="status" className="space-y-2 p-4"><span className="sr-only">Loading review actions…</span>{[0, 1, 2].map((key) => <div key={key} className="h-16 animate-pulse rounded bg-stone-200 motion-reduce:animate-none" />)}</div> : openItems.length === 0 ? <div className="p-6 text-center"><ScanSearch className="mx-auto h-7 w-7 text-[#386c5c]" /><p className="mt-4 text-sm font-medium">Ready when the draft is</p><p className="mt-2 text-xs leading-5 text-stone-500">Run one scan to create calm, prioritized review actions.</p><Button size="sm" onClick={() => startReview()} disabled={scanning} className="mt-5 bg-[#173f35] hover:bg-[#245548]">Review document</Button></div> : <section>
-          <div className="px-4 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-amber-700">Review actions · {openItems.length}</div>
-          {openItems.map((item) => {
-            const quote = quoteForReviewItem(item)
-            const selectedClass = selectedId === item.id ? 'border-[#386c5c] bg-[#eef3ef]' : item.blocksCertification ? 'border-rose-400 hover:bg-stone-50' : 'border-amber-400 hover:bg-stone-50'
-            return <button key={item.id} onClick={() => selectItem(item)} className={'w-full border-l-2 px-3 py-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#386c5c] ' + selectedClass}>
-              <div className="flex items-start gap-2"><CircleDot className={'mt-0.5 h-3.5 w-3.5 shrink-0 ' + (item.blocksCertification ? 'text-rose-600' : 'text-amber-600')} /><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><p className="text-xs font-medium leading-5 text-stone-800">{item.title}</p>{quote && <MapPin className="mt-1 h-3.5 w-3.5 shrink-0 text-[#386c5c]" />}</div><p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-stone-500">{item.detail}</p>{quote && <span className="mt-1 block text-[10px] text-[#28614f]">Open in draft</span>}</div></div>
-            </button>
+        {loading ? <div role="status" className="space-y-2 p-4"><span className="sr-only">Loading review actions…</span>{[0, 1, 2].map((key) => <div key={key} className="h-16 animate-pulse rounded bg-stone-200 motion-reduce:animate-none" />)}</div> : openItems.length === 0 ? <div className="p-6 text-center"><ScanSearch className="mx-auto h-7 w-7 text-[#386c5c]" /><p className="mt-4 text-sm font-medium">Ready when the draft is</p><p className="mt-2 text-xs leading-5 text-stone-500">Run one scan to create calm, prioritized review actions.</p><Button size="sm" onClick={() => startReview()} disabled={scanning} className="mt-5 bg-[#173f35] hover:bg-[#245548]">Review document</Button></div> : <section aria-label="Review actions by category">
+          <div className="flex items-center justify-between px-4 py-2"><span className="font-mono text-[10px] uppercase tracking-[0.16em] text-amber-700">Review actions</span><span className="font-mono text-[10px] tabular-nums text-stone-500">{openItems.length}</span></div>
+          {reviewGroups.map((group) => {
+            const Icon = group.icon
+            const isOpen = openReviewGroups.has(group.key)
+            return <section key={group.key} className="border-t border-stone-200 bg-white">
+              <button type="button" aria-expanded={isOpen} onClick={() => setOpenReviewGroups((current) => {
+                const next = new Set(current)
+                if (next.has(group.key)) next.delete(group.key)
+                else next.add(group.key)
+                return next
+              })} className="flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-[#f3f6f3] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#386c5c]">
+                <Icon className="h-3.5 w-3.5 shrink-0 text-[#386c5c]" aria-hidden="true" />
+                <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-stone-800">{group.label}</p><p className="truncate text-[10px] text-stone-500">{group.description}</p></div>
+                <span className="font-mono text-[10px] tabular-nums text-stone-500">{group.items.length}</span>
+                <ChevronDown className={'h-3.5 w-3.5 text-stone-400 transition-transform duration-200 motion-reduce:transition-none ' + (isOpen ? 'rotate-180' : '')} aria-hidden="true" />
+              </button>
+              {isOpen && <div className="border-t border-stone-100">
+                {group.items.map((item) => {
+                  const quote = quoteForReviewItem(item)
+                  const context = reviewItemContext(item)
+                  const selectedClass = selectedId === item.id ? 'border-[#386c5c] bg-[#eef3ef]' : item.blocksCertification ? 'border-rose-400 hover:bg-stone-50' : 'border-amber-400 hover:bg-stone-50'
+                  return <button key={item.id} onClick={() => selectItem(item)} aria-current={selectedId === item.id ? 'true' : undefined} className={'w-full border-l-2 px-4 py-3 text-left transition-colors active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#386c5c] ' + selectedClass}>
+                    <div className="flex items-start gap-2"><CircleDot className={'mt-0.5 h-3.5 w-3.5 shrink-0 ' + (item.blocksCertification ? 'text-rose-600' : 'text-amber-600')} aria-hidden="true" /><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><p className="text-xs font-medium leading-5 text-stone-800">{item.title}</p>{quote && <MapPin className="mt-1 h-3.5 w-3.5 shrink-0 text-[#386c5c]" aria-hidden="true" />}</div>{context && <p className="mt-0.5 line-clamp-2 font-serif text-[11px] leading-4 text-stone-700">“{context}”</p>}<p className="mt-1 line-clamp-2 text-[10px] leading-4 text-stone-500">{item.detail}</p>{quote && <span className="mt-1 block text-[10px] font-medium text-[#28614f]">Open in draft</span>}</div></div>
+                  </button>
+                })}
+              </div>}
+            </section>
           })}
         </section>}
       </div>
 
       {selected && !['resolved', 'dismissed'].includes(selected.state) && <footer className="max-h-[48vh] overflow-y-auto border-t border-stone-300 bg-white p-4">
         <div className="flex items-start justify-between gap-3"><div><span className={'font-mono text-[9px] uppercase tracking-[0.15em] ' + (selected.blocksCertification ? 'text-rose-700' : 'text-amber-700')}>{selected.blocksCertification ? 'Blocks verification' : 'Advisory'}</span><h3 className="mt-1 text-sm font-semibold">{selected.title}</h3></div><button onClick={() => setSelectedId(null)} aria-label="Close action"><X className="h-4 w-4 text-stone-400" /></button></div>
+        {selectedContext && <blockquote className="mt-3 border-l-2 border-[#9bb5aa] pl-3 font-serif text-xs leading-5 text-stone-700">“{selectedContext}”</blockquote>}
         <p className="mt-2 text-xs leading-5 text-stone-500">{selected.detail}</p>
         {selectedQuote && <Button size="sm" variant="outline" onClick={() => focusQuote(selectedQuote)} className="mt-3 h-8 border-[#386c5c] text-xs text-[#28614f]"><MapPin className="mr-1.5 h-3.5 w-3.5" />Locate in draft</Button>}
         {needsEvidenceLink && <div className="mt-3 space-y-2">
@@ -329,7 +444,8 @@ export default function ActionQueue() {
           {candidates && !candidates.passages.length && !candidates.code.length && <p className="rounded bg-amber-50 p-2 text-[11px] leading-4 text-amber-800">No candidate passage was found. Upload a source or use Find sources, then run the review again.</p>}
         </div>}
         {!needsEvidenceLink && !needsDocumentRecheck && <Textarea value={response} onChange={(event) => setResponse(event.target.value)} rows={3} className="mt-3 resize-none text-xs" placeholder="Optional note about what you changed or confirmed…" />}
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
+          {needsReferenceReview && <Button size="sm" variant="outline" onClick={() => setActiveModal('library')} className="h-8 border-stone-300 text-xs"><BookOpen className="mr-1.5 h-3.5 w-3.5" />Open library</Button>}
           {needsDocumentRecheck ? <Button size="sm" onClick={() => startReview('changed_blocks')} disabled={acting || scanning} className="flex-1 bg-[#173f35] hover:bg-[#245548]"><RefreshCw className="mr-1 h-3 w-3" />Recheck after editing</Button> : !needsEvidenceLink && <Button size="sm" onClick={() => resolveItem('resolve')} disabled={acting} className="flex-1 bg-[#173f35] hover:bg-[#245548]">{acting ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}Record action</Button>}
           <Button size="sm" variant="ghost" onClick={() => resolveItem('dismiss')} disabled={acting} title={selected.blocksCertification ? 'Keeps this item unresolved' : 'Dismiss advisory'} aria-label={selected.blocksCertification ? 'Dismiss response without resolving blocker' : 'Dismiss advisory'}><AlertTriangle className="h-3.5 w-3.5" /></Button>
         </div>

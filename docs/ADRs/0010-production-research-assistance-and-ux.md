@@ -35,6 +35,14 @@ the student's final prose or making unsupported authorship claims.
 - Document-review actions remain distinct because they represent deterministic
   verification state and certificate blockers, not live writing guidance.
 
+Large review runs are grouped into Evidence and citations, Reference list,
+Understanding checks, Assignment requirements, and Other actions. The queue
+keeps every open result, exposes the number in each category, and initially
+opens only the highest-priority available category. Each reference finding
+shows its title or raw metadata so repeated rule labels remain distinguishable,
+and offers a direct route to the research library. Anchored findings retain the
+same click-to-select and scroll behavior as live interventions.
+
 This deviates from the original single Living Margin presentation. The
 conceptual intervention system remains unchanged, but navigation is now usable
 for long documents and keyboard users.

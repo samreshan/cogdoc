@@ -3,7 +3,7 @@
 import { useCogdoc } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -174,7 +174,10 @@ export default function EditorShell() {
       {/* Library modal */}
       <Dialog open={activeModal === 'review'} onOpenChange={(o) => !o && setActiveModal('none')}>
         <DialogContent className="h-[82vh] max-w-md p-0 overflow-hidden">
-          <DialogHeader className="sr-only"><DialogTitle>Review action queue</DialogTitle></DialogHeader>
+          <DialogHeader className="sr-only">
+            <DialogTitle>Review action queue</DialogTitle>
+            <DialogDescription>Browse prioritized interventions and document checks, then locate or resolve each item.</DialogDescription>
+          </DialogHeader>
           <ActionQueue />
         </DialogContent>
       </Dialog>
@@ -186,6 +189,7 @@ export default function EditorShell() {
             <DialogTitle className="flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-stone-600" /> Research Library
             </DialogTitle>
+            <DialogDescription>Upload source text, inspect saved references, and verify citation metadata.</DialogDescription>
           </DialogHeader>
           <div className="h-[60vh]">
             <ResearchLibrary />
@@ -200,6 +204,7 @@ export default function EditorShell() {
             <DialogTitle className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-stone-600" /> Analytics
             </DialogTitle>
+            <DialogDescription>Review intervention activity and how guidance was handled in this workspace.</DialogDescription>
           </DialogHeader>
           <div className="h-[60vh]">
             <AnalyticsPanel />
@@ -214,6 +219,7 @@ export default function EditorShell() {
             <DialogTitle className="flex items-center gap-2">
               <History className="w-5 h-5 text-stone-600" /> Intervention History
             </DialogTitle>
+            <DialogDescription>Inspect earlier interventions, verdicts, and recorded author actions.</DialogDescription>
           </DialogHeader>
           <ScrollArea className="h-[60vh]">
             <div className="p-4 space-y-2">

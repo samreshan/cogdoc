@@ -4,8 +4,8 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, expect, it } from 'vitest'
 import { api } from '@/lib/api-client'
 import { useCogdoc } from '@/lib/store'
-import type { EngineType, Intervention } from '@/lib/types'
-import ActionQueue, { groupActiveInterventions } from './action-queue'
+import type { EngineType, Intervention, ReviewItem } from '@/lib/types'
+import ActionQueue, { groupActiveInterventions, groupOpenReviewItems, reviewItemContext } from './action-queue'
 
 function intervention(id: string, engineType: EngineType, overrides: Partial<Intervention> = {}): Intervention {
   return {
@@ -21,6 +21,27 @@ function intervention(id: string, engineType: EngineType, overrides: Partial<Int
     status: 'active',
     userAction: null,
     createdAt: `2026-08-28T00:00:0${id.slice(-1)}.000Z`,
+    resolvedAt: null,
+    ...overrides,
+  }
+}
+
+function reviewItem(id: string, type: string, overrides: Partial<ReviewItem> = {}): ReviewItem {
+  return {
+    id,
+    projectId: 'project-1',
+    reviewRunId: 'run-1',
+    claimId: null,
+    type,
+    severity: 'advisory',
+    title: 'Review this item',
+    detail: 'Inspect the underlying academic issue.',
+    evidenceJson: '{}',
+    anchorJson: null,
+    state: 'open',
+    blocksCertification: false,
+    resolution: null,
+    createdAt: '2026-08-31T00:00:00.000Z',
     resolvedAt: null,
     ...overrides,
   }
@@ -56,6 +77,36 @@ describe('groupActiveInterventions', () => {
     ])
 
     expect(groups[0].items.map((item) => item.id)).toEqual(['item-2', 'item-1'])
+  })
+})
+
+describe('review action presentation', () => {
+  it('groups every open item in stable workflow order and excludes closed work', () => {
+    const groups = groupOpenReviewItems([
+      reviewItem('requirement', 'rubric_gap'),
+      reviewItem('reference', 'reference_metadata_unverified'),
+      reviewItem('understanding', 'comprehension_check'),
+      reviewItem('evidence', 'claim_needs_evidence'),
+      reviewItem('other', 'future_review_type'),
+      reviewItem('resolved', 'claim_needs_evidence', { state: 'resolved' }),
+    ])
+
+    expect(groups.map((group) => group.key)).toEqual([
+      'evidence', 'references', 'understanding', 'requirements', 'other',
+    ])
+    expect(groups.flatMap((group) => group.items).map((item) => item.id)).toEqual([
+      'evidence', 'reference', 'understanding', 'requirement', 'other',
+    ])
+  })
+
+  it('extracts distinctive context from anchored claims and reference metadata', () => {
+    expect(reviewItemContext(reviewItem('claim', 'claim_needs_evidence', {
+      anchorJson: JSON.stringify({ quote: 'This claim needs a source.' }),
+    }))).toBe('This claim needs a source.')
+
+    expect(reviewItemContext(reviewItem('reference', 'reference_not_cited', {
+      evidenceJson: JSON.stringify({ reference: { title: 'Research literacy in higher education', doi: '10.1000/example' } }),
+    }))).toBe('Research literacy in higher education')
   })
 })
 
@@ -101,6 +152,41 @@ describe('ActionQueue navigation', () => {
     const detail = screen.getByLabelText('Selected intervention')
     expect(within(detail).getByRole('button', { name: /mark addressed/i })).toBeInTheDocument()
     expect(within(detail).getByRole('button', { name: /find sources/i })).toBeInTheDocument()
+    list.mockRestore()
+  })
+
+  it('renders large review sets as distinct categories with direct reference actions', async () => {
+    const reference = reviewItem('reference-1', 'reference_metadata_unverified', {
+      title: 'Reference metadata needs confirmation',
+      evidenceJson: JSON.stringify({ reference: { title: 'Research literacy in higher education' } }),
+    })
+    const evidence = reviewItem('evidence-1', 'claim_needs_evidence', {
+      title: 'Claim may need evidence',
+      anchorJson: JSON.stringify({ quote: 'Students need reliable evidence.' }),
+    })
+    useCogdoc.setState({
+      activeProject: {
+        id: 'project-1', title: 'Research', description: null, archived: false,
+        createdAt: '2026-08-31T00:00:00.000Z', updatedAt: '2026-08-31T00:00:00.000Z',
+        document: null, pdfs: [], interventions: [], _count: { pdfs: 0, interventions: 0 },
+      },
+      activeInterventions: [],
+      editorFocusQuote: null,
+      activeModal: 'none',
+    })
+    const list = vi.spyOn(api, 'listReviewItems').mockResolvedValue({ reviewItems: [reference, evidence], reviewRunId: 'run-1', stale: false })
+
+    render(<ActionQueue />)
+    await screen.findByText('Evidence and citations')
+    expect(screen.getByText('Reference list')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('Reference list'))
+    const referenceRow = screen.getAllByText('“Research literacy in higher education”')[0].closest('button')
+    expect(referenceRow).not.toBeNull()
+    fireEvent.click(referenceRow!)
+    fireEvent.click(screen.getByRole('button', { name: /open library/i }))
+
+    expect(useCogdoc.getState().activeModal).toBe('library')
     list.mockRestore()
   })
 })
