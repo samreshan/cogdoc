@@ -112,6 +112,8 @@ export interface CollaboratorResponse {
 export interface DocumentResearchDockProps {
   projectId: string
   projectTitle?: string
+  /** When supplied, the workspace rail controls the visible dock section. */
+  activeSection?: DocumentDockSection
   initialSection?: DocumentDockSection
   documentSelection?: DocumentSelectionContext | null
   documentState?: { documentId: string; documentRevision: number }

@@ -61,4 +61,13 @@ describe('DocumentResearchDock', () => {
     await user.click(screen.getByRole('button', { name: 'Close research tools' }))
     expect(onFocusDocument).toHaveBeenCalled()
   })
+
+  it('follows a controlled rail section without remounting the dock', async () => {
+    const stableProps = { projectId: 'project-1', onRequestPreview: vi.fn(), onApplyProposal: vi.fn(), onOpenSource: vi.fn(), onFocusDocument: vi.fn() }
+    const { rerender } = render(<DocumentResearchDock {...stableProps} activeSection="collaborator" />)
+    expect(await screen.findByText('Work through the next part')).toBeInTheDocument()
+    rerender(<DocumentResearchDock {...stableProps} activeSection="plan" />)
+    expect(screen.getByText('Plan panel')).toBeInTheDocument()
+    expect(mocks.load).toHaveBeenCalledTimes(1)
+  })
 })
