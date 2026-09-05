@@ -8,13 +8,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { QuestionPlan } from '@/components/cogdoc/refined-ui'
+import type { InvestigationPlanProposal } from '@/lib/document-collaborator-contract'
 
 interface Props {
   projectId: string
   onReady?: (context: ResearchContextSummary, questions: ResearchQuestionSummary[]) => void
+  initialProposal?: InvestigationPlanProposal
 }
 
-export default function InvestigationPlanPanel({ projectId, onReady }: Props) {
+export default function InvestigationPlanPanel({ projectId, onReady, initialProposal }: Props) {
   const [context, setContext] = useState<ResearchContextSummary | null>(null)
   const [questions, setQuestions] = useState<ResearchQuestionSummary[]>([])
   const [topic, setTopic] = useState('')
@@ -26,6 +28,7 @@ export default function InvestigationPlanPanel({ projectId, onReady }: Props) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [enabled, setEnabled] = useState(true)
+  const [dismissedProposalId, setDismissedProposalId] = useState('')
 
   useEffect(() => {
     let live = true
@@ -110,6 +113,7 @@ export default function InvestigationPlanPanel({ projectId, onReady }: Props) {
     </div>
     <label className="grid gap-1.5 text-sm font-medium text-slate-800">What do you understand so far?<Textarea value={understanding} onChange={(event) => setUnderstanding(event.target.value)} placeholder="It is fine to say you are not sure yet." /></label>
     <div className="flex flex-wrap gap-2"><Button onClick={() => void saveContext()} disabled={saving}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{context ? 'Save plan context' : 'Start investigation'}</Button><Button variant="outline" onClick={() => void addProposal()} disabled={saving || !context}><Sparkles className="mr-2 h-4 w-4" />Question template</Button></div>
+    {initialProposal && dismissedProposalId !== initialProposal.id ? <section className="rounded-lg border border-violet-200 bg-violet-50/50 p-3" aria-label="Collaborator plan proposal"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-slate-900">Editable question proposal</p><p className="mt-1 text-xs leading-5 text-slate-600">Nothing is added until you choose a question below.</p></div><Button size="sm" variant="ghost" onClick={() => setDismissedProposalId(initialProposal.id)}>Dismiss</Button></div><div className="mt-3 space-y-2">{initialProposal.questions.map((item, index) => <div key={`${item.wording}:${index}`} className="rounded-md border border-violet-100 bg-white p-2"><p className="text-sm font-medium text-slate-800">{item.wording}</p>{item.rationale ? <p className="mt-1 text-xs leading-5 text-slate-600">{item.rationale}</p> : null}<Button className="mt-2" size="sm" variant="outline" disabled={saving || !context} onClick={() => void addQuestion(item.wording, item.rationale)}>Add question</Button></div>)}</div></section> : null}
     {context ? <QuestionPlan topic={context.topic} purpose={context.purpose ?? undefined} questions={questions.map((question) => ({ id: question.id, title: question.wording, purpose: question.rationale ?? undefined, state: question.state === 'answered_for_now' ? 'answered' : question.state === 'archived' ? 'archived' : 'active' }))} selectedQuestionId={context.selectedQuestionId ?? undefined} onSelectQuestion={(questionId) => void api.updateResearchQuestion(projectId, { action: 'select', questionId, expectedRevision: context.revision }).then((result) => result.context && setContext(result.context)).catch((requestError) => setError(requestError.message))} /> : null}
     {context ? <div className="grid gap-2 border-t pt-4 md:grid-cols-[1fr_auto]"><div className="grid gap-2"><Input value={newQuestion} onChange={(event) => setNewQuestion(event.target.value)} placeholder="Add a question to investigate" aria-label="New research question" /><Input value={newRationale} onChange={(event) => setNewRationale(event.target.value)} placeholder="Why does this question matter? (optional)" aria-label="Question rationale" /></div><Button variant="outline" onClick={() => void addQuestion()} disabled={saving || !newQuestion.trim()}><Plus className="mr-2 h-4 w-4" />Add question</Button></div> : null}
     {error ? <p className="text-sm text-rose-700" role="alert">{error}</p> : null}

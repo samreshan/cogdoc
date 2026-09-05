@@ -47,6 +47,7 @@ import {
   GeminiAdapter,
   getAIService,
   parseContextualHelpResponse,
+  parseDocumentCollaboratorResponse,
   parseArticleDraftResponse,
 } from '@/lib/ai-service'
 import { db } from '@/lib/db'
@@ -118,6 +119,35 @@ describe('research kickoff response parsing', () => {
 
   it('rejects a kickoff draft that does not cover at least two sections', () => {
     expect(() => parseResearchKickoffDraft('{"sections":[{"heading":"Only","content":"One paragraph"}]}')).toThrow(/invalid kickoff draft/i)
+  })
+})
+
+describe('document collaborator response parsing', () => {
+  const selection = {
+    projectId: 'p1', documentId: 'd1', documentRevision: 2, from: 4, to: 14,
+    exactText: 'Draft text', textFingerprint: 'fingerprint', selectionId: 'p1:d1:2:4:14:fingerprint',
+  }
+  const sources = [{ workspaceSourceId: 'source-1', title: 'Owned passage', accessBasis: 'extracted_text' as const }]
+
+  it('keeps a targeted revision bounded to the requested selection and known source ids', () => {
+    const response = parseDocumentCollaboratorResponse(JSON.stringify({
+      answer: 'The sentence makes two claims. The revision separates them.',
+      nextStep: 'Preview the change.', hypothetical: false,
+      proposal: { replacement: 'Revised text', reason: 'Separate the claims.', sourceIds: ['source-1', 'foreign-source'] },
+    }), { intent: 'revise_selection', selection, sources })
+    expect(response.proposal).toEqual({ kind: 'document_revision', replacement: 'Revised text', reason: 'Separate the claims.', sourceIds: ['source-1'] })
+  })
+
+  it('does not accept a document revision when no selection was supplied', () => {
+    const response = parseDocumentCollaboratorResponse('{"answer":"Select a passage first.","proposal":{"replacement":"Overwrite everything"}}', { intent: 'revise_selection', selection: null, sources: [] })
+    expect(response.proposal).toBeUndefined()
+  })
+
+  it('bounds an editable plan to five questions', () => {
+    const questions = Array.from({ length: 8 }, (_, index) => ({ wording: `Question ${index + 1}?`, rationale: 'Useful scope.' }))
+    const response = parseDocumentCollaboratorResponse(JSON.stringify({ answer: 'Here is an editable plan.', proposal: { questions } }), { intent: 'plan', selection: null, sources: [] })
+    expect(response.proposal?.kind).toBe('plan')
+    if (response.proposal?.kind === 'plan') expect(response.proposal.questions).toHaveLength(5)
   })
 })
 
