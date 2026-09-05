@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: false,
+  // Local browser automation opens the dev server through this loopback host.
+  // This applies only to Next's development-resource origin check.
+  allowedDevOrigins: ['127.0.0.1'],
   async headers() {
     const scriptPolicy = process.env.NODE_ENV === 'development'
       ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"

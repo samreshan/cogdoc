@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeReq } from '@/app/api/_test-helpers'
 
 const mocks = vi.hoisted(() => ({
@@ -42,6 +42,7 @@ const updated = { ...intervention, evidences: [{
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.stubEnv('COGDOC_RESEARCH_COLLABORATOR', '')
   mocks.findFirst.mockResolvedValue(intervention)
   mocks.update.mockResolvedValue(updated)
   mocks.updateMany.mockResolvedValue({ count: 0 })
@@ -51,6 +52,8 @@ beforeEach(() => {
   mocks.appendAuditEvent.mockResolvedValue({ id: 'audit-1' })
   mocks.restructure.mockResolvedValue('The highlighted claim is supported within a bounded scope.')
 })
+
+afterEach(() => vi.unstubAllEnvs())
 
 const context = { params: Promise.resolve({ id: 'intervention-1' }) }
 
@@ -96,5 +99,17 @@ describe('POST /api/interventions/[id]/responses', () => {
     mocks.findFirst.mockResolvedValue(null)
     const response = await POST(makeReq({ answer: 'A sufficiently long answer.' }), context)
     expect(response.status).toBe(404)
+  })
+
+  it('retains the structured note but suppresses passage rewrites in refined exposure', async () => {
+    vi.stubEnv('COGDOC_RESEARCH_COLLABORATOR', 'investigation')
+    mocks.evaluate.mockResolvedValue({ satisfied: true, rationale: 'Specific and grounded.', followUpQuestion: null })
+    const response = await POST(makeReq({ answer: 'The passage supports the bounded part of the claim, but not the interface evaluation.' }), context)
+    const body = await response.json()
+    expect(response.status).toBe(200)
+    expect(body.satisfied).toBe(true)
+    expect(body.revisionProposal).toBeNull()
+    expect(mocks.noteCreate).toHaveBeenCalled()
+    expect(mocks.restructure).not.toHaveBeenCalled()
   })
 })

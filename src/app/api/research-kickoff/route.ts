@@ -4,6 +4,7 @@ import { requireUserId } from '@/lib/auth-supabase'
 import { getAIService } from '@/lib/ai-service'
 import type { ResearchKickoffOutlineItem, ResearchKickoffPlan } from '@/lib/types'
 import { appendAuditEvent } from '@/lib/workspace-server'
+import { collaboratorExposure } from '@/lib/research-collaborator'
 
 export const runtime = 'nodejs'
 export const maxDuration = 45
@@ -54,6 +55,12 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'draft') {
+    if (collaboratorExposure() !== 'legacy') {
+      return NextResponse.json({
+        error: 'Article drafting becomes available after reviewed findings are selected.',
+        code: 'forbidden_operation',
+      }, { status: 409 })
+    }
     const projectId = String(body.projectId ?? '')
     const topic = String(body.topic ?? '').trim().slice(0, 2_000)
     const outline = Array.isArray(body.outline) ? body.outline.flatMap((item) => {

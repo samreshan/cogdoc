@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useCogdoc } from '@/lib/store'
-import { api } from '@/lib/api-client'
+import { api, ApiError } from '@/lib/api-client'
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -28,6 +28,13 @@ export interface FoundSource {
   openAccessHostType?: string | null
   openAccessVersion?: string | null
   openAccessLicense?: string | null
+  role?: 'orientation' | 'evidence_candidate'
+  relevanceExplanation?: string
+  rationaleBasis?: 'metadata' | 'abstract'
+  relevanceBasis?: string
+  accessState?: 'full_text_accessible' | 'abstract_only' | 'metadata_only'
+  authoritySignals?: string[]
+  authorityLimitations?: string
   citation?: {
     authors: string[]
     year: string | null
@@ -45,6 +52,10 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   claim: string
+  questionId?: string
+  purpose?: string | null
+  uncertainty?: string | null
+  onSaved?: () => void
 }
 
 const RELEVANCE_META = {
@@ -57,7 +68,7 @@ export function formatCitationSuggestions(source: FoundSource): FormattedCitatio
   return source.citation?.formatted ?? null
 }
 
-export default function SourcesResults({ open, onOpenChange, claim }: Props) {
+export default function SourcesResults({ open, onOpenChange, claim, questionId, purpose, uncertainty, onSaved }: Props) {
   const project = useCogdoc((s) => s.activeProject)
   const bumpLibrary = useCogdoc((s) => s.bumpLibrary)
   const [loading, setLoading] = useState(false)
@@ -68,10 +79,12 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
   const [addedUrls, setAddedUrls] = useState<Set<string>>(new Set())
   const [addingUrl, setAddingUrl] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
+  const [query, setQuery] = useState(claim)
+  const [providerStatus, setProviderStatus] = useState<Record<string, 'available' | 'unavailable'>>({})
   const requestId = useRef(0)
 
   const handleSearch = useCallback(async () => {
-    if (!claim || claim.trim().length < 10) return
+    if (!query || query.trim().length < 10) return
     const currentRequest = ++requestId.current
     setLoading(true)
     setError(null)
@@ -81,7 +94,9 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
     setAddedUrls(new Set())
     setHasSearched(true)
     try {
-      const res = await api.findSources(claim, project?.id)
+      const res = questionId
+        ? await api.findSources(query, project?.id, { questionId, purpose, uncertainty })
+        : await api.findSources(query, project?.id)
       if (currentRequest !== requestId.current) return
       if (res.error) {
         setError(res.detail ? `${res.error}: ${res.detail}` : res.error)
@@ -90,28 +105,47 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
       } else {
         setSources(res.sources)
         setProvider(res.provider ?? null)
+        setProviderStatus(res.providerStatus ?? {})
         toast.success(`Found ${res.sources.length} sources`)
       }
     } catch (e) {
       if (currentRequest !== requestId.current) return
-      setError((e as Error).message)
+      setError(e instanceof ApiError && e.status === 502
+        ? `${e.message} You can still attach a source you already own or add a lawful excerpt in the investigation workspace.`
+        : (e as Error).message)
     } finally {
       if (currentRequest === requestId.current) setLoading(false)
     }
-  }, [claim, project?.id])
+  }, [project?.id, purpose, query, questionId, uncertainty])
 
   // Opening source discovery is the explicit author action. Search
   // immediately so selecting text and pressing Find sources is a one-step
   // workflow rather than a modal followed by a second confirmation click.
   useEffect(() => {
-    if (!open || claim.trim().length < 10) return
+    if (!open || query.trim().length < 10) return
     void handleSearch()
-  }, [open, claim, handleSearch])
+  }, [open, query, handleSearch])
+
+  useEffect(() => { setQuery(claim) }, [claim])
 
   async function handleAdd(source: FoundSource) {
     if (!project) return
     setAddingUrl(source.url)
     try {
+      if (questionId) {
+        const result = await api.researchFindingAction(project.id, {
+          action: 'save_discovered_source', questionId, title: source.title, url: source.url,
+          doi: source.citation?.doi, role: source.role ?? 'evidence_candidate',
+          rationale: source.relevanceExplanation ?? source.snippet,
+          rationaleBasis: source.rationaleBasis ?? 'metadata', recordProvider: source.recordProvider,
+          accessState: source.accessState ?? (source.openAccessUrl ? 'full_text_accessible' : 'metadata_only'),
+          metadata: { authors: source.citation?.authors ?? [], year: source.citation?.year ?? null, venue: source.citation?.venue ?? null, openAccessUrl: source.openAccessUrl ?? null, authoritySignals: source.authoritySignals ?? [], authorityLimitations: source.authorityLimitations ?? null },
+        }) as { alreadySaved?: boolean }
+        setAddedUrls((prev) => new Set([...prev, source.url]))
+        bumpLibrary(); onSaved?.()
+        toast.success(result.alreadySaved ? 'Source already linked to this question' : 'Source linked to this question', { description: 'Saved metadata is not a passage or accepted evidence. Open a lawful copy or add an excerpt to inspect content.' })
+        return
+      }
       const res = await api.addReference(project.id, {
         title: source.title,
         url: source.url,
@@ -163,8 +197,9 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
             separately for passage-level evidence checks.
           </DialogDescription>
           <div className="mt-3 p-3 rounded-lg bg-stone-50 border border-stone-200">
-            <p className="text-[11px] uppercase tracking-wide text-stone-400 font-medium mb-1">Your claim</p>
+            <p className="text-[11px] uppercase tracking-wide text-stone-400 font-medium mb-1">{questionId ? 'Question being investigated' : 'Your claim'}</p>
             <p className="text-sm text-stone-700 italic">&ldquo;{claim}&rdquo;</p>
+            {questionId && <label className="mt-3 grid gap-1 text-[11px] font-medium text-stone-600">Refine this search without changing your saved question<textarea value={query} onChange={(event) => setQuery(event.target.value)} rows={2} className="rounded border border-stone-200 bg-white p-2 text-sm font-normal text-stone-700" /></label>}
           </div>
         </DialogHeader>
 
@@ -182,7 +217,7 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
             ) : (
               <>
                 <Search className="w-4 h-4 mr-2" />
-                {hasSearched ? 'Search again' : 'Find sources'}
+                {hasSearched ? (questionId ? 'Find more' : 'Search again') : 'Find sources'}
               </>
             )}
           </Button>
@@ -200,6 +235,7 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
                   : 'Grounded web fallback results'}</span>
               <span className="font-medium text-[#28614f]">{sources.length} matches</span>
             </div>}
+            {Object.values(providerStatus).some((status) => status === 'unavailable') && <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">Some source providers were unavailable. Available records are shown; you can retry without losing any saved source links.</p>}
             {error && (
               <div className="p-4 rounded-lg bg-rose-50 border border-rose-200 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />
@@ -213,7 +249,7 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
             {!loading && !error && emptyMessage && (
               <div className="rounded-lg border border-stone-200 bg-stone-50 p-5 text-center">
                 <BookOpen className="mx-auto mb-2 h-7 w-7 text-stone-300" />
-                <p className="text-sm font-medium text-stone-700">No matches yet</p>
+                <p className="text-sm font-medium text-stone-700">No useful matches found</p>
                 <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-stone-500">{emptyMessage}</p>
               </div>
             )}
@@ -259,6 +295,7 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
                     <p className="text-xs text-stone-600 leading-relaxed mb-2">
                       {source.snippet}
                     </p>
+                    {source.relevanceExplanation && <p className="mb-2 rounded-md border border-stone-200/80 bg-white/70 p-2 text-[11px] leading-4 text-stone-700"><span className="font-semibold">Why it may help:</span> {source.relevanceExplanation}<br /><span className="text-stone-500">Basis: {source.rationaleBasis === 'abstract' ? 'metadata and abstract' : 'metadata only'}; full text has not been inspected by Cogdoc.</span></p>}
                     <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] text-stone-500">
                       <span className="rounded-full border border-stone-200 bg-white/70 px-2 py-0.5 font-medium">
                         Metadata: {providerName(source.recordProvider)}
@@ -266,7 +303,9 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
                       {source.openAccessUrl && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
                         Free copy via {providerName(source.openAccessProvider)}{accessDetails(source)}
                       </span>}
+                      <span className="rounded-full border border-stone-200 bg-white/70 px-2 py-0.5">{source.accessState === 'full_text_accessible' ? 'Full text link available (not inspected)' : source.accessState === 'abstract_only' ? 'Abstract only' : 'Metadata only'}</span>
                     </div>
+                    {source.authorityLimitations && <p className="mb-2 text-[10px] leading-4 text-stone-500">{source.authoritySignals?.length ? `Known signals: ${source.authoritySignals.join(', ')}. ` : ''}{source.authorityLimitations}</p>}
                     {citation && <div className="mb-2 rounded-md border border-stone-200/80 bg-white/70 p-2.5">
                       <div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-stone-500">CSL {citation.style === 'apa' ? 'APA 7' : 'Harvard Cite Them Right'} reference</p><button type="button" onClick={() => copyCitation(citation.reference, 'Reference')} className="rounded p-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700" aria-label="Copy suggested reference"><Clipboard className="h-3.5 w-3.5" /></button></div>
                       <p className="mt-1 text-[11px] leading-4 text-stone-700">{citation.reference}</p>
@@ -298,7 +337,7 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
                         ) : (
                           <Plus className="w-3 h-3 mr-1" />
                         )}
-                        {isAdded ? 'Saved' : 'Save'}
+                        {isAdded ? 'Saved' : questionId ? 'Link to question' : 'Save'}
                       </Button>
                     </div>
                   </motion.div>

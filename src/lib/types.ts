@@ -103,6 +103,44 @@ export interface ResearchKickoffDraft {
   sourceNeeds: string[]
 }
 
+export interface ResearchContextSummary {
+  id: string
+  projectId: string
+  topic: string
+  purpose: string | null
+  existingUnderstanding: string | null
+  scope: string | null
+  selectedQuestionId: string | null
+  lifecycleState: 'exploring' | 'paused' | 'concluded' | 'archived'
+  revision: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ResearchQuestionSummary {
+  id: string
+  projectId: string
+  contextId: string
+  parentId: string | null
+  wording: string
+  rationale: string | null
+  state: 'open' | 'parked' | 'answered_for_now' | 'archived'
+  sortOrder: number
+  revision: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ResearchFindingJourney {
+  articleEnabled?: boolean
+  context: ResearchContextSummary
+  question: ResearchQuestionSummary | null
+  workspaceSources: Array<{ id: string; source: { id: string; title: string; canonicalUrl?: string | null; parseStatus: string; metadataJson: string } }>
+  resources: Array<{ id: string; workspaceSourceId: string; role: string; workspaceSource: { id: string; source: { id: string; title: string; canonicalUrl?: string | null; parseStatus: string; metadataJson: string } } }>
+  exchanges: Array<{ id: string; body: string; createdAt: string }>
+  findings: Array<{ id: string; disposition: string; reviewState: string; revisions: Array<{ id: string; revision: number; conclusion: string | null; researcherExplanation: string | null; uncertainty: string | null; limitations: string | null; conflicts: string | null; evidenceUnavailable: boolean; evidenceScope: string | null; reviews: Array<{ decision: string; createdAt: string }>; evidences: Array<{ id: string; workspaceSourceId: string | null; excerpt: string | null; locatorValue: string | null; locatorPrecision: string | null; role: string; workspaceSource: { source: { title: string } } | null }> }> }>
+}
+
 export interface PositionedIntervention extends Intervention {
   position: { top: number; left: number }
   fadingOut?: boolean

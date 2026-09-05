@@ -1,7 +1,7 @@
 /**
  * Typed API client for the Cogdoc frontend.
  */
-import type { Project, Intervention, InterventionAnswerResult, Analytics, PdfSummary, ReferenceSummary, ReviewItem, ReviewRun, VerificationReport, ResearchWorkspaceSnapshot, ResearchNote, ResearchAction, AcademicProfile, SourceMapResult, ResearchDialogueAnswers, ResearchDialogueDraft, ResearchKickoffDraft, ResearchKickoffOutlineItem, ResearchKickoffPlan, ResearchHistorySnapshot } from '@/lib/types'
+import type { Project, Intervention, InterventionAnswerResult, Analytics, PdfSummary, ReferenceSummary, ReviewItem, ReviewRun, VerificationReport, ResearchWorkspaceSnapshot, ResearchNote, ResearchAction, AcademicProfile, SourceMapResult, ResearchDialogueAnswers, ResearchDialogueDraft, ResearchKickoffDraft, ResearchKickoffOutlineItem, ResearchKickoffPlan, ResearchHistorySnapshot, ResearchContextSummary, ResearchFindingJourney, ResearchQuestionSummary } from '@/lib/types'
 import type { FormattedCitation } from '@/lib/citation-format'
 
 export interface AssistantReadiness {
@@ -70,6 +70,26 @@ export const api = {
     jsonFetch<{ workspace: Project; referencesReformatted?: number; referencesNeedingReview?: number }>(`/api/workspaces/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   deleteWorkspace: (id: string) => jsonFetch<{ ok: boolean }>(`/api/workspaces/${id}`, { method: 'DELETE' }),
   getResearchWorkspace: (id: string) => jsonFetch<ResearchWorkspaceSnapshot>(`/api/workspaces/${id}/research`),
+  getInvestigation: (id: string) => jsonFetch<{ context: ResearchContextSummary | null; questions: ResearchQuestionSummary[] }>(`/api/workspaces/${id}/investigation`),
+  saveInvestigation: (id: string, input: Partial<Pick<ResearchContextSummary, 'topic' | 'purpose' | 'existingUnderstanding' | 'scope' | 'selectedQuestionId'>> & { expectedRevision?: number }) =>
+    jsonFetch<{ context: ResearchContextSummary }>(`/api/workspaces/${id}/investigation`, { method: 'POST', body: JSON.stringify(input) }),
+  proposeInvestigationPlan: (id: string, input: { topic: string; purpose?: string }) =>
+    jsonFetch<{ proposal: Array<{ wording: string; rationale: string }>; source: 'manual_template' }>(`/api/workspaces/${id}/investigation`, { method: 'POST', body: JSON.stringify({ action: 'propose', ...input }) }),
+  createResearchQuestion: (id: string, input: { wording: string; rationale?: string; parentId?: string | null }) =>
+    jsonFetch<{ question: ResearchQuestionSummary; context: ResearchContextSummary }>(`/api/workspaces/${id}/questions`, { method: 'POST', body: JSON.stringify(input) }),
+  updateResearchQuestion: (id: string, input: Record<string, unknown>) =>
+    jsonFetch<{ question?: ResearchQuestionSummary; context?: ResearchContextSummary; ok?: boolean }>(`/api/workspaces/${id}/questions`, { method: 'PATCH', body: JSON.stringify(input) }),
+  getFindingJourney: (id: string) => jsonFetch<ResearchFindingJourney>(`/api/workspaces/${id}/findings`),
+  researchFindingAction: (id: string, input: Record<string, unknown>) =>
+    jsonFetch<Record<string, unknown>>(`/api/workspaces/${id}/findings`, { method: 'POST', body: JSON.stringify(input) }),
+  requestContextualHelp: (id: string, input: { questionId: string; explanation: string; kind?: 'help' | 'hint' | 'example' | 'alternative' | 'next' | 'proposal'; passageId?: string; requested?: boolean }) =>
+    jsonFetch<{ help?: { kind: string; title: string; body: string; basis: string; action: string; hypothetical: boolean; noUsefulGap?: boolean; proposal?: { conclusion: string; uncertainty: string; limitations: string; conflicts: string } }; exchange?: { id: string }; contextKey?: string; providerStatus?: 'configured' | 'deterministic_fallback'; suppressed?: boolean; message?: string }>(`/api/workspaces/${id}/research-help`, { method: 'POST', body: JSON.stringify(input) }),
+  controlContextualHelp: (id: string, input: { questionId: string; contextKey: string; action: 'dismiss' | 'snooze' }) =>
+    jsonFetch<Record<string, unknown>>(`/api/workspaces/${id}/research-help`, { method: 'PATCH', body: JSON.stringify(input) }),
+  reviewFindingRevision: (workspaceId: string, findingId: string, input: { findingRevisionId: string; expectedRevision: number; decision: string; note?: string }) =>
+    jsonFetch<Record<string, unknown>>(`/api/workspaces/${workspaceId}/findings/${findingId}/review`, { method: 'POST', body: JSON.stringify(input) }),
+  createResearchArticle: (workspaceId: string, input: { path: 'manual_outline' | 'generated_draft'; title: string; audience: string; purpose: string; findingRevisionIds: string[] }) =>
+    jsonFetch<{ article: { id: string; path: string; status: string }; warning?: string | null }>(`/api/workspaces/${workspaceId}/articles`, { method: 'POST', body: JSON.stringify(input) }),
   getResearchHistory: (id: string) => jsonFetch<ResearchHistorySnapshot>(`/api/workspaces/${id}/history`),
   recordDecision: (id: string, input: { type: string; summary: string; entityType?: string; entityId?: string; detail?: Record<string, unknown> }) =>
     jsonFetch<{ event: { id: string; type: string; createdAt: string } }>(`/api/workspaces/${id}/history`, {
@@ -287,7 +307,7 @@ export const api = {
     jsonFetch<Analytics>(`/api/analytics?projectId=${projectId}`),
 
   // Find sources (scholarly index, with grounded-web fallback)
-  findSources: (claim: string, projectId?: string) =>
+  findSources: (claim: string, projectId?: string, context?: { purpose?: string | null; uncertainty?: string | null; questionId?: string }) =>
     jsonFetch<{
       sources: Array<{
         title: string
@@ -301,6 +321,13 @@ export const api = {
         openAccessHostType?: string | null
         openAccessVersion?: string | null
         openAccessLicense?: string | null
+        role?: 'orientation' | 'evidence_candidate'
+        relevanceExplanation?: string
+        rationaleBasis?: 'metadata' | 'abstract'
+        relevanceBasis?: string
+        accessState?: 'full_text_accessible' | 'abstract_only' | 'metadata_only'
+        authoritySignals?: string[]
+        authorityLimitations?: string
         citation?: {
           authors: string[]
           year: string | null
@@ -317,13 +344,14 @@ export const api = {
       totalFound?: number
       provider?: 'openalex' | 'crossref' | 'semantic_scholar' | 'gemini'
       providersTried?: Array<'openalex' | 'crossref' | 'semantic_scholar' | 'gemini'>
+      providerStatus?: Record<string, 'available' | 'unavailable'>
       accessResolver?: 'unpaywall' | null
       message?: string
       error?: string
       detail?: string
     }>('/api/find-sources', {
       method: 'POST',
-      body: JSON.stringify({ claim, projectId }),
+      body: JSON.stringify(context?.questionId ? { question: claim, projectId, purpose: context.purpose, uncertainty: context.uncertainty } : { claim, projectId }),
     }),
 
   // Add a web source to the project library

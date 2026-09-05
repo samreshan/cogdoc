@@ -6,6 +6,7 @@ import { chunkText } from '@/lib/retrieval'
 import { assessSourceQuality, canonicalizeSourceUrl, contentDigest, normalizeDoi } from '@/lib/research-source'
 import { enqueueClericalResearchJobs } from '@/lib/research-jobs'
 import { appendAuditEvent } from '@/lib/workspace-server'
+import { currentFindingIdsForWorkspaceSource, invalidateFindingReviews } from '@/lib/finding-review-invalidation'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -111,6 +112,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const workspaceSource = await db.workspaceSource.findFirst({ where: { id: String(body.workspaceSourceId ?? ''), projectId: id } })
   if (!workspaceSource) return NextResponse.json({ error: 'Workspace source not found' }, { status: 404 })
   await db.$transaction(async (tx) => {
+    const findingIds = await currentFindingIdsForWorkspaceSource(tx as never, id, workspaceSource.id)
+    await invalidateFindingReviews(tx as never, {
+      projectId: id,
+      userId,
+      findingIds,
+      reason: 'A source used by the current finding was removed from this workspace.',
+      changed: { kind: 'removal', id: workspaceSource.id },
+    })
     await tx.workspaceSource.delete({ where: { id: workspaceSource.id } })
     await appendAuditEvent(tx, { projectId: id, userId, type: 'workspace_source_detached', actor: 'student', payload: { summary: 'Removed a source from this project', workspaceSourceId: workspaceSource.id, librarySourceId: workspaceSource.librarySourceId, librarySourceRetained: true } })
   })

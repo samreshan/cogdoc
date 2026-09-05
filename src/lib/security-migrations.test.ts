@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
 const schema = readFileSync(path.join(root, 'prisma/schema.prisma'), 'utf8')
-const migrations = ['0002_rls_policies.sql', '0003_workspace_rls.sql', '0004_security_hardening.sql', '0005_research_ide_rls.sql']
+const migrations = ['0002_rls_policies.sql', '0003_workspace_rls.sql', '0004_security_hardening.sql', '0005_research_ide_rls.sql', '0006_research_collaborator_foundation_rls.sql']
   .map((name) => readFileSync(path.join(root, 'fastapi/migrations', name), 'utf8'))
   .join('\n')
 const hardening = readFileSync(

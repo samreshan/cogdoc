@@ -28,6 +28,7 @@ model User {
   certificates          Certificate[]
   librarySources        LibrarySource[]
   academicProfiles      AcademicProfile[]
+  researchReviews       FindingReview[]
 }
 
 model Project {
@@ -68,6 +69,11 @@ model Project {
   groundedSyntheses GroundedSynthesis[]
   academicProfiles  AcademicProfile[]
   researchJobs      ResearchJob[]
+  researchContext   ResearchContext?
+  researchQuestions ResearchQuestion[]
+  researchExchanges ResearchExchange[]
+  researchFindings  ResearchFinding[]
+  researchArticles  ResearchArticle[]
 
   @@index([userId])
 }
@@ -167,6 +173,7 @@ model PdfChunk {
   synthesisPassages SynthesisFindingPassage[]
   researchNotes     ResearchNote[]
   annotations       SourceAnnotation[]
+  findingEvidences  FindingEvidence[]
   // pgvector column (ADR-0008). Declared Unsupported so `prisma db push`
   // preserves it; the Prisma client ignores it (reads/writes go through the
   // FastAPI PgvectorStore). Populated by fastapi/migrations/0001.
@@ -542,6 +549,8 @@ model WorkspaceSource {
   notesEntries       ResearchNote[]
   annotations        SourceAnnotation[]
   references         Reference[]
+  questionLinks      QuestionResource[]
+  findingEvidences   FindingEvidence[]
 
   @@unique([projectId, librarySourceId])
   @@index([projectId, status])
@@ -692,4 +701,217 @@ model ResearchJob {
   @@unique([projectId, idempotencyKey])
   @@index([status, availableAt])
   @@index([projectId, createdAt])
+}
+
+// Research collaborator domain. These records are deliberately separate from
+// the legacy document, Claim, SynthesisFinding and certificate models: each
+// represents a researcher's revisable investigation rather than a document
+// scan, AI synthesis, or certification result.
+model ResearchContext {
+  id                    String   @id @default(cuid())
+  projectId             String   @unique
+  topic                 String   @default("")
+  purpose               String?
+  existingUnderstanding  String?
+  scope                 String?
+  selectedQuestionId    String?
+  lifecycleState        String   @default("exploring") // exploring | paused | concluded | archived
+  revision              Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  project               Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  questions             ResearchQuestion[]
+  articles              ResearchArticle[]
+
+  @@index([projectId, lifecycleState])
+}
+
+model ResearchQuestion {
+  id               String             @id @default(cuid())
+  projectId        String
+  contextId        String
+  parentId         String?
+  wording          String
+  rationale        String?
+  state            String             @default("open") // open | parked | answered_for_now | archived
+  sortOrder        Int                @default(0)
+  revision         Int                @default(0)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  project          Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  context          ResearchContext    @relation(fields: [contextId], references: [id], onDelete: Cascade)
+  parent           ResearchQuestion?  @relation("ResearchQuestionTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children         ResearchQuestion[] @relation("ResearchQuestionTree")
+  exchanges        ResearchExchange[]
+  findings         ResearchFinding[]
+  resourceLinks    QuestionResource[]
+
+  @@index([projectId, state, sortOrder])
+  @@index([contextId, parentId])
+}
+
+model QuestionResource {
+  id                String           @id @default(cuid())
+  projectId         String
+  questionId        String
+  workspaceSourceId String
+  role              String           @default("evidence_candidate") // orientation | evidence_candidate | both
+  rationale         String?
+  rationaleBasis    String?          // researcher | assistant | imported
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  question          ResearchQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  workspaceSource   WorkspaceSource  @relation(fields: [workspaceSourceId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, workspaceSourceId])
+  @@index([projectId, questionId])
+  @@index([projectId, workspaceSourceId])
+}
+
+model ResearchExchange {
+  id                 String            @id @default(cuid())
+  projectId          String
+  questionId         String
+  findingRevisionId  String?
+  speaker            String            // researcher | assistant | system
+  body               String
+  origin             String            @default("researcher") // researcher | assistant | imported
+  referencedIdsJson  String            @default("[]")
+  operation          String?
+  modelVersion       String?
+  promptVersion      String?
+  commandKey         String?
+  createdAt          DateTime          @default(now())
+  project            Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  question           ResearchQuestion  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  findingRevision    FindingRevision?  @relation(fields: [findingRevisionId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, commandKey])
+  @@index([projectId, questionId, createdAt])
+}
+
+model ResearchFinding {
+  id                String            @id @default(cuid())
+  projectId         String
+  questionId        String
+  disposition       String            @default("tentative") // tentative | supported_with_limits | inconclusive
+  reviewState       String            @default("draft") // draft | review_needed | reviewed | archived
+  currentRevision   Int               @default(0)
+  archivedAt        DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  question          ResearchQuestion  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  revisions         FindingRevision[]
+  articles          ArticleInput[]
+
+  @@index([projectId, reviewState, updatedAt])
+  @@index([questionId, currentRevision])
+}
+
+model FindingRevision {
+  id                    String            @id @default(cuid())
+  projectId             String
+  findingId             String
+  revision              Int
+  conclusion            String?
+  researcherExplanation String?
+  uncertainty           String?
+  limitations           String?
+  conflicts             String?
+  evidenceUnavailable   Boolean           @default(false)
+  evidenceScope         String?
+  contentHash           String
+  origin                String            @default("researcher") // researcher | assistant_proposal | imported
+  createdAt             DateTime          @default(now())
+  finding               ResearchFinding   @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  evidences             FindingEvidence[]
+  reviews               FindingReview[]
+  exchanges             ResearchExchange[]
+  articleInputs         ArticleInput[]
+
+  @@unique([findingId, revision])
+  @@index([projectId, findingId, revision])
+}
+
+model FindingEvidence {
+  id                String            @id @default(cuid())
+  projectId         String
+  findingRevisionId String
+  workspaceSourceId String?
+  passageId         String?
+  sourceFingerprint String?
+  contentFingerprint String?
+  excerpt           String?
+  locatorType       String?           // pdf_page | chunk | section | video_timestamp | external
+  locatorValue      String?
+  locatorPrecision  String?           // exact | approximate | user_confirmed
+  acquisition       String            @default("workspace_source") // workspace_source | researcher_supplied | imported
+  role              String            @default("supports") // supports | qualifies | contradicts | context
+  interpretation    String?
+  createdAt         DateTime          @default(now())
+  findingRevision   FindingRevision   @relation(fields: [findingRevisionId], references: [id], onDelete: Cascade)
+  workspaceSource   WorkspaceSource?  @relation(fields: [workspaceSourceId], references: [id], onDelete: SetNull)
+  passage           PdfChunk?         @relation(fields: [passageId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, findingRevisionId])
+  @@index([projectId, workspaceSourceId])
+  @@index([projectId, passageId])
+}
+
+model FindingReview {
+  id                   String           @id @default(cuid())
+  projectId            String
+  findingRevisionId    String
+  reviewerId           String
+  decision             String           // accept | revise | investigate | retain_uncertainty | withdraw
+  dependencyHash       String
+  note                 String?
+  commandKey           String?
+  createdAt            DateTime         @default(now())
+  findingRevision      FindingRevision  @relation(fields: [findingRevisionId], references: [id], onDelete: Cascade)
+  reviewer             User             @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, commandKey])
+  @@index([projectId, findingRevisionId, createdAt])
+  @@index([reviewerId, createdAt])
+}
+
+model ResearchArticle {
+  id                String          @id @default(cuid())
+  projectId         String
+  contextId         String
+  title             String?
+  path              String          // manual_outline | generated_draft
+  content           String          @default("")
+  revision          Int             @default(0)
+  status            String          @default("outline") // outline | draft | review_needed | ready_to_export | archived
+  generationStatus  String?         // queued | running | failed | cancelled | completed
+  policyVersion     String?
+  commandKey        String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  context           ResearchContext @relation(fields: [contextId], references: [id], onDelete: Cascade)
+  inputs            ArticleInput[]
+
+  @@unique([projectId, commandKey])
+  @@index([projectId, status, updatedAt])
+}
+
+model ArticleInput {
+  id                String          @id @default(cuid())
+  projectId         String
+  articleId         String
+  findingId         String
+  findingRevisionId String
+  dependencyHash    String
+  createdAt         DateTime        @default(now())
+  article           ResearchArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  finding           ResearchFinding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  findingRevision   FindingRevision @relation(fields: [findingRevisionId], references: [id], onDelete: Restrict)
+
+  @@unique([articleId, findingRevisionId])
+  @@index([projectId, articleId])
+  @@index([projectId, findingId])
 }

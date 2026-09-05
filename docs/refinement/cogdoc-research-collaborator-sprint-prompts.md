@@ -1,16 +1,16 @@
 # CogDoc research collaborator implementation sprint prompts
 
-This pack turns the product refinement requirements into bounded implementation assignments. Current authorized execution ends with Sprint 8. The former Sprint 9 evaluation/UAT campaign is retained only as a clearly deferred user-owned manual-testing reference and must not be dispatched without a new explicit user authorization. These prompts are not a record of work already performed; do not claim tests, browser checks, UAT, or user-study results that have not actually occurred. Each fenced block is self-contained for a fresh agent with repository access: copy one complete block, including its context and handoff requirements. The PRD supplies the full definitions and acceptance criteria; no earlier conversation is needed.
+This pack turns the [product refinement requirements](cogdoc-research-collaborator-prd.md) into bounded implementation assignments. The prompts below are instructions for future execution, not a record of work already performed. Each fenced block is self-contained for a fresh agent with repository access: copy one complete block, including its context and handoff requirements. The PRD supplies the full definitions and acceptance criteria; no earlier conversation is needed.
 
 ## Usage and readiness
 
-1. Start with Sprint 1. Inspect its handoff and actual changes before dispatching the next sprint, and continue through Sprint 8 in order by default. Do not dispatch the deferred Sprint 9 reference. Do not run all active prompts simultaneously or give competing agents ownership of the same schema/store/shell files.
+1. Start with Sprint 1. Inspect its handoff and actual changes before dispatching Sprint 2. Continue in order by default. Do not run all prompts simultaneously or give competing agents ownership of the same schema/store/shell files.
 2. A sprint is ready when its prerequisite contracts exist, its predecessor's actual tests/limitations have been read, and the next increment can build on persisted behavior. A completed-looking screen alone is insufficient. If a prerequisite is missing, report its exact effect; do not invent a passing handoff.
 3. Each implementing agent should create the named handoff under `docs/refinement/handoffs/`. That directory and the handoffs are future deliverables; their absence before execution is expected. New endpoint filenames proposed by the PRD also do not exist yet. The “inspect” lists below are real baseline files; additional paths are discovered through previous handoffs.
 4. The user has authorized implementation after these documentation files are complete, using one or two GPT-5.6 Terra tasks coordinated outside this documentation task. These files do not execute implementation. The recommended first task receives the entire Sprint 1 block. No clarification about the confirmed generation policy is needed.
 5. Use one implementation task initially. A second Terra task can perform the explicitly bounded read-only audit described below while Sprint 1 runs, then review its output. Do not parallelize Sprint 2 against an unfinished domain contract. After Sprint 3, discovery and reasoning have partly independent behavior, but both touch sources/AI/store; keep sequential execution unless the coordinator establishes non-overlapping file ownership.
 6. The user also wants substantially more polished, visually appealing UI without extra complexity. Prefer existing shadcn-compatible/Radix primitives; this is not a library migration. The approved core visual reference is [the generated workspace image](/Users/samreshan/.codex/generated_images/01a070a2-eaee-7a01-a233-a5e8c06effff/exec-6384f8a5-de70-4082-be69-6223fe7abb51.png): charcoal navigation/sidebar, light mineral workspace, restrained periwinkle/violet accents, refined legible typography, sources beside reasoning, contextual questions and a findings strip. The related [planning](/Users/samreshan/.codex/generated_images/01a070a2-eaee-7a01-a233-a5e8c06effff/exec-ed08c0a9-5c76-42de-b9fd-0da1a00584f5.png) and [findings](/Users/samreshan/.codex/generated_images/01a070a2-eaee-7a01-a233-a5e8c06effff/exec-a28945c3-250c-4f9e-9744-8724c38cd834.png) images are extension references only. Do not copy fictional image content into the product. Use the approved core reference as the Sprint 8 styling gate.
-7. Do not deploy or contact participants from these prompts. The user owns any later manual testing. Use disposable data for migration/seed rehearsals. A missing live provider does not block the manual core; a missing database can block actual migration verification and must be reported honestly.
+7. Do not deploy or contact participants from these prompts. Use disposable data for migration/seed rehearsals. A missing live provider does not block the manual core; a missing database can block actual migration verification and must be reported honestly.
 
 ### Current prototype priority
 
@@ -18,23 +18,17 @@ Build the functional prototype first: foundation, topic/plan, owned-source expla
 
 The product boundary remains immediate work: refined-flow investigation cannot use legacy early-draft endpoints to create article prose, and an unrecognized job kind must not be reported as completed. Complete the full review/invalidation contract before article eligibility. RC-22 is a post-prototype hardening requirement before release. The coordinator may dispatch the manual review transition portion of Sprint 6 directly after Sprint 3; defer its AI analysis and broader dependency work until the functional slice is established.
 
-### Current authorized implementation sequence (Sprints 1–8)
-
-Every code increment must run meaningful targeted automated checks, applicable type/lint/build checks, and a basic browser smoke of the changed journey. Report results and blockers honestly; these checks do not substitute for the user's future manual testing.
-
 | Sprint | Prerequisite | Deliverable and handoff | Readiness for next increment |
 | --- | --- | --- | --- |
-| 1 | Existing code inspection | Additive domain/policy/compatibility foundation; sprint-01-foundation.md | Schema/API mapping, migration evidence and flag contract; production hardening deferred |
-| 2 | 1 | Persisted topic/question plan; sprint-02-topic-plan.md | Reloadable selected question; manual planning fallback; no early draft gate |
-| 3 | 1–2 | Complete manual source/explanation/finding journey; sprint-03-source-finding.md | Real saved finding and provenance with providers disabled; then demonstrate minimum manual acceptance |
-| 4 | 3 plus minimum manual acceptance | Purposeful discovery/access/video fallback; sprint-04-discovery.md | Truthful availability and question-linked candidates |
-| 5 | 3; 4 for discovery help | Contextual help and controlled proposals; sprint-05-reasoning.md | Human wording preserved, skip works, no hidden draft bypass |
-| 6 | 3; complete manual acceptance slice before 4–5 | Revision-specific review and invalidation; sprint-06-review.md | Server eligibility/freshness contract for articles |
-| 7 | 6 | Both article paths, scoped policy, export; sprint-07-articles.md | Grounded article artifacts, selective invalidation, no publishing |
-| 8 | 2–7 | Integrated simple/accessible experience; sprint-08-integration.md | User-owned manual testing may follow; it is not an agent prerequisite |
-
-Security hardening remains deferred as described for RC-22; preserve existing protections and do not represent the current implementation as release-ready.
-
+| 1 | Existing code inspection | Additive domain/policy/compatibility foundation; `sprint-01-foundation.md` | Schema/API mapping, migration evidence and flag contract; production hardening deferred |
+| 2 | 1 | Persisted topic/question plan; `sprint-02-topic-plan.md` | Reloadable selected question; manual planning fallback; no early draft gate |
+| 3 | 1–2 | Complete manual source/explanation/finding journey; `sprint-03-source-finding.md` | Real saved finding and provenance with providers disabled; then demonstrate minimum manual acceptance |
+| 4 | 3 plus minimum manual acceptance | Purposeful discovery/access/video fallback; `sprint-04-discovery.md` | Truthful availability and question-linked candidates |
+| 5 | 3; 4 for discovery help | Contextual help and controlled proposals; `sprint-05-reasoning.md` | Human wording preserved, skip works, no hidden draft bypass |
+| 6 | 3; complete manual acceptance slice before 4–5 | Revision-specific review and invalidation; `sprint-06-review.md` | Server eligibility/freshness contract for articles |
+| 7 | 6 | Both article paths, scoped policy, export; `sprint-07-articles.md` | Grounded article artifacts, selective invalidation, no publishing |
+| 8 | 2–7 | Integrated simple/accessible experience; `sprint-08-integration.md` | Complete release candidate with recorded defects |
+| 9 | 8 | Evaluation, demo and honest report; `sprint-09-evaluation.md` | Evidence-based release decision; UAT outstanding if not conducted |
 
 ### Optional independent second task
 
@@ -633,16 +627,12 @@ Verification and deliverables
 Handoff filename: docs/refinement/handoffs/sprint-08-integration.md
 ```
 
-### Deferred reference — former Sprint 9 evaluation/UAT/manual-testing handoff
-
-> Not currently authorized. The user will perform manual testing. This historical reference is retained for a later explicit user-owned follow-up; it is not required to finish Sprint 8, must not be dispatched automatically, and must not be used to claim UAT, a user study, or report updates occurred.
+### Sprint 9 — Evaluation UAT demo and accurate academic reporting
 
 ```text
-DEFERRED USER-OWNED FOLLOW-UP: former Sprint 9 evaluation/UAT/manual-testing handoff
+SPRINT 9: Evaluation UAT demo and accurate academic reporting
 
-Run this only after the user explicitly authorizes it. Do not treat it as a prerequisite for Sprints 1–8.
-
-If explicitly authorized, you would work in the checkout assigned to this task. The saved project is /Users/samreshan/Programming/cogdoc-workspace; if this task runs in an isolated worktree, make all implementation changes in that assigned worktree, not the saved project. Read applicable AGENTS.md files, inspect git status/diff, and preserve all existing user changes, including untracked implementation. Do not reset, clean, mass-format, replace lockfiles unnecessarily, or revert unrelated work. This repository was a dirty local checkout when the specification was written; inspect current code rather than assuming the documented baseline is unchanged.
+You are implementing a bounded CogDoc refinement sprint in the checkout assigned to this task. The saved project is /Users/samreshan/Programming/cogdoc-workspace; if this task runs in an isolated worktree, make all implementation changes in that assigned worktree, not the saved project. Read applicable AGENTS.md files, inspect git status/diff, and preserve all existing user changes, including untracked implementation. Do not reset, clean, mass-format, replace lockfiles unnecessarily, or revert unrelated work. This repository was a dirty local checkout when the specification was written; inspect current code rather than assuming the documented baseline is unchanged.
 
 Read docs/refinement/cogdoc-research-collaborator-prd.md in full and the relevant requirements below. Some docs/uploads are ignored and may be absent from a new worktree: use /Users/samreshan/Programming/cogdoc-workspace as a read-only reference source or locate moved files with rg --files --no-ignore. Never silently assume an isolated checkout contains the uncommitted baseline; compare required source files with the coordinator-provided starting state and report missing prerequisites. The PRD is the product contract; this prompt supplies this sprint's scope. CogDoc is a topic-first human-plus-AI research collaborator, not a multi-user editor. The primary outcome is structured findings linking question, conclusion, evidence/locators, the researcher's explanation, uncertainty, limitations and conflicting evidence. Inconclusive findings are valid. Research loops and branches; do not introduce a rigid wizard, answer-count/word-count comprehension gates, or idle-time passivity judgments. Reviewed means a particular revision was examined and explicitly accepted by the researcher, not AI-certified truth, authorship or understanding, and not completion of the whole investigation.
 
@@ -650,10 +640,10 @@ The confirmed generation policy deliberately evolves the original blanket non-ge
 
 Reuse Next.js/React/Tiptap, Prisma/PostgreSQL, existing source/library/evidence/auth/storage/job infrastructure and optional FastAPI retrieval. Inspect actual call sites and tests; comments and historical ADRs can be stale. Do not add a second app/framework or conflate SynthesisFinding, document Claim, legacy certification or AI satisfaction with reviewed research findings. Keep old work accessible and use additive migrations. Run migrations only against an identified disposable development/test database; never reset or migrate an unidentified live database. Do not deploy, publish, recruit/contact participants or modify unrelated product areas in this sprint.
 
-Requirements: RC-25, RC-26, RC-27, RC-30; deferred user-owned evaluation reference. Do not treat these as release verification or a prerequisite for current Sprints 1–8. Read associated PRD state, flow, policy, migration and evaluation sections, not only the requirements table.
+Requirements: RC-25, RC-26, RC-27, RC-30; release verification of all P0 requirements. Read associated PRD state, flow, policy, migration and evaluation sections, not only the requirements table.
 
 Prerequisites
-This deferred reference requires a new explicit user authorization after Sprint 8. The user owns manual testing. Access to raw questionnaire/interview/UAT records is needed only for claims based on them. Participant recruitment/contact requires separate authorization.
+Sprint 8 integrated candidate ready and known defects listed. Read all handoffs. Access to raw questionnaire/interview/UAT records is needed only for claims based on them; absence does not block creating evaluation instruments or truthful reports. Participant recruitment/contact requires authorization.
 
 Actual baseline files to inspect
 - docs/refinement/cogdoc-research-collaborator-prd.md
@@ -678,7 +668,7 @@ Actual baseline files to inspect
 Also inspect current files created by prerequisite sprints using their handoff paths. If a listed baseline file moved, locate its replacement with rg before editing.
 
 Scope
-If later authorized, evaluate and document the implemented refinement accurately. In the current scope, do not create or execute a final UAT campaign, evaluation harness, report update, or release decision. Do not invent participant records, reuse old test counts as current, claim long-term efficacy, change the historical investigation report or deploy. If real UAT cannot be conducted, finish all independent materials and mark empirical results outstanding.
+Evaluate and document the implemented refinement accurately. Build executable functional/AI evaluation fixtures, a reproducible demo, UAT instruments and a truthful academic narrative. Do not invent participant records, reuse old test counts as current, claim long-term efficacy, change the historical investigation report or deploy. If real UAT cannot be conducted, finish all independent materials and mark empirical results outstanding.
 
 Implementation tasks
 1. Reconcile every RC requirement with actual implementation and handoff evidence. Record implemented, tested, failed, deferred or unverified separately. Run current functional/build/gate checks in the available environment and report exact revision, commands, counts and failures. Historical Chapter 5 results are not current test evidence.
@@ -711,23 +701,23 @@ Verification and deliverables
 - Deliver source changes and relevant tests plus a concise handoff in docs/refinement/handoffs/ for this sprint. Use the sprint-specific filename below. Include implemented requirement IDs, exact files/API/model changes, migrations and rehearsal evidence, commands/results, manual demo steps, unresolved regressions, feature-flag state, and precise prerequisites for the next sprint. Separate actual results from planned validation and distinguish blocking issues from documented defaults.
 - Finish with a user-readable summary of what changed, why, how it was verified and any remaining risks. Do not continue into the next sprint automatically. Do not claim cognitive benefit, UAT success, academic acceptance or authorship certification from software tests.
 
-Handoff filename if explicitly authorized later: docs/refinement/handoffs/sprint-09-evaluation.md
+Handoff filename: docs/refinement/handoffs/sprint-09-evaluation.md
 ```
 
 ## Requirement ownership check
 
 | Requirement IDs | Primary sprint | Later verification |
 | --- | --- | --- |
-| RC-01, RC-24 | 1 | Migration/data-preservation regressions throughout; deferred user-owned evaluation if later authorized |
+| RC-01, RC-24 | 1 | Migration/data-preservation regressions throughout; 9 release reconciliation |
 | RC-22 | Post-prototype hardening | Complete before release; preserve existing protections during prototype |
-| RC-02, RC-03, RC-04 | 2 | 3 first journey; 8 integration; deferred user-owned manual testing if later authorized |
+| RC-02, RC-03, RC-04 | 2 | 3 first journey; 8 integration; 9 UAT |
 | RC-06, RC-07, RC-09, RC-11, RC-12 minimum acceptance, RC-29 | 3 | 4 source extension; 5 assistance; 6 review hardening; 8 recovery |
-| RC-05, RC-08 | 4 | deferred source/AI evaluation if later authorized |
-| RC-10, RC-23 | 5 | 7 policy; 8 interruption controls; deferred semantic evaluation if later authorized |
-| RC-12 hardening, RC-13, RC-14 | 6 | 7 article eligibility/invalidation; deferred transition testing if later authorized |
-| RC-15, RC-16, RC-17, RC-18, RC-19 | 7 | 8 integration; deferred output traceability if later authorized |
-| RC-20, RC-21, RC-28 | 8 | deferred user-owned manual testing if later authorized |
-| RC-25, RC-26, RC-27, RC-30 | Deferred user-owned evaluation | Explicit follow-up only if the user later authorizes it |
+| RC-05, RC-08 | 4 | 9 source/AI evaluation |
+| RC-10, RC-23 | 5 | 7 policy; 8 interruption controls; 9 semantic evaluation |
+| RC-12 hardening, RC-13, RC-14 | 6 | 7 article eligibility/invalidation; 9 transition tests |
+| RC-15, RC-16, RC-17, RC-18, RC-19 | 7 | 8 integration; 9 output traceability |
+| RC-20, RC-21, RC-28 | 8 | 9 usability and release review |
+| RC-25, RC-26, RC-27, RC-30 | 9 | Explicit follow-up if participant evidence remains outstanding |
 
 ## Blocking decisions versus defaults
 
@@ -737,4 +727,4 @@ Final visual styling has an approved core input: `/Users/samreshan/.codex/genera
 
 For an isolated-worktree dispatch, start from the saved working tree including the existing user changes, or explicitly transfer its required files before implementation. Commit or otherwise transfer the two canonical documents from the saved project: ignored files do not appear in worktrees automatically. The documentation task stages only these two files for durable inclusion; it does not commit unrelated changes. Baseline commit 9bcb1b8 alone is insufficient to reproduce the inspected code.
 
-The initial coordinator dispatch should contain the complete Sprint 1 block above and request the named handoff before the next sprint. The optional second task is the read-only audit block. Later implementation through Sprint 8 must follow actual completed handoffs, not assume these prompts themselves prove readiness. The deferred former Sprint 9 reference remains user-owned and requires a new explicit authorization.
+The initial coordinator dispatch should contain the complete Sprint 1 block above and request the named handoff before the next sprint. The optional second task is the read-only audit block. Later implementation must follow actual completed handoffs, not assume these prompts themselves prove readiness.

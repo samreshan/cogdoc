@@ -1,6 +1,6 @@
 # CogDoc research collaborator product refinement requirements
 
-Status: implementation contract, updated 5 September 2026. Current coordinated implementation is authorized through Sprint 8 in the successive sprint prompts. It does not claim that the target product is implemented, validated, deployed, or accepted by users. The former Sprint 9 evaluation/UAT campaign is retained only as a deferred, user-owned manual-testing reference; it is not an execution prerequisite or currently authorized work.
+Status: documentation-only system change request, prepared 5 September 2026. This specification records confirmed product decisions and proposes an implementation contract; it does not claim that the target product is implemented or validated. Implementation has subsequently been authorized for separate coordinated tasks, after these documents are complete, through the [successive sprint prompts](cogdoc-research-collaborator-sprint-prompts.md). No deployment, database migration, or system change is authorized by the creation of these documents.
 
 ## 1. Intent and outcome
 
@@ -32,7 +32,7 @@ These choices make the request implementable without treating every design choic
 
 | Area | Proposed default | Open question and decision point |
 | --- | --- | --- |
-| Initial audience | Individual undergraduate or early-career researcher investigating a bounded, non-emergency question; plain-language interface usable beyond academia | The user may validate audience fit during their own deferred manual testing after Sprint 8. Collaborator means human plus CogDoc; multi-user coauthoring is not assumed. |
+| Initial audience | Individual undergraduate or early-career researcher investigating a bounded, non-emergency question; plain-language interface usable beyond academia | Validate audience fit in Sprint 9 before expanding onboarding terminology. “Collaborator” means human plus CogDoc; multi-user coauthoring is not assumed. |
 | Starting scope | English text, an owned PDF or lawful pasted excerpt, one question and one finding | Add additional languages or OCR only after the complete initial journey works. |
 | Source batch | Up to three recommendations initially; “Find more” is explicit | Test whether three gives useful choice without overload; never fill quota with poor matches. |
 | Investigation guidance | One active contextual question, optional hint and skip controls; user can request more | Measure interruption burden rather than impose answer quotas. |
@@ -44,7 +44,7 @@ These choices make the request implementable without treating every design choic
 
 ### 1.3 Scope and non-goals
 
-Current implementation scope ends with Sprint 8: a complete topic-to-finding journey; persistent planning and explanations; source access transparency; grounded help; finding review and revisions; the two optional article paths; simplified navigation; safe migration; accessibility; and representative automated/browser verification. A researcher can finish with findings and never create an article. Evaluation materials, UAT, formal release decisions and academic-report updates are deferred to user-owned follow-up work.
+Release scope includes a complete topic-to-finding journey; persistent planning and explanations; source access transparency; grounded help; finding review and revisions; the two optional article paths; simplified navigation; safe migration; accessibility; and evaluation materials. A researcher can finish with findings and never create an article.
 
 Exclude autonomous research completion, bulk unattended literature reviews, automatic publication, plagiarism/authorship detection, cognitive scoring, academic grading or acceptance guarantees, mandatory reflection tests, a new reference manager, real-time team collaboration, universal scraping, automatic video transcription, and a complete rewrite of the application. Legacy assignment verification can remain accessible through a secondary route during migration; it must not define the collaborator's workflow.
 
@@ -254,12 +254,12 @@ P0 means necessary for the coherent collaborator release. P1 is useful after the
 | RC-22 | P1 / post-prototype hardening | Authorization, validation, optimistic concurrency and idempotency protect new data. Foreign nested IDs, stale revisions and duplicate commands are tested at the server boundary. Preserve existing protections during the prototype; complete this expanded hardening before release. |
 | RC-23 | P0 / 5 | AI/source content is untrusted. Unknown citations/passages and prompt injection cannot create evidence links, accept findings, or invoke tools/actions outside an allowed operation. |
 | RC-24 | P0 / 1 | Feature-controlled additive rollout preserves legacy documents/sources/audit and supports disabling new UI without data deletion or rewriting accepted history. |
-| RC-25 | P0 / deferred user-owned evaluation | Evaluation separates functional correctness, AI grounding, task usability, participant evidence and long-term cognition. Report actual denominators, run versions and unexecuted checks. |
-| RC-26 | P0 / deferred user-owned evaluation | Reconcile investigation statistics/interview status using raw records if supplied; otherwise document unresolved discrepancies. UAT remains outstanding until consented sessions have records. |
-| RC-27 | P0 / deferred user-owned evaluation | Demo shows topic → source → explanation → finding → review → both optional article paths and upstream invalidation. Synthetic fixtures are explicitly labeled. |
+| RC-25 | P0 / 9 | Evaluation separates functional correctness, AI grounding, task usability, participant evidence and long-term cognition. Report actual denominators, run versions and unexecuted checks. |
+| RC-26 | P0 / 9 | Reconcile investigation statistics/interview status using raw records if supplied; otherwise document unresolved discrepancies. UAT remains outstanding until consented sessions have records. |
+| RC-27 | P0 / 9 | Demo shows topic → source → explanation → finding → review → both optional article paths and upstream invalidation. Synthetic fixtures are explicitly labeled. |
 | RC-28 | P0 / 8 | Explain provider processing, preserve user control over sensitive text, and follow existing access/deletion controls. No raw research text in routine analytics or logs by default. |
 | RC-29 | P0 / 3 | Empty/loading/error/retry/conflict states preserve user input. A provider outage does not prevent manual source/explanation/finding work; a save failure is never shown as success. |
-| RC-30 | P1 / deferred user-owned evaluation | Measure explanation and revision quality plus task success and interruption burden with a documented rubric; do not use clicks, dwell time or word counts as learning proof. |
+| RC-30 | P1 / 9 | Measure explanation and revision quality plus task success and interruption burden with a documented rubric; do not use clicks, dwell time or word counts as learning proof. |
 
 ## 7. Scoped AI contract and trust boundaries
 
@@ -328,9 +328,7 @@ Logs should contain request IDs, object IDs, policy/model versions, timing and s
 
 Paginate stored exchanges/findings and lazy-load source files; provider context truncation must not truncate durable research history. Cancellation after provider dispatch is best effort: a later fetch resolves actual committed state and cancellation must not promise refunded provider cost. Set bounded input sizes and context budgets at every AI route. Proposed usability target: acknowledge a local save action immediately with pending status, show slow-operation state promptly, and allow cancellation without blocking manual work. Establish measured save and provider latency budgets in Sprint 1/9 based on deployment; do not claim numeric service guarantees without measurements. Degraded mode must support manual planning, sources already available, explanations, findings and manual review.
 
-## 10. Current delivery scope and deferred evaluation
-
-The currently authorized implementation sequence ends at Sprint 8. Each increment must still run meaningful targeted automated checks and applicable type, lint or build checks, and perform a basic browser smoke of the working journey; those checks are implementation verification, not user-study evidence.
+## 10. Delivery plan and readiness
 
 | Sprint | Demonstrable increment | Must precede |
 | --- | --- | --- |
@@ -340,14 +338,13 @@ The currently authorized implementation sequence ends at Sprint 8. Each incremen
 | 4 | Purposeful source discovery, role/access transparency and optional video fallback | Broader source-assisted UX |
 | 5 | Contextual reasoning help and structured finding suggestions with control over interruptions | Assisted review experience |
 | 6 | Explicit finding review, revisions, dependency invalidation and separate project completion | Both article paths |
-| 7 | Manual outline/writing plus grounded article generation, scoped policy and export | Integrated candidate |
-| 8 | Simplified integrated IA, accessibility, recovery/privacy and legacy access | User-owned manual testing, if the user chooses to conduct it |
-
-The former Sprint 9 evaluation/UAT/demo/report campaign is deferred. The user will perform any manual testing; no agent may treat it as a prerequisite, recruit participants, create UAT results, or claim evaluation occurred. Its historical guidance remains in the sprint-prompts document as an optional reference for a later explicit authorization.
+| 7 | Manual outline/writing plus grounded article generation, scoped policy and export | Full release candidate |
+| 8 | Simplified integrated IA, accessibility, recovery/privacy and legacy access | Human evaluation candidate |
+| 9 | Evaluation, UAT materials/results only if actually conducted, demo, accurate report updates | Release decision |
 
 Do not wait until Sprint 8 to make earlier increments usable. Each sprint supplies a narrow working UI and persists its work. Sprint 8 integrates and removes competing primary navigation. For the functional-prototype phase, demonstrate a minimal manual acceptance transition after Sprint 3 before advancing to broad discovery or AI-led guidance; finish the full Sprint 6 invalidation work before article eligibility. Freeze broad extensions until this first loop works. Production hardening is a later release gate, not a current prototype blocker. No mandatory calendar dates or speculative parallel editing plan is implied.
 
-Current implementation completion requires the applicable product behavior, meaningful targeted automated checks, relevant type/lint/build checks, and a basic browser smoke to be reported honestly. Formal release criteria, UAT evidence, participant usability findings and deployment decisions remain deferred. Outstanding UAT blocks claims of user acceptance; it does not justify fabricating sessions or blocking delivery of the Sprint 1–8 implementation.
+Release criteria: P0 acceptance criteria exercised, no known cross-tenant access/data-loss/policy-bypass failure, successful migration rehearsal, traceable article output, recoverable provider failures, and documented accessibility/usability findings. Outstanding UAT blocks claims of user acceptance; it does not justify fabricating sessions or preventing delivery of clearly labeled evaluation materials. Real deployment requires its own readiness decision.
 
 ## 11. Verification and evaluation plan
 
@@ -361,9 +358,9 @@ Build a small versioned, lawfully usable corpus with annotated questions, passag
 
 For article evaluation, trace every substantive claim to selected finding(s), classify unsupported additions, verify locator and bibliography fidelity, and inspect bridging concerns. Report error counts with denominators, examples and known limits. Do not substitute a single opaque confidence score for inspection.
 
-### 11.3 Usability and human evidence (deferred user-owned follow-up)
+### 11.3 Usability and human evidence
 
-The user will perform manual testing after the current implementation scope. Do not prepare, recruit for, conduct, or report a UAT campaign as part of Sprints 1–8. The following historical guidance is retained only for a later user-authorized follow-up: a consent script, participant log using pseudonyms, neutral task instructions, observation sheet, assistance log and post-task questions. A proposed first round would involve at least three intended users for formative discovery, explicitly too small for efficacy claims. Never manufacture attendance or statements.
+Prepare a consent script, participant log using pseudonyms, neutral task instructions, observation sheet, assistance log and post-task questions. Proposed first round: at least three intended users for formative discovery, explicitly too small for efficacy claims. Recruit and schedule only with authorization; never manufacture attendance or statements.
 
 Tasks: start a topic; change the plan; add/open a source; explain what it supports; save an inconclusive or qualified finding; respond to or skip one question; explicitly review; choose each article path; identify a changed-source warning; export and explain what reviewed means. Observe where users get lost and whether they can find their saved finding without coaching. Record completion, assistance, errors, recovery, time-on-task and perceived interruption burden. Distinguish participants who received help from unassisted successes.
 
@@ -371,9 +368,9 @@ Proposed interpretation rubric, scored by human reviewers on a documented sample
 
 Source opens, clicks, dwell time, number of questions answered, word count and amount typed are interaction traces only. More friction can indicate harm. Evaluate whether a suggestion helps resolve a real uncertainty and whether the user can decline it. Long-term learning/retention or cognitive atrophy claims require a separately designed longitudinal study and cannot be inferred from this release.
 
-### 11.4 Reporting rules (deferred)
+### 11.4 Reporting rules
 
-A later explicitly authorized reporting task must distinguish original rationale, implemented scope, tested behavior, participant evidence, and future work. Preserve the historical investigation report unchanged; corrections belong in a reconciliation note with source provenance. Do not reuse old screenshots, test counts, benchmarks or claims as current evidence without rerunning or verifying them. Current Sprint 1–8 work must not claim that report updates, UAT, or a user study occurred.
+Update final-report text to distinguish original rationale, implemented scope, tested behavior, participant evidence, and future work. Explicitly document the scoped evolution from blanket non-generation to reviewed-finding article assistance. Preserve the historical investigation report unchanged; corrections belong in a reconciliation note with source provenance. Do not reuse old screenshots, test counts, benchmarks or claims as current evidence without rerunning/verifying them. If no UAT records arrive, provide ready-to-run materials and mark results outstanding.
 
 ## 12. Risks and mitigations
 
@@ -393,8 +390,8 @@ Dependencies are current authentication/storage correctness, a migration-capable
 
 ## 13. Documentation completion boundary
 
-These two Markdown artifacts define the requested refinement and current Sprint 1–8 implementation sequence. Their preparation and maintenance verify source references, requirement coverage, dependencies and policy consistency, not system correctness. Per-change tests, type/lint/build checks and basic browser smoke remain required during implementation. UAT recruitment or analysis, report regeneration, release decisions and deployment are deferred user-owned follow-up work governed by a later explicit authorization and actual execution evidence.
+These two Markdown artifacts define the requested refinement and implementation sequence. Their preparation verifies source references, requirement coverage, dependencies and policy consistency, not system correctness. Implementation, migrations, new tests, UAT recruitment, report regeneration and deployment remain future work governed by the sprint prompts and actual execution evidence.
 
 ### Canonical reconciliation note
 
-This saved-project pair is the authoritative implementation contract. A separately completed isolated draft was reviewed for useful differences. Its alternate requirement numbering and sprint order are not used here: this pair uses RC-01–RC-30 and the current eight-sprint implementation sequence in section 10. Incorporated details include approximate locator fidelity, review withdrawal, adequate-explanation/no-question behavior, article mapping invalidation after human edits, and worktree reference-file preservation. The former Sprint 9 material is retained as deferred user-owned manual-testing guidance, not a current ninth execution sprint. Navigation labels and source batch sizes remain proposed defaults; the two article paths remain required within the current implementation scope. Sprint 3 demonstrates a complete manual loop, including minimum explicit researcher acceptance of a finding. Sprint 6 hardens revision/dependency invalidation before article eligibility. A Sprint 3 pilot remains a functional prototype, not the complete agreed release.
+This saved-project pair is the authoritative implementation contract. A separately completed isolated draft was reviewed for useful differences. Its alternate requirement numbering and sprint order are not used here: this pair uses RC-01–RC-30 and the nine-sprint sequence in section 10. Incorporated details include approximate locator fidelity, review withdrawal, adequate-explanation/no-question behavior, article mapping invalidation after human edits, and worktree reference-file preservation. Navigation labels and source batch sizes remain proposed defaults; the two article paths remain required for the complete release. Sprint 3 demonstrates a complete manual loop, including minimum explicit researcher acceptance of a finding. Sprint 6 hardens revision/dependency invalidation before article eligibility. A Sprint 3 pilot remains a functional prototype, not the complete agreed release.

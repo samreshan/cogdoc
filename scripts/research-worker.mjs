@@ -5,6 +5,9 @@ const db = new PrismaClient()
 const workerId = `${process.pid}:${randomUUID()}`
 const once = process.argv.includes('--once')
 const LEASE_MS = 60_000
+// These operations are completed synchronously during upload/save. They remain
+// queue records for auditability, but no worker implementation is required.
+const INLINE_MARKER_JOB_KINDS = new Set(['parse', 'deduplicate', 'quality', 'index', 'backlink'])
 
 async function lease() {
   return db.$transaction(async (tx) => {
@@ -83,8 +86,14 @@ async function synthesize(job) {
 async function perform(job) {
   if (job.kind === 'reprioritize') await reprioritize(job.projectId)
   else if (job.kind === 'synthesis') await synthesize(job)
-  // Parsing, dedupe, quality, indexing, and backlink jobs are idempotent
-  // markers here: uploads already do the low-latency work synchronously.
+  else if (INLINE_MARKER_JOB_KINDS.has(job.kind)) {
+    // Parsing, dedupe, quality, indexing, and backlink jobs are idempotent
+    // markers here: uploads already do the low-latency work synchronously.
+  } else {
+    // A new collaborator job must add an explicit handler. Falling through
+    // would incorrectly report unperformed work as completed.
+    throw new Error(`Unsupported research job kind: ${job.kind}`)
+  }
 }
 
 async function runOne() {

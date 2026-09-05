@@ -74,6 +74,15 @@ describe('POST /api/research-kickoff', () => {
     expect(findProject).not.toHaveBeenCalled()
   })
 
+  it('does not allow the legacy draft path when investigation mode is enabled', async () => {
+    vi.stubEnv('COGDOC_RESEARCH_COLLABORATOR', 'investigation')
+    const response = await POST(makeReq({ action: 'draft', projectId: 'project-1' }))
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'forbidden_operation' })
+    expect(findProject).not.toHaveBeenCalled()
+    vi.unstubAllEnvs()
+  })
+
   it('drafts from a reviewed outline and three substantive answers', async () => {
     const draftResearchKickoff = vi.fn(async () => ({
       sections: [{ heading: 'Context', content: 'Working context.' }, { heading: 'Evidence', content: 'Working evidence.' }],

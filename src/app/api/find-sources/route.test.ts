@@ -70,6 +70,20 @@ describe('POST /api/find-sources — validation', () => {
   })
 })
 
+describe('POST /api/find-sources — question discovery', () => {
+  it('uses a selected question and returns a bounded metadata-based batch', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(openAlexResponse([1, 2, 3, 4].map((index) => ({
+      id: `https://openalex.org/W${index}`, display_name: `Evening access source ${index}`,
+      primary_location: { landing_page_url: `https://example.test/${index}` }, abstract_inverted_index: { Context: [0], evidence: [1] },
+    }))))
+    const res = await POST(req({ question: 'How does evening access affect study planning?', purpose: 'Compare available evidence' }))
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.sources).toHaveLength(3)
+    expect(body.sources[0].relevanceBasis).toMatch(/metadata or abstract only/)
+  })
+})
+
 describe('POST /api/find-sources — pipeline', () => {
   it('returns scholarly sources with citation metadata from OpenAlex first', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(openAlexResponse([{

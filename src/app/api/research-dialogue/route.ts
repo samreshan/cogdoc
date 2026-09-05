@@ -5,6 +5,7 @@ import { getAIService } from '@/lib/ai-service'
 import { documentToPlainText } from '@/lib/document-content'
 import type { ResearchDialogueAnswers } from '@/lib/types'
 import { appendAuditEvent } from '@/lib/workspace-server'
+import { collaboratorExposure } from '@/lib/research-collaborator'
 
 export const runtime = 'nodejs'
 export const maxDuration = 45
@@ -24,6 +25,12 @@ const MINIMUM_WORDS: Record<keyof ResearchDialogueAnswers, number> = {
 }
 
 export async function POST(req: NextRequest) {
+  if (collaboratorExposure() !== 'legacy') {
+    return NextResponse.json({
+      error: 'Article drafting becomes available after reviewed findings are selected.',
+      code: 'forbidden_operation',
+    }, { status: 409 })
+  }
   const body = await req.json().catch(() => ({})) as {
     projectId?: string
     answers?: Partial<ResearchDialogueAnswers>

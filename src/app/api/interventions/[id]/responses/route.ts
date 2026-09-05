@@ -5,6 +5,7 @@ import { getAIService } from '@/lib/ai-service'
 import { evaluateInterventionAnswerLocally, structuredResolutionLines } from '@/lib/intervention-response'
 import { plainResearchQuestion } from '@/lib/intervention-language'
 import { appendAuditEvent } from '@/lib/workspace-server'
+import { collaboratorExposure } from '@/lib/research-collaborator'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId(req)
@@ -114,15 +115,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   })
 
   let revisionProposal: string | null = null
-  try {
-    revisionProposal = await getAIService().restructureFromIntervention({
-      passage: intervention.promptText ?? '',
-      intervention: intervention.responseText ?? '',
-      answer,
-      rationale: evaluation.rationale,
-    })
-  } catch (error) {
-    console.warn('[intervention-response] restructuring unavailable:', (error as Error).message.slice(0, 160))
+  if (collaboratorExposure() === 'legacy') {
+    try {
+      revisionProposal = await getAIService().restructureFromIntervention({
+        passage: intervention.promptText ?? '',
+        intervention: intervention.responseText ?? '',
+        answer,
+        rationale: evaluation.rationale,
+      })
+    } catch (error) {
+      console.warn('[intervention-response] restructuring unavailable:', (error as Error).message.slice(0, 160))
+    }
   }
 
   return NextResponse.json({ satisfied: true, evaluation, evaluator, intervention: result.updated, note: result.note, structuredLines, revisionProposal })

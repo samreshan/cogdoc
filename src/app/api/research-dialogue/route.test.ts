@@ -42,6 +42,15 @@ describe('POST /api/research-dialogue', () => {
     expect(getService).not.toHaveBeenCalled()
   })
 
+  it('does not allow the legacy draft path when investigation mode is enabled', async () => {
+    vi.stubEnv('COGDOC_RESEARCH_COLLABORATOR', 'investigation')
+    const response = await POST(makeReq({ projectId: 'project-1', answers: completeAnswers }))
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'forbidden_operation' })
+    expect(findProject).not.toHaveBeenCalled()
+    vi.unstubAllEnvs()
+  })
+
   it('drafts only after the complete research dialogue', async () => {
     const draftFromResearchDialogue = vi.fn(async () => ({
       draft: 'A provisional account of cognitive offloading.',

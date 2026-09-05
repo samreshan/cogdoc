@@ -1,6 +1,6 @@
 /**
  * POST /api/find-sources
- * Body: { claim, projectId }
+ * Body: { claim | question, projectId, purpose?, uncertainty? }
  *
  * Searches OpenAlex, Crossref, and Semantic Scholar before considering Gemini
  * grounding.
@@ -54,6 +54,12 @@ interface SearchResult {
   rankScore?: number
   qualitySignals?: string[]
   uncertainty?: string | null
+  role?: 'orientation' | 'evidence_candidate'
+  relevanceExplanation?: string
+  rationaleBasis?: 'metadata' | 'abstract'
+  accessState?: 'full_text_accessible' | 'abstract_only' | 'metadata_only'
+  authoritySignals?: string[]
+  authorityLimitations?: string
 }
 
 interface OpenAlexWork {
@@ -78,7 +84,8 @@ interface OpenAlexWork {
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const { claim, projectId } = body as { claim: string; projectId?: string }
+  const { claim: rawClaim, question, projectId, purpose, uncertainty } = body as { claim?: string; question?: string; projectId?: string; purpose?: string; uncertainty?: string }
+  const claim = (question ?? rawClaim ?? '').trim()
 
   if (!claim || claim.trim().length < 10) {
     return NextResponse.json({ error: 'A claim (10+ chars) is required' }, { status: 400 })
@@ -96,7 +103,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const searchQuery = buildSearchQuery(claim)
+    const searchQuery = buildSearchQuery([claim, purpose, uncertainty].filter((value): value is string => Boolean(value?.trim())).join(' '))
 
     let sources: SearchResult[] = []
     let provider: RecordProvider | null = null
@@ -120,12 +127,15 @@ export async function POST(req: NextRequest) {
     ]
     const settled = await Promise.allSettled(searches.map((item) => item.run()))
     const collected: SearchResult[] = []
+    const providerStatus: Record<string, 'available' | 'unavailable'> = {}
     settled.forEach((result, index) => {
       const name = searches[index].name
       if (result.status === 'fulfilled') {
         reachableProviders += 1
+        providerStatus[name] = 'available'
         collected.push(...result.value)
       } else {
+        providerStatus[name] = 'unavailable'
         console.warn(`${providerLabel(name)} source search unavailable:`, result.reason instanceof Error ? result.reason.message : String(result.reason))
       }
     })
@@ -133,22 +143,50 @@ export async function POST(req: NextRequest) {
       error: 'Source search failed. OpenAlex, Crossref, Semantic Scholar, and grounded web search were unavailable.', providersTried,
     }, { status: 502 })
     sources = mergeAndRankSources(collected)
+    if (question) sources = sources.filter((source) => usefulForQuestion(source, question)).slice(0, 3)
+    else sources = sources.slice(0, 24)
     provider = sources[0]?.recordProvider ?? null
 
     if (sources.length === 0) {
       return NextResponse.json({
         sources: [],
-        message: 'No sources found for this claim.',
+        message: question ? 'No useful matches found for this question. Refine it, attach a source you already own, or add a lawful excerpt.' : 'No sources found for this claim.',
         providersTried,
+        providerStatus,
       })
     }
 
     const accessEnrichedSources = await enrichWithUnpaywall(sources)
     const formattedSources = accessEnrichedSources.map((source) => {
-      if (!source.citation) return source
+      const hasAbstract = Boolean(source.snippet && !/^(Scholarly (record|metadata)|Untitled)/i.test(source.snippet))
+      const accessState = source.openAccessUrl ? 'full_text_accessible' : hasAbstract ? 'abstract_only' : 'metadata_only'
+      const authoritySignals = [
+        ...(source.citation?.authors.length ? ['authorship metadata'] : []),
+        ...(source.citation?.year ? ['publication date'] : []),
+        ...(source.citation?.venue ? ['publication venue'] : []),
+        ...(source.citation?.doi ? ['DOI identity'] : []),
+      ]
+      const annotated = {
+        ...source,
+        role: hasAbstract ? 'evidence_candidate' as const : 'orientation' as const,
+        relevanceExplanation: hasAbstract
+          ? 'Its record includes an abstract or summary that may help investigate this question; inspect the original before treating it as evidence.'
+          : 'Its metadata appears related to this question; no abstract or full text was inspected by CogDoc.',
+        rationaleBasis: hasAbstract ? 'abstract' as const : 'metadata' as const,
+        accessState,
+        authoritySignals,
+        authorityLimitations: authoritySignals.length
+          ? 'These are metadata signals only. CogDoc has not assessed the method, author authority, or whether this source supports a conclusion.'
+          : 'Authority, method, and claim support have not been assessed from this record.',
+        relevanceBasis: source.openAccessUrl
+          ? 'metadata and access record; full text has not been inspected'
+          : hasAbstract ? 'metadata or abstract only; full text has not been inspected'
+          : 'metadata only; full text has not been inspected',
+      }
+      if (!source.citation) return annotated
       try {
         return {
-          ...source,
+          ...annotated,
           citation: {
             ...source.citation,
             formatted: formatCitation({
@@ -167,7 +205,7 @@ export async function POST(req: NextRequest) {
         }
       } catch (error) {
         console.warn('CSL rendering skipped for source:', source.url, (error as Error).message)
-        return source
+        return annotated
       }
     })
 
@@ -177,6 +215,7 @@ export async function POST(req: NextRequest) {
       totalFound: sources.length,
       provider,
       providersTried,
+      providerStatus,
       accessResolver: process.env.UNPAYWALL_EMAIL?.trim() ? 'unpaywall' : null,
       message: `Merged and deduplicated records from ${reachableProviders} reachable provider${reachableProviders === 1 ? '' : 's'}. Ranking signals and uncertainty are included with each result.`,
     })
@@ -227,6 +266,21 @@ export function mergeAndRankSources(input: SearchResult[]): SearchResult[] {
     const uncertainty = !source.citation?.doi ? 'No DOI was returned; verify identity and publication status.' : !source.openAccessUrl ? 'Full text availability is unknown; relevance is based on metadata.' : null
     return { ...source, rankScore: score, qualitySignals: signals, uncertainty }
   }).sort((a, b) => (b.rankScore ?? 0) - (a.rankScore ?? 0) || a.title.localeCompare(b.title)).slice(0, 24)
+}
+
+/**
+ * Provider rankings are untrusted: a generic keyword hit is not a useful
+ * recommendation. For the deliberately small question batch, require a
+ * substantive term from the selected question in the returned title/summary.
+ * A conservative empty batch leaves the manual path available instead of
+ * presenting unrelated records as evidence candidates.
+ */
+function usefulForQuestion(source: SearchResult, question: string): boolean {
+  const stopWords = new Set(['about', 'after', 'affect', 'among', 'because', 'campus', 'could', 'does', 'effect', 'evidence', 'from', 'have', 'hours', 'might', 'question', 'research', 'shows', 'source', 'student', 'students', 'study', 'that', 'their', 'there', 'these', 'this', 'through', 'using', 'what', 'when', 'where', 'which', 'with', 'would'])
+  const terms = question.toLowerCase().match(/[a-z]{4,}/g)?.filter((word) => !stopWords.has(word)).map((word) => word.replace(/s$/, '')) ?? []
+  if (terms.length === 0) return true
+  const record = `${source.title} ${source.snippet}`.toLowerCase().replace(/[^a-z]+/g, ' ')
+  return terms.some((term) => new RegExp(`\\b${term}(?:s|es|ing)?\\b`).test(record))
 }
 
 /**

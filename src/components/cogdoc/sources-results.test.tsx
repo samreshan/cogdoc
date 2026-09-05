@@ -138,4 +138,28 @@ describe('SourcesResults', () => {
     search.mockRestore()
     save.mockRestore()
   })
+
+  it('links a bounded discovery result to the active question without treating metadata as evidence', async () => {
+    const user = userEvent.setup()
+    useCogdoc.setState({
+      activeProject: {
+        id: 'project-1', title: 'Research', description: null, archived: false,
+        createdAt: '2026-08-28T00:00:00.000Z', updatedAt: '2026-08-28T00:00:00.000Z',
+        citationStyle: 'harvard', document: null, pdfs: [], interventions: [], _count: { pdfs: 0, interventions: 0 },
+      } as Project,
+    })
+    const questionSource: FoundSource = { ...source, accessState: 'metadata_only', rationaleBasis: 'metadata', relevanceExplanation: 'The metadata names a related concept.', authorityLimitations: 'Method and claim support have not been assessed.' }
+    const search = vi.spyOn(api, 'findSources').mockResolvedValue({ provider: 'openalex', sources: [questionSource] })
+    const link = vi.spyOn(api, 'researchFindingAction').mockResolvedValue({ alreadySaved: false })
+
+    render(<SourcesResults open onOpenChange={() => {}} claim="How does library access affect study planning?" questionId="question-1" purpose="Compare available evidence" />)
+    await user.click(await screen.findByRole('button', { name: 'Link to question' }))
+
+    await waitFor(() => expect(link).toHaveBeenCalledWith('project-1', expect.objectContaining({
+      action: 'save_discovered_source', questionId: 'question-1', accessState: 'metadata_only', rationaleBasis: 'metadata',
+    })))
+    expect(screen.getByText(/full text has not been inspected by Cogdoc/i)).toBeInTheDocument()
+    search.mockRestore()
+    link.mockRestore()
+  })
 })

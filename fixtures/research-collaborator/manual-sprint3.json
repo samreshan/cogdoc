@@ -1,0 +1,25 @@
+{
+  "notice": "Synthetic fixture for local manual-flow demonstrations. It is not a scholarly source or evidence about students.",
+  "supportedWithLimits": {
+    "topic": "How might a local reading-room policy affect study planning?",
+    "question": "What does the policy notice tell us about evening access?",
+    "sourceTitle": "Synthetic reading-room policy notice",
+    "excerpt": "The reading room is scheduled to remain open until 20:00 on weekdays during the pilot. The notice does not report attendance, outcomes, or reasons for the schedule.",
+    "locator": "Pilot notice, Access section",
+    "conclusion": "The notice supports a limited conclusion that the pilot schedules weekday access until 20:00; it does not show how students used the room or whether access affected study outcomes.",
+    "explanation": "I am relying only on the stated schedule and not inferring attendance or educational effects.",
+    "uncertainty": "The notice may not reflect later schedule changes.",
+    "limitations": "This is an administrative notice, not an outcome study.",
+    "conflicts": "None identified in this single synthetic fixture."
+  },
+  "inconclusive": {
+    "question": "Did evening access improve study outcomes?",
+    "conclusion": "The available policy notice is inconclusive about study outcomes.",
+    "explanation": "It records a schedule but no outcome data.",
+    "uncertainty": "No attendance or outcome material was available in the checked notice.",
+    "limitations": "Only the schedule notice was inspected.",
+    "conflicts": "No conflicting material was available in the checked scope.",
+    "evidenceUnavailable": true,
+    "evidenceScope": "Synthetic reading-room policy notice, Access section."
+  }
+}

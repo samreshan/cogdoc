@@ -46,6 +46,8 @@ import {
   checkAIReadiness,
   GeminiAdapter,
   getAIService,
+  parseContextualHelpResponse,
+  parseArticleDraftResponse,
 } from '@/lib/ai-service'
 import { db } from '@/lib/db'
 
@@ -310,6 +312,22 @@ describe('parseVerdictJSON', () => {
     const r = parseVerdictJSON('{"verdict":"supported","supported_claims":"not an array"}', true)
     expect(r.ok).toBe(true)
     if (r.ok) expect(r.supported_claims).toEqual([])
+  })
+})
+
+describe('bounded contextual and article provider contracts', () => {
+  it('preserves the requested contextual action and only accepts a bounded proposal shape', () => {
+    const result = parseContextualHelpResponse('{"body":"Try naming the limit.","action":"Compare it with the excerpt.","proposal":{"conclusion":"My stated view","uncertainty":"A limit","limitations":"One source","conflicts":"Not checked"}}', 'proposal')
+    expect(result.body).toBe('Try naming the limit.')
+    expect(result.proposal?.conclusion).toBe('My stated view')
+    expect(() => parseContextualHelpResponse('{"body":"No fields"}', 'proposal')).toThrow(/invalid finding organization/i)
+  })
+
+  it('accepts article output only with content and known numeric finding references for later validation', () => {
+    expect(parseArticleDraftResponse('{"content":"A draft with limits.","sourceIndexes":[0,1,"bad"],"unsupportedClaims":["Bridge to verify"]}')).toMatchObject({
+      content: 'A draft with limits.', sourceIndexes: [0, 1], unsupportedClaims: ['Bridge to verify'],
+    })
+    expect(() => parseArticleDraftResponse('{"sourceIndexes":[]}')).toThrow(/no article content/i)
   })
 })
 
