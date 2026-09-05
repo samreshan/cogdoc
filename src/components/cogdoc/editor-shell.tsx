@@ -131,7 +131,7 @@ export default function EditorShell() {
 
   const document = <ResearchWorkPane editorRef={editorRef} onSelectionChange={setSelection} onOpenSources={(value) => { setSelection(value); setDockSection('sources') }} onOpenCollaborator={(value) => { setSelection(value); setDockSection('collaborator') }} />
 
-  return <div className="flex h-[100dvh] min-h-0 overflow-hidden bg-[var(--cog-workspace)] text-[var(--cog-foreground)]">
+  return <div className="relative flex h-[100dvh] min-h-0 overflow-hidden bg-[var(--cog-workspace)] text-[var(--cog-foreground)]">
     {!focusMode && railVisible && <div className="hidden shrink-0 lg:block"><ResearchNavigator project={project} questions={questions} activeQuestionId={selectedQuestion?.id} activeSection={dockSection} onHome={() => setView('dashboard')} onSectionChange={openDock} onQuestionChange={(question) => void selectQuestion(question)} onCollapse={() => setRailVisible(false)} onOpenHistory={() => setSecondary('history')} onOpenReferences={() => setSecondary('references')} /></div>}
 
     <div className="flex min-w-0 flex-1 flex-col">
@@ -139,7 +139,7 @@ export default function EditorShell() {
         <div className="flex min-w-0 items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => setView('dashboard')} className="h-9 w-9 lg:hidden" aria-label="Back to projects"><ArrowLeft className="h-4 w-4" /></Button>
           {!focusMode && !railVisible && <Button variant="ghost" size="icon" onClick={() => setRailVisible(true)} className="hidden h-9 w-9 lg:inline-flex" aria-label="Open project rail"><PanelLeftOpen className="h-4 w-4" /></Button>}
-          <Button variant="ghost" size="icon" onClick={() => setRailVisible((value) => !value)} className="h-9 w-9 lg:hidden" aria-label="Open workspace tools"><Menu className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="icon" onClick={() => setDockSection('collaborator')} className="h-9 w-9 lg:hidden" aria-label="Open workspace tools"><Menu className="h-4 w-4" /></Button>
           <div className="min-w-0"><h1 className="max-w-56 truncate text-sm font-semibold tracking-[-0.015em] sm:max-w-md">{project.title}</h1><p className="hidden text-xs text-[var(--cog-muted-foreground)] sm:block">Working document{selectedQuestion ? ` · ${selectedQuestion.wording}` : ''}</p></div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
