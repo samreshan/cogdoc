@@ -60,10 +60,9 @@ export default function Home() {
   if (authStatus === 'misconfigured') return <AuthConfigurationError />
   if (authStatus === 'anon') return <Login />
 
-  let content = <Dashboard />
-  if (view === 'editor' && activeProject) content = <EditorShell />
+  if (view === 'editor' && activeProject) return <EditorShell />
   // Legacy links that still target the former project overview now open the
   // research IDE directly.
-  if (view === 'workspace' && activeProject) content = <EditorShell />
-  return <>{content}<OnboardingTour /></>
+  if (view === 'workspace' && activeProject) return <EditorShell />
+  return <><Dashboard /><OnboardingTour /></>
 }

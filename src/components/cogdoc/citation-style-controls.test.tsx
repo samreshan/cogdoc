@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   listWorkspaces: vi.fn(),
   createWorkspace: vi.fn(),
   getWorkspace: vi.fn(),
+  saveInvestigation: vi.fn(),
   updateWorkspace: vi.fn(),
   planResearchKickoff: vi.fn(),
   draftResearchKickoff: vi.fn(),
@@ -36,6 +37,7 @@ vi.mock('@/lib/api-client', () => ({
     listWorkspaces: mocks.listWorkspaces,
     createWorkspace: mocks.createWorkspace,
     getWorkspace: mocks.getWorkspace,
+    saveInvestigation: mocks.saveInvestigation,
     updateWorkspace: mocks.updateWorkspace,
     planResearchKickoff: mocks.planResearchKickoff,
     draftResearchKickoff: mocks.draftResearchKickoff,
@@ -62,6 +64,7 @@ beforeEach(() => {
   mocks.listWorkspaces.mockResolvedValue({ workspaces: [] })
   mocks.createWorkspace.mockResolvedValue({ workspace })
   mocks.getWorkspace.mockResolvedValue({ workspace })
+  mocks.saveInvestigation.mockResolvedValue({ context: { id: 'context-1', revision: 0 } })
   mocks.updateWorkspace.mockResolvedValue({
     workspace: { ...workspace, citationStyle: 'apa' },
     referencesReformatted: 3,
@@ -92,18 +95,12 @@ describe('citation style controls', () => {
   it('lets the author choose a style while creating a workspace', async () => {
     const user = userEvent.setup()
     render(<Dashboard />)
-    await user.click(screen.getByRole('button', { name: /new project/i }))
-    await user.type(screen.getByPlaceholderText(/How does routine reliance/i), 'How do researchers evaluate evidence when using generative AI?')
+    await user.type(screen.getByLabelText('What are you working on?'), 'How do researchers evaluate evidence when using generative AI?')
+    await user.click(screen.getByRole('button', { name: /add goal and starting point/i }))
     await user.selectOptions(screen.getByLabelText('Citation style'), 'apa')
-    await user.click(screen.getByRole('button', { name: /start conversation/i }))
-    for (let index = 0; index < 3; index += 1) {
-      fireEvent.change(screen.getByPlaceholderText('Answer naturally…'), { target: { value: `This answer ${index + 1} explains my current view.` } })
-      await user.click(screen.getByRole('button', { name: index === 2 ? /make my outline/i : /continue/i }))
-    }
-    await user.click(await screen.findByRole('button', { name: /build cited structure/i }))
+    await user.click(screen.getByRole('button', { name: /start writing/i }))
 
     await waitFor(() => expect(mocks.createWorkspace).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Evidence synthesis',
       workspaceType: 'research',
       citationStyle: 'apa',
     })))
