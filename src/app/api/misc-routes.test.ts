@@ -2,7 +2,7 @@
  * Integration tests for the small routes: GET /api/user, GET /api/settings,
  * DELETE /api/pdfs/[id], and the root GET /api.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn() }))
@@ -42,6 +42,12 @@ beforeEach(() => {
   user.mockResolvedValue({ id: 'u1' })
   auditFindFirst.mockResolvedValue(null)
   auditCreate.mockResolvedValue({ id: 'audit-1' })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL
+  delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 })
 
 describe('GET /api/user (fallback path — Supabase not configured)', () => {

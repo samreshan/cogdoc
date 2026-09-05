@@ -22,31 +22,26 @@ describe('OnboardingTour', () => {
     vi.restoreAllMocks()
   })
 
-  it('opens for a first login, persists completion, and remains replayable', async () => {
-    vi.spyOn(api, 'getUser').mockResolvedValue({
-      user: { id: 'user-1', email: 'student@example.com', displayName: null, dailyTokenBudget: 1000, onboardingCompletedAt: null },
-    })
+  it('stays optional, persists completion, and remains replayable', async () => {
     const complete = vi.spyOn(api, 'setOnboardingCompleted').mockResolvedValue({ onboardingCompletedAt: '2026-08-28T00:00:00.000Z' })
 
     render(<OnboardingTour />)
-    expect(await screen.findByText('One research workspace. Three quiet roles.')).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Cogdoc workspace overview' })).toBeInTheDocument()
+    expect(screen.queryByText('The document stays central.')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Cogdoc guide' }))
+    expect(await screen.findByText('The document stays central.')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /skip for now/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Got it' }))
     await waitFor(() => expect(complete).toHaveBeenCalledWith(true))
     expect(window.localStorage.getItem('cogdoc-onboarding-complete')).toBe('1')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Cogdoc tutorial' }))
-    expect(await screen.findByText('One research workspace. Three quiet roles.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Cogdoc guide' }))
+    expect(await screen.findByText('The document stays central.')).toBeInTheDocument()
   })
 
-  it('does not force the dialog after account-level completion', async () => {
-    vi.spyOn(api, 'getUser').mockResolvedValue({
-      user: { id: 'user-1', email: 'student@example.com', displayName: null, dailyTokenBudget: 1000, onboardingCompletedAt: '2026-08-27T00:00:00.000Z' },
-    })
+  it('does not force the guide open on render', () => {
     render(<OnboardingTour />)
 
-    expect(await screen.findByRole('button', { name: 'Open Cogdoc tutorial' })).toBeInTheDocument()
-    expect(screen.queryByText('One research workspace. Three quiet roles.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open Cogdoc guide' })).toBeInTheDocument()
+    expect(screen.queryByText('The document stays central.')).not.toBeInTheDocument()
   })
 })

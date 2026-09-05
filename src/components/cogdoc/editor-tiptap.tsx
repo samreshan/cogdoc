@@ -16,19 +16,13 @@
  * src/lib/editor-orchestration.ts; this component is wiring + presentation.
  */
 import { useEditor, EditorContent } from '@tiptap/react'
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { forwardRef, useEffect, useRef, useCallback, useImperativeHandle, useState } from 'react'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
-import { extractLastSentence } from '@/lib/content-analyzer'
 import {
-  idleThresholdForMode,
-  pickEnginesForSentence,
   serializeForSave,
   parseStoredContent,
-  extractContext,
-  isParagraphComplete,
 } from '@/lib/editor-orchestration'
-import { IdleDetector } from '@/lib/extensions/idle-detector'
 import {
   interventionHighlightKey,
 } from '@/lib/extensions/intervention-highlight'
@@ -36,29 +30,52 @@ import {
   reviewItemHighlightKey,
 } from '@/lib/extensions/review-item-highlight'
 import { researchActionHighlightKey } from '@/lib/extensions/research-action-highlight'
-import { useEngineFiring } from '@/lib/use-engine-firing'
-import type { EngineType } from '@/lib/types'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Send, Loader2, Clock, Check, Sparkles } from 'lucide-react'
+import { Loader2, Clock, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import SentencePopover from './sentence-popover'
-import RunningPets, { IdlePetBadge } from './running-pets'
 import { ApiError } from '@/lib/api-client'
 import { clearRecoveryDraft, loadRecoveryDraft, saveRecoveryDraft } from '@/lib/draft-recovery'
 import { findEditorTextRange } from '@/lib/editor-focus'
 import EditorToolbar from './editor-toolbar'
 import { createEditorExtensions } from '@/lib/editor-extensions'
 import type { StructuredCitationAttrs } from '@/lib/extensions/citation-node'
+import { fingerprintDocumentText } from '@/lib/document-selection'
 
-export default function EditorTiptap() {
+export interface DocumentEditorSelection {
+  text: string
+  textFingerprint: string
+  documentRevision: number
+  selectionId: string
+  from: number
+  to: number
+}
+
+export interface DocumentEditorApplyRequest {
+  replacement: string
+  expectedDocumentRevision: number
+  expectedSelectionId?: string
+}
+
+export interface DocumentEditorHandle {
+  applyDocumentRevision: (request: DocumentEditorApplyRequest) => { applied: boolean; reason?: 'stale_selection' | 'stale_revision' | 'rejected' }
+  focus: () => void
+}
+
+interface EditorTiptapProps {
+  onSelectionChange?: (selection: DocumentEditorSelection | null) => void
+  onOpenSources?: (selection: DocumentEditorSelection | null) => void
+  onOpenCollaborator?: (selection: DocumentEditorSelection | null) => void
+}
+
+function selectionIdentity(projectId: string, documentId: string, revision: number, from: number, to: number, fingerprint: string) {
+  return [projectId, documentId, revision, from, to, fingerprint].join(':')
+}
+
+const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(function EditorTiptap({ onSelectionChange, onOpenSources, onOpenCollaborator }, ref) {
   const project = useCogdoc((s) => s.activeProject)
   const updateActiveProjectContent = useCogdoc((s) => s.updateActiveProjectContent)
-  const pushIntervention = useCogdoc((s) => s.pushIntervention)
   const activeInterventions = useCogdoc((s) => s.activeInterventions)
-  const setEngineLoading = useCogdoc((s) => s.setEngineLoading)
-  const engineLoading = useCogdoc((s) => s.engineLoading)
-  const bumpAnalytics = useCogdoc((s) => s.bumpAnalytics)
   const focusMode = useCogdoc((s) => s.focusMode)
   const setHovered = useCogdoc((s) => s.setHovered)
   const editorFocusQuote = useCogdoc((s) => s.editorFocusQuote)
@@ -72,10 +89,7 @@ export default function EditorTiptap() {
   const pendingCitation = useCogdoc((s) => s.pendingCitation)
   const clearPendingCitation = useCogdoc((s) => s.clearPendingCitation)
   const setSourceMapperQuery = useCogdoc((s) => s.setSourceMapperQuery)
-  const openIdeTab = useCogdoc((s) => s.openIdeTab)
-  const frictionMode = useCogdoc((s) => s.frictionMode)
 
-  const [promptInput, setPromptInput] = useState('')
   const [selectedText, setSelectedText] = useState('')
   const [, setToolbarVersion] = useState(0)
   const [wordCount, setWordCount] = useState(0)
@@ -84,11 +98,11 @@ export default function EditorTiptap() {
     project?.document?.lastSaved ?? null,
   )
 
-  const idleRef = useRef<IdleDetector | null>(null)
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
   const revisionRef = useRef(project?.document?.revision ?? 0)
+  const selectionPublishTokenRef = useRef(0)
+  const publishedSelectionRef = useRef<DocumentEditorSelection | null>(null)
   const [conflict, setConflict] = useState<{ serverRevision: number; serverContent: string } | null>(null)
-  const reviewPace = project?.reviewPace ?? 'deep'
 
   const editor = useEditor({
     extensions: createEditorExtensions(),
@@ -97,13 +111,59 @@ export default function EditorTiptap() {
     editorProps: {
       attributes: {
         class: 'tiptap-editor outline-none',
-        style:
-          'font-family: var(--font-newsreader), Georgia, serif; font-size: 18px; line-height: 1.8; color: #2a2520; max-width: 680px; margin: 0 auto; min-height: 50vh;',
         'data-placeholder':
-          'Start with what you understand. Cogdoc will question assumptions, surface evidence gaps, and help you explore other views.',
+          'Begin your draft. Select any passage when you want to explain it, find evidence, or ask CogDoc for help.',
       },
     },
   })
+
+  const publishSelection = useCallback(async () => {
+    if (!editor || !project?.document) return
+    const token = ++selectionPublishTokenRef.current
+    const { from, to } = editor.state.selection
+    const text = from === to ? '' : editor.state.doc.textBetween(from, to, ' ').trim().slice(0, 2_000)
+    setEditorSelectionBookmark({ from, to })
+    setSelectedText(text)
+    setToolbarVersion((version) => version + 1)
+    if (!text) {
+      publishedSelectionRef.current = null
+      onSelectionChange?.(null)
+      return
+    }
+    const fingerprint = await fingerprintDocumentText(text)
+    if (token !== selectionPublishTokenRef.current || !editor || revisionRef.current < 0) return
+    const current = editor.state.selection
+    const currentText = current.from === current.to ? '' : editor.state.doc.textBetween(current.from, current.to, ' ').trim().slice(0, 2_000)
+    if (current.from !== from || current.to !== to || currentText !== text) return
+    const selection: DocumentEditorSelection = {
+      text,
+      textFingerprint: fingerprint,
+      documentRevision: revisionRef.current,
+      selectionId: selectionIdentity(project.id, project.document.id, revisionRef.current, from, to, fingerprint),
+      from,
+      to,
+    }
+    publishedSelectionRef.current = selection
+    onSelectionChange?.(selection)
+  }, [editor, onSelectionChange, project, setEditorSelectionBookmark])
+
+  useImperativeHandle(ref, () => ({
+    applyDocumentRevision(request) {
+      if (!editor || !project?.document || !request.replacement.trim()) return { applied: false, reason: 'rejected' }
+      if (request.expectedDocumentRevision !== revisionRef.current) return { applied: false, reason: 'stale_revision' }
+      if (request.expectedSelectionId && request.expectedSelectionId !== publishedSelectionRef.current?.selectionId) {
+        return { applied: false, reason: 'stale_selection' }
+      }
+      const { from, to } = publishedSelectionRef.current ?? editor.state.selection
+      if (request.expectedSelectionId && from !== to) {
+        editor.chain().focus().insertContentAt({ from, to }, request.replacement).run()
+      } else {
+        editor.chain().focus().insertContent(request.replacement).run()
+      }
+      return { applied: true }
+    },
+    focus() { editor?.commands.focus() },
+  }), [editor, project])
 
   useEffect(() => {
     if (!editor || !project) return
@@ -175,10 +235,6 @@ export default function EditorTiptap() {
     }).finally(clearPendingCitation)
   }, [editor, pendingCitation, editorSelectionBookmark, clearPendingCitation, project])
 
-  const { fireEngine, checkBlindspot } = useEngineFiring(
-    useCallback(() => editor?.getText() ?? '', [editor]),
-  )
-
   // ── Autosave (debounced 1.5s) — serialise ProseMirror JSON (ADR-0009) ────
   const scheduleSave = useCallback(() => {
     if (!editor || !project) return
@@ -198,6 +254,7 @@ export default function EditorTiptap() {
         setLastSavedAt(res.lastSaved)
         setSaveState('saved')
         setConflict(null)
+        void publishSelection()
         await clearRecoveryDraft(project.id)
         setTimeout(() => setSaveState('idle'), 1500)
       } catch (error) {
@@ -212,42 +269,26 @@ export default function EditorTiptap() {
         }
       }
     }, 1500)
-  }, [editor, project, updateActiveProjectContent])
+  }, [editor, project, publishSelection, updateActiveProjectContent])
 
   // ── Wire editor events ──────────────────────────────────────────────────
   useEffect(() => {
     if (!editor) return
     const handleUpdate = () => {
       scheduleSave()
-      idleRef.current?.ping()
       const text = editor.getText()
       setWordCount(text.split(/\s+/).filter(Boolean).length)
-      // Sentence completion → choose one primary intervention for this phrase.
-      const endChar = text.trim().slice(-1)
-      if (reviewPace !== 'rapid' && (endChar === '.' || endChar === '?' || endChar === '!')) {
-        const sentence = extractLastSentence(text)
-        if (sentence.split(/\s+/).length >= 4) {
-          const { context } = extractContext(text)
-          const engines = pickEnginesForSentence(sentence).filter((engine) => reviewPace === 'deep' || engine === 'citation' || engine === 'interceptor')
-          engines.forEach((eng) => void fireEngine(eng, sentence, context))
-        }
-      }
     }
     editor.on('update', handleUpdate)
     return () => { editor.off('update', handleUpdate) }
-  }, [editor, scheduleSave, fireEngine, project, reviewPace])
+  }, [editor, scheduleSave])
 
   // Keep research actions and formatting state in sync with the editor's
   // current selection. The selected text remains author-controlled and is
   // only sent when they explicitly open the source finder.
   useEffect(() => {
     if (!editor) return
-    const handleSelection = () => {
-      const { from, to } = editor.state.selection
-      setEditorSelectionBookmark({ from, to })
-      setSelectedText(from === to ? '' : editor.state.doc.textBetween(from, to, ' ').trim().slice(0, 2_000))
-      setToolbarVersion((version) => version + 1)
-    }
+    const handleSelection = () => { void publishSelection() }
     editor.on('selectionUpdate', handleSelection)
     editor.on('transaction', handleSelection)
     handleSelection()
@@ -255,21 +296,7 @@ export default function EditorTiptap() {
       editor.off('selectionUpdate', handleSelection)
       editor.off('transaction', handleSelection)
     }
-  }, [editor, setEditorSelectionBookmark])
-
-  // ── Idle detector at the friction-scaled 45s (IR §2.3.6) ────────────────
-  useEffect(() => {
-    if (reviewPace !== 'deep') {
-      idleRef.current?.stop()
-      return
-    }
-    idleRef.current = new IdleDetector({
-      thresholdMs: idleThresholdForMode(frictionMode),
-      onIdle: () => fireEngine('socratic', '', ''),
-    })
-    idleRef.current.start()
-    return () => idleRef.current?.stop()
-  }, [frictionMode, fireEngine, reviewPace])
+  }, [editor, publishSelection])
 
   // Recover the latest unsent local draft after an offline close or failed save.
   useEffect(() => {
@@ -388,44 +415,11 @@ export default function EditorTiptap() {
     revealInlineContext(e.target)
   }
 
-  // Submit a prompt to the Interceptor
-  async function handlePromptSubmit() {
-    if (!project || !promptInput.trim() || !editor) return
-    const { context } = extractContext(editor.getText())
-    setEngineLoading('interceptor', true)
-    try {
-      const res = await api.interceptor(project.id, promptInput, context)
-      if (res.action === 'pass') {
-        toast('Prompt was not delegative — passed through')
-      } else if (res.intervention) {
-        pushIntervention(res.intervention)
-        bumpAnalytics()
-      }
-      setPromptInput('')
-    } catch (e) {
-      toast.error('Interceptor failed', { description: (e as Error).message })
-    } finally {
-      setEngineLoading('interceptor', false)
-    }
-  }
-
-  // Paragraph completion (Enter) → Scaffold + Blindspot
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!editor) return
     if ((e.key === 'Enter' || e.key === ' ') && revealInlineContext(e.target)) {
       e.preventDefault()
       return
-    }
-    if (e.key === 'Enter' && !e.shiftKey && reviewPace === 'deep') {
-      setTimeout(() => {
-        const text = editor.getText()
-        const paras = text.split(/\n\s*\n/).filter((p) => p.trim())
-        if (isParagraphComplete(paras)) {
-          const { context } = extractContext(text)
-          fireEngine('scaffold', '', context)
-          checkBlindspot(text)
-        }
-      }, 50)
     }
     // Esc → clear selection and close any open sentence popover
     if (e.key === 'Escape') {
@@ -436,12 +430,12 @@ export default function EditorTiptap() {
 
   // Seed the word count from the loaded document (updates flow from handleUpdate)
   useEffect(() => {
-    if (editor) setWordCount(editor.getText().split(/\s+/).filter(Boolean).length)
+    if (!editor) return
+    const timer = window.setTimeout(() => setWordCount(editor.getText().split(/\s+/).filter(Boolean).length), 0)
+    return () => window.clearTimeout(timer)
   }, [editor])
 
   if (!project || !editor) return null
-
-  const activeEngines = (Object.keys(engineLoading) as EngineType[]).filter((e) => engineLoading[e])
 
   function resolveConflict(choice: 'server' | 'mine') {
     if (!conflict) return
@@ -458,10 +452,10 @@ export default function EditorTiptap() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#f7f6f3]" onKeyDown={handleKeyDown}>
+    <div className="flex h-full flex-col bg-[var(--cog-workspace)]" onKeyDown={handleKeyDown}>
       {/* Subtle toolbar */}
-      <div className="flex min-h-9 items-center justify-between gap-4 border-b border-[#ebe7df] bg-[#fffefb] px-6 py-1.5">
-        <div className="flex items-center gap-3 text-xs text-stone-500">
+      <div className="flex min-h-10 items-center justify-between gap-4 border-b border-[var(--cog-border)] bg-[var(--cog-paper)] px-4 py-1.5 sm:px-6">
+        <div className="flex items-center gap-3 text-xs text-[var(--cog-muted-foreground)]" aria-live="polite" aria-atomic="true">
           {saveState === 'saving' ? (
             <span className="flex items-center gap-1.5">
               <Loader2 className="w-3 h-3 animate-spin" /> Saving…
@@ -483,22 +477,8 @@ export default function EditorTiptap() {
           ) : <span>Not saved</span>}
           <span className="text-stone-300">·</span>
           <span>{wordCount} words</span>
-          {activeEngines.length > 0 && (
-            <>
-              <span className="text-stone-300">·</span>
-              <span className="flex items-center gap-1.5">
-                <Loader2 className="w-3 h-3 animate-spin text-stone-400" />
-                {activeEngines.map((e) => (
-                  <IdlePetBadge key={e} engine={e} />
-                ))}
-                <span className="text-stone-500 text-xs">checking…</span>
-              </span>
-            </>
-          )}
         </div>
-        <div className="hidden items-center gap-2 text-[9px] text-stone-400 md:flex" aria-label="Intervention engines are listening">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#68897d]" /><span>Cogdoc is listening for evidence and reasoning gaps</span>
-        </div>
+        <p className="hidden text-xs text-[var(--cog-muted-foreground)] md:block">Select text to research or ask the collaborator</p>
       </div>
 
       {conflict && (
@@ -510,12 +490,12 @@ export default function EditorTiptap() {
 
       <EditorToolbar editor={editor} selectedText={selectedText} onFindSources={() => {
         setSourceMapperQuery(selectedText)
-        openIdeTab({ id: 'sources', kind: 'sources', label: 'Source mapper', closable: true })
-      }} />
+        void publishSelection().then(() => onOpenSources?.(publishedSelectionRef.current))
+      }} onAskCollaborator={() => { void publishSelection().then(() => onOpenCollaborator?.(publishedSelectionRef.current)) }} />
 
       {/* Scrollable writing surface */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="relative mx-auto min-h-full w-full max-w-[880px] border-x border-[#ece8e0] bg-[#fffefb] px-8 py-14 sm:px-14 sm:py-16">
+      <div className="document-scroll flex-1 overflow-y-auto overscroll-contain">
+        <div className="document-paper relative mx-auto min-h-full w-full max-w-[920px] bg-[var(--cog-paper)] px-7 py-12 sm:px-14 sm:py-16 lg:px-20">
           {/* Writing surface — focus mode dims all but the last paragraph */}
           <div
             onMouseOver={handleMouseOver}
@@ -528,44 +508,15 @@ export default function EditorTiptap() {
         </div>
       </div>
 
-      {/* Discreet prompt bar */}
-      <div className="border-t border-[#e8e4dc] bg-[#fffefb] px-6 py-3">
-        <div className="max-w-[680px] mx-auto flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-          <Textarea
-            value={promptInput}
-            onChange={(e) => setPromptInput(e.target.value)}
-            aria-label="Ask Cogdoc"
-            placeholder="Ask Cogdoc… (it intercepts delegative prompts and reframes them as questions)"
-            rows={1}
-            className="resize-none min-h-[32px] max-h-[100px] border-none bg-transparent focus-visible:ring-0 text-sm placeholder:text-stone-400"
-            style={{ fontFamily: 'var(--font-geist-sans), sans-serif' }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                handlePromptSubmit()
-              }
-            }}
-          />
-          <Button
-            size="icon"
-            aria-label="Send prompt"
-            onClick={handlePromptSubmit}
-            disabled={!promptInput.trim() || engineLoading.interceptor}
-            className="bg-stone-800 hover:bg-stone-700 shrink-0 h-7 w-7"
-          >
-            {engineLoading.interceptor ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-          </Button>
-        </div>
-      </div>
-
       {/* Hover popover (renders outside the scrollable area) */}
       <div data-sentence-popover>
         <SentencePopover />
       </div>
 
-      {/* Running pixelated pets — animate across the screen when engines fire */}
-      <RunningPets />
     </div>
   )
-}
+})
+
+EditorTiptap.displayName = 'EditorTiptap'
+
+export default EditorTiptap

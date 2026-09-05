@@ -24,6 +24,7 @@ interface EditorToolbarProps {
   editor: Editor
   selectedText: string
   onFindSources: () => void
+  onAskCollaborator?: () => void
 }
 
 interface ToolButtonProps {
@@ -60,8 +61,8 @@ function currentBlock(editor: Editor): string {
   return 'paragraph'
 }
 
-export default function EditorToolbar({ editor, selectedText, onFindSources }: EditorToolbarProps) {
-  const hasResearchSelection = selectedText.trim().length >= 10
+export default function EditorToolbar({ editor, selectedText, onFindSources, onAskCollaborator }: EditorToolbarProps) {
+  const hasResearchSelection = selectedText.trim().length > 0
 
   function setBlock(value: string) {
     if (value === 'paragraph') editor.chain().focus().setParagraph().run()
@@ -112,11 +113,21 @@ export default function EditorToolbar({ editor, selectedText, onFindSources }: E
         <Button
           type="button"
           size="sm"
+          variant="ghost"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => onAskCollaborator?.()}
+          className="h-8 shrink-0 rounded-md px-3 text-xs text-[var(--cog-accent-strong)] hover:bg-[var(--cog-accent-soft)]"
+        >
+          Ask CogDoc
+        </Button>
+        <Button
+          type="button"
+          size="sm"
           onMouseDown={(event) => event.preventDefault()}
           onClick={onFindSources}
           disabled={!hasResearchSelection}
-          title={hasResearchSelection ? 'Search for sources about the selected passage' : 'Select at least 10 characters to find sources'}
-          className="h-8 shrink-0 rounded-md bg-[#173f35] px-3 text-xs hover:bg-[#245548] active:translate-y-px"
+          title={hasResearchSelection ? 'Search for sources about the selected passage' : 'Select a passage to find sources'}
+          className="h-8 shrink-0 rounded-md bg-[var(--cog-accent)] px-3 text-xs text-white hover:bg-[var(--cog-accent-strong)] active:translate-y-px"
         >
           <Search className="mr-1.5 h-3.5 w-3.5" />Find sources
         </Button>

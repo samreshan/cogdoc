@@ -42,6 +42,7 @@ export function fakeAI(overrides: Partial<AIService> = {}): AIService {
     draftResearchKickoff: async () => ({ sections: [{ heading: 'Context', content: 'Working context.' }, { heading: 'Evidence', content: 'Working evidence.' }], reflection: 'Does this match your view?', sourceNeeds: [] }),
     restructureFromIntervention: async ({ passage }) => passage,
     provideContextualHelp: async () => ({ body: 'What evidence would change this account?', action: 'Compare it with the supplied material.', modelVersion: 'fake-contextual-provider' }),
+    collaborateOnDocument: async () => ({ answer: 'Here is a direct answer grounded in the context you chose.', nextStep: 'Check the claim against one available passage.', hypothetical: false, modelVersion: 'fake-document-collaborator' }),
     draftArticleFromFindings: async () => ({ content: 'A bounded draft from reviewed findings.', sourceIndexes: [], unsupportedClaims: [], modelVersion: 'fake-article-provider' }),
     ...overrides,
   }
