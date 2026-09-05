@@ -39,7 +39,7 @@ beforeEach(() => {
 describe('research kickoff', () => {
   it('only rejects an empty topic and keeps the form usable', async () => {
     const user = userEvent.setup()
-    render(<ResearchKickoff onComplete={vi.fn()} />)
+    render(<ResearchKickoff onOpenWorkspace={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: 'Start writing' }))
     expect(screen.getByRole('alert')).toHaveTextContent('Add a topic')
@@ -48,13 +48,13 @@ describe('research kickoff', () => {
 
   it('creates a durable blank document from a one-word topic', async () => {
     const user = userEvent.setup()
-    const onComplete = vi.fn()
-    render(<ResearchKickoff onComplete={onComplete} />)
+    const onOpenWorkspace = vi.fn()
+    render(<ResearchKickoff onOpenWorkspace={onOpenWorkspace} />)
 
     await user.type(screen.getByLabelText('What are you working on?'), 'AI')
     await user.click(screen.getByRole('button', { name: 'Start writing' }))
 
-    await waitFor(() => expect(onComplete).toHaveBeenCalledWith(workspace))
+    await waitFor(() => expect(onOpenWorkspace).toHaveBeenCalledWith(workspace))
     expect(mocks.createWorkspace).toHaveBeenCalledWith(expect.objectContaining({
       title: 'AI', description: 'AI', workspaceType: 'research', citationStyle: 'harvard',
     }))
@@ -67,7 +67,7 @@ describe('research kickoff', () => {
 
   it('saves optional context including an explicit unknown without making it a gate', async () => {
     const user = userEvent.setup()
-    render(<ResearchKickoff onComplete={vi.fn()} />)
+    render(<ResearchKickoff onOpenWorkspace={vi.fn()} />)
 
     await user.type(screen.getByLabelText('What are you working on?'), 'Evidence evaluation')
     await user.click(screen.getByRole('button', { name: /add goal and starting point/i }))
@@ -84,21 +84,21 @@ describe('research kickoff', () => {
 
   it('opens the created document even when optional context persistence is unavailable', async () => {
     const user = userEvent.setup()
-    const onComplete = vi.fn()
+    const onOpenWorkspace = vi.fn()
     mocks.saveInvestigation.mockRejectedValueOnce(new Error('Context service unavailable'))
-    render(<ResearchKickoff onComplete={onComplete} />)
+    render(<ResearchKickoff onOpenWorkspace={onOpenWorkspace} />)
 
     await user.type(screen.getByLabelText('What are you working on?'), 'Resilient entry')
     await user.click(screen.getByRole('button', { name: 'Start writing' }))
 
-    await waitFor(() => expect(onComplete).toHaveBeenCalledWith(workspace))
+    await waitFor(() => expect(onOpenWorkspace).toHaveBeenCalledWith(workspace))
     expect(mocks.createWorkspace).toHaveBeenCalledTimes(1)
   })
 
   it('preserves user text after creation failure so retry does not require retyping', async () => {
     const user = userEvent.setup()
     mocks.createWorkspace.mockRejectedValueOnce(new Error('Network unavailable'))
-    render(<ResearchKickoff onComplete={vi.fn()} />)
+    render(<ResearchKickoff onOpenWorkspace={vi.fn()} />)
 
     const topic = screen.getByLabelText('What are you working on?')
     await user.type(topic, 'My retained topic')

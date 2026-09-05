@@ -62,7 +62,7 @@ function currentBlock(editor: Editor): string {
 }
 
 export default function EditorToolbar({ editor, selectedText, onFindSources, onAskCollaborator }: EditorToolbarProps) {
-  const hasResearchSelection = selectedText.trim().length >= 10
+  const hasResearchSelection = selectedText.trim().length > 0
 
   function setBlock(value: string) {
     if (value === 'paragraph') editor.chain().focus().setParagraph().run()
@@ -126,7 +126,7 @@ export default function EditorToolbar({ editor, selectedText, onFindSources, onA
           onMouseDown={(event) => event.preventDefault()}
           onClick={onFindSources}
           disabled={!hasResearchSelection}
-          title={hasResearchSelection ? 'Search for sources about the selected passage' : 'Select at least 10 characters to find sources'}
+          title={hasResearchSelection ? 'Search for sources about the selected passage' : 'Select a passage to find sources'}
           className="h-8 shrink-0 rounded-md bg-[var(--cog-accent)] px-3 text-xs text-white hover:bg-[var(--cog-accent-strong)] active:translate-y-px"
         >
           <Search className="mr-1.5 h-3.5 w-3.5" />Find sources

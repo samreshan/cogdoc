@@ -77,7 +77,7 @@ The article surface preserves an editable outline and generated/manual draft his
 
 ## Integration contracts and ownership
 
-The executable contract lives in `src/lib/document-workspace-contract.ts`.
+The canonical dock contract lives in `src/lib/document-collaborator-contract.ts`; `src/lib/document-workspace-contract.ts` re-exports it and owns the small Home-to-document `OpenWorkspaceHandler` boundary.
 
 ### Lead/integrator owns
 

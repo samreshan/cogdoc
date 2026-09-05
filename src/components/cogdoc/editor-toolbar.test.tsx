@@ -29,13 +29,13 @@ function fakeEditor() {
 }
 
 describe('EditorToolbar', () => {
-  it('keeps source search disabled until the author selects a useful passage', () => {
+  it('enables source search for any explicit non-empty selection', () => {
     const { editor } = fakeEditor()
     const onFindSources = vi.fn()
-    const { rerender } = render(<EditorToolbar editor={editor} selectedText="short" onFindSources={onFindSources} />)
+    const { rerender } = render(<EditorToolbar editor={editor} selectedText="" onFindSources={onFindSources} />)
     expect(screen.getByRole('button', { name: 'Find sources' })).toBeDisabled()
 
-    rerender(<EditorToolbar editor={editor} selectedText="A selected research claim" onFindSources={onFindSources} />)
+    rerender(<EditorToolbar editor={editor} selectedText="term" onFindSources={onFindSources} />)
     fireEvent.click(screen.getByRole('button', { name: 'Find sources' }))
     expect(onFindSources).toHaveBeenCalledOnce()
   })

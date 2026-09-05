@@ -40,11 +40,12 @@ describe('Login', () => {
     expect(screen.getByRole('button', { name: /sign in/i })).toBeTruthy()
   })
 
-  it('explains the product boundary and its support for research literacy', () => {
+  it('explains the document-first product boundary', () => {
     render(<Login />)
     expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content')
-    expect(screen.getByText(/sdg 4/i)).toBeTruthy()
-    expect(screen.getByText(/productive friction/i)).toBeTruthy()
+    expect(screen.getByText(/keep the document open/i)).toBeTruthy()
+    expect(screen.getByText(/context you control/i)).toBeTruthy()
+    expect(screen.getByText(/sources and citations with provenance/i)).toBeTruthy()
   })
 
   it('calls signInWithPassword with the entered credentials on submit', async () => {
@@ -59,7 +60,7 @@ describe('Login', () => {
 describe('Login — signup mode', () => {
   function toSignup() {
     render(<Login />)
-    fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
   }
 
   it('shows a confirm-password field after switching to sign up', () => {

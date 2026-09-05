@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
 import type { Project } from '@/lib/types'
+import type { OpenWorkspaceHandler } from '@/lib/document-workspace-contract'
 import { Button } from '@/components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import ResearchKickoff from '@/components/cogdoc/research-kickoff'
@@ -49,12 +50,16 @@ export default function Dashboard() {
 
   useEffect(() => { void refresh() }, [])
 
+  const openWorkspace: OpenWorkspaceHandler = (project) => {
+    setActiveProject(project)
+    setView('editor')
+  }
+
   async function enterProject(id: string) {
     setOpeningId(id)
     try {
       const { workspace } = await api.getWorkspace(id)
-      setActiveProject(workspace)
-      setView('editor')
+      openWorkspace(workspace)
     } catch (error) {
       toast.error('Could not open this document', { description: (error as Error).message })
     } finally {
@@ -80,8 +85,7 @@ export default function Dashboard() {
       workspace = created.workspace
       await api.importWorkspaceFile(workspace.id, file, 'docx')
       const { workspace: hydrated } = await api.getWorkspace(workspace.id)
-      setActiveProject(hydrated)
-      setView('editor')
+      openWorkspace(hydrated)
       toast.success('Document imported')
     } catch (error) {
       toast.error('DOCX import did not finish', {
@@ -135,7 +139,7 @@ export default function Dashboard() {
               <p className="flex items-center gap-3"><MessageSquareText className="size-4 text-[#6858a8]" aria-hidden="true" />The collaborator works from context you choose.</p>
             </div>
           </div>
-          <ResearchKickoff onComplete={(project) => { setActiveProject(project); setView('editor') }} />
+          <ResearchKickoff onOpenWorkspace={openWorkspace} />
         </div>
       </section>
 

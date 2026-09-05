@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
 
-import { act, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { Project } from '@/lib/types'
-import { useCogdoc } from '@/lib/store'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import type { Project, ResearchQuestionSummary } from '@/lib/types'
 import ResearchNavigator from './research-navigator'
 
 const project = {
@@ -19,38 +18,43 @@ const project = {
   pdfs: [], interventions: [], _count: { pdfs: 0, interventions: 2 },
 } as Project
 
-beforeEach(() => {
-  useCogdoc.setState({
-    activeProject: project,
-    activeInterventions: [],
-    ideTabs: [{ id: 'document', kind: 'document', label: 'Working document', closable: false }],
-    activeTabId: 'document',
-    editorOutlineTarget: null,
-    editorContext: { workspaceId: project.id, activeTabId: 'document', activeKind: 'document' },
-  })
-})
+const questions = [{ id: 'question-1', wording: 'What evidence explains the effect?', state: 'active', revision: 1 }] as ResearchQuestionSummary[]
 
-afterEach(() => act(() => useCogdoc.setState({ activeProject: null, activeInterventions: [] })))
+function renderNavigator(overrides: Partial<React.ComponentProps<typeof ResearchNavigator>> = {}) {
+  const props = {
+    project,
+    questions,
+    activeQuestionId: null,
+    activeSection: 'collaborator' as const,
+    onHome: vi.fn(),
+    onSectionChange: vi.fn(),
+    onQuestionChange: vi.fn(),
+    onCollapse: vi.fn(),
+    onOpenHistory: vi.fn(),
+    onOpenReferences: vi.fn(),
+    ...overrides,
+  }
+  render(<ResearchNavigator {...props} />)
+  return props
+}
 
 describe('ResearchNavigator', () => {
-  it('keeps the full research system in four quiet groups', () => {
-    render(<ResearchNavigator project={project} data={null} loading={false} onRefresh={() => undefined} />)
-    expect(screen.getByText('Document')).toBeInTheDocument()
-    expect(screen.getByText('In focus')).toBeInTheDocument()
-    expect(screen.getByText('Research')).toBeInTheDocument()
+  it('keeps contextual tools in one compact project rail', () => {
+    renderNavigator()
     expect(screen.getByText('Project')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /collaborator/i })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('button', { name: /sources/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /history/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /findings/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /plan/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /share/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /what evidence/i })).toBeInTheDocument()
   })
 
-  it('keeps outline links clickable and opens history as one focused view', () => {
-    render(<ResearchNavigator project={project} data={null} loading={false} onRefresh={() => undefined} />)
-    const methods = screen.getByRole('link', { name: /methods/i })
-    expect(methods).toHaveAttribute('href', expect.stringMatching(/^#outline-/))
-    fireEvent.click(methods)
-    expect(useCogdoc.getState().editorOutlineTarget).toMatch(/^outline-/)
-
-    fireEvent.click(screen.getByRole('button', { name: /history/i }))
-    expect(useCogdoc.getState().activeTabId).toBe('history:decisions')
+  it('routes questions and tools through typed callbacks', () => {
+    const props = renderNavigator()
+    fireEvent.click(screen.getByRole('button', { name: /what evidence/i }))
+    expect(props.onQuestionChange).toHaveBeenCalledWith(questions[0])
+    fireEvent.click(screen.getByRole('button', { name: /sources/i }))
+    expect(props.onSectionChange).toHaveBeenCalledWith('sources')
   })
 })

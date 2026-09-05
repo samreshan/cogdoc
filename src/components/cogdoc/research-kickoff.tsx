@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 interface Props {
   open?: boolean
   onOpenChange?: (open: boolean) => void
-  onComplete: (project: Project) => void
+  onOpenWorkspace: (project: Project) => void
 }
 
 export function projectTitleFromTopic(topic: string) {
@@ -22,7 +22,7 @@ export function projectTitleFromTopic(topic: string) {
   return `${shortened || compact.slice(0, 69).trim()}...`
 }
 
-export default function ResearchKickoff({ open = true, onOpenChange, onComplete }: Props) {
+export default function ResearchKickoff({ open = true, onOpenChange, onOpenWorkspace }: Props) {
   const [topic, setTopic] = useState('')
   const [purpose, setPurpose] = useState('')
   const [existingUnderstanding, setExistingUnderstanding] = useState('')
@@ -73,7 +73,7 @@ export default function ResearchKickoff({ open = true, onOpenChange, onComplete 
       const hydrated = await api.getWorkspace(workspace.id).then(({ workspace: current }) => current).catch(() => workspace)
       createdWorkspaceRef.current = null
       onOpenChange?.(false)
-      onComplete(hydrated)
+      onOpenWorkspace(hydrated)
     } catch (error) {
       setFeedback((error as Error).message || 'Cogdoc could not create the document. Your topic is still here, so you can retry.')
     } finally {

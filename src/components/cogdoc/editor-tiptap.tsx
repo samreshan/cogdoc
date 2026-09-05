@@ -40,9 +40,11 @@ import { findEditorTextRange } from '@/lib/editor-focus'
 import EditorToolbar from './editor-toolbar'
 import { createEditorExtensions } from '@/lib/editor-extensions'
 import type { StructuredCitationAttrs } from '@/lib/extensions/citation-node'
+import { fingerprintDocumentText } from '@/lib/document-selection'
 
 export interface DocumentEditorSelection {
   text: string
+  textFingerprint: string
   documentRevision: number
   selectionId: string
   from: number
@@ -66,14 +68,8 @@ interface EditorTiptapProps {
   onOpenCollaborator?: (selection: DocumentEditorSelection | null) => void
 }
 
-function selectionIdentity(projectId: string, documentId: string, revision: number, from: number, to: number, text: string) {
-  const value = `${projectId}:${documentId}:${revision}:${from}:${to}:${text}`
-  let hash = 2166136261
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index)
-    hash = Math.imul(hash, 16777619)
-  }
-  return `${documentId}:${revision}:${from}-${to}:${(hash >>> 0).toString(36)}`
+function selectionIdentity(projectId: string, documentId: string, revision: number, from: number, to: number, fingerprint: string) {
+  return [projectId, documentId, revision, from, to, fingerprint].join(':')
 }
 
 const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(function EditorTiptap({ onSelectionChange, onOpenSources, onOpenCollaborator }, ref) {
@@ -104,6 +100,8 @@ const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(functio
 
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
   const revisionRef = useRef(project?.document?.revision ?? 0)
+  const selectionPublishTokenRef = useRef(0)
+  const publishedSelectionRef = useRef<DocumentEditorSelection | null>(null)
   const [conflict, setConflict] = useState<{ serverRevision: number; serverContent: string } | null>(null)
 
   const editor = useEditor({
@@ -119,18 +117,44 @@ const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(functio
     },
   })
 
+  const publishSelection = useCallback(async () => {
+    if (!editor || !project?.document) return
+    const token = ++selectionPublishTokenRef.current
+    const { from, to } = editor.state.selection
+    const text = from === to ? '' : editor.state.doc.textBetween(from, to, ' ').trim().slice(0, 2_000)
+    setEditorSelectionBookmark({ from, to })
+    setSelectedText(text)
+    setToolbarVersion((version) => version + 1)
+    if (!text) {
+      publishedSelectionRef.current = null
+      onSelectionChange?.(null)
+      return
+    }
+    const fingerprint = await fingerprintDocumentText(text)
+    if (token !== selectionPublishTokenRef.current || !editor || revisionRef.current < 0) return
+    const current = editor.state.selection
+    const currentText = current.from === current.to ? '' : editor.state.doc.textBetween(current.from, current.to, ' ').trim().slice(0, 2_000)
+    if (current.from !== from || current.to !== to || currentText !== text) return
+    const selection: DocumentEditorSelection = {
+      text,
+      textFingerprint: fingerprint,
+      documentRevision: revisionRef.current,
+      selectionId: selectionIdentity(project.id, project.document.id, revisionRef.current, from, to, fingerprint),
+      from,
+      to,
+    }
+    publishedSelectionRef.current = selection
+    onSelectionChange?.(selection)
+  }, [editor, onSelectionChange, project, setEditorSelectionBookmark])
+
   useImperativeHandle(ref, () => ({
     applyDocumentRevision(request) {
       if (!editor || !project?.document || !request.replacement.trim()) return { applied: false, reason: 'rejected' }
       if (request.expectedDocumentRevision !== revisionRef.current) return { applied: false, reason: 'stale_revision' }
-      const { from, to } = editor.state.selection
-      const text = from === to ? '' : editor.state.doc.textBetween(from, to, ' ').trim().slice(0, 2_000)
-      const currentSelectionId = text
-        ? selectionIdentity(project.id, project.document.id, revisionRef.current, from, to, text)
-        : undefined
-      if (request.expectedSelectionId && request.expectedSelectionId !== currentSelectionId) {
+      if (request.expectedSelectionId && request.expectedSelectionId !== publishedSelectionRef.current?.selectionId) {
         return { applied: false, reason: 'stale_selection' }
       }
+      const { from, to } = publishedSelectionRef.current ?? editor.state.selection
       if (request.expectedSelectionId && from !== to) {
         editor.chain().focus().insertContentAt({ from, to }, request.replacement).run()
       } else {
@@ -230,15 +254,7 @@ const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(functio
         setLastSavedAt(res.lastSaved)
         setSaveState('saved')
         setConflict(null)
-        const { from, to } = editor.state.selection
-        const selectionText = from === to ? '' : editor.state.doc.textBetween(from, to, ' ').trim().slice(0, 2_000)
-        onSelectionChange?.(selectionText && project.document ? {
-          text: selectionText,
-          documentRevision: res.revision,
-          selectionId: selectionIdentity(project.id, project.document.id, res.revision, from, to, selectionText),
-          from,
-          to,
-        } : null)
+        void publishSelection()
         await clearRecoveryDraft(project.id)
         setTimeout(() => setSaveState('idle'), 1500)
       } catch (error) {
@@ -253,7 +269,7 @@ const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(functio
         }
       }
     }, 1500)
-  }, [editor, onSelectionChange, project, updateActiveProjectContent])
+  }, [editor, project, publishSelection, updateActiveProjectContent])
 
   // ── Wire editor events ──────────────────────────────────────────────────
   useEffect(() => {
@@ -272,20 +288,7 @@ const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(functio
   // only sent when they explicitly open the source finder.
   useEffect(() => {
     if (!editor) return
-    const handleSelection = () => {
-      const { from, to } = editor.state.selection
-      setEditorSelectionBookmark({ from, to })
-      const text = from === to ? '' : editor.state.doc.textBetween(from, to, ' ').trim().slice(0, 2_000)
-      setSelectedText(text)
-      onSelectionChange?.(text && project?.document ? {
-        text,
-        documentRevision: revisionRef.current,
-        selectionId: selectionIdentity(project.id, project.document.id, revisionRef.current, from, to, text),
-        from,
-        to,
-      } : null)
-      setToolbarVersion((version) => version + 1)
-    }
+    const handleSelection = () => { void publishSelection() }
     editor.on('selectionUpdate', handleSelection)
     editor.on('transaction', handleSelection)
     handleSelection()
@@ -293,7 +296,7 @@ const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(functio
       editor.off('selectionUpdate', handleSelection)
       editor.off('transaction', handleSelection)
     }
-  }, [editor, onSelectionChange, project, setEditorSelectionBookmark])
+  }, [editor, publishSelection])
 
   // Recover the latest unsent local draft after an offline close or failed save.
   useEffect(() => {
@@ -427,7 +430,9 @@ const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(functio
 
   // Seed the word count from the loaded document (updates flow from handleUpdate)
   useEffect(() => {
-    if (editor) setWordCount(editor.getText().split(/\s+/).filter(Boolean).length)
+    if (!editor) return
+    const timer = window.setTimeout(() => setWordCount(editor.getText().split(/\s+/).filter(Boolean).length), 0)
+    return () => window.clearTimeout(timer)
   }, [editor])
 
   if (!project || !editor) return null
@@ -485,20 +490,8 @@ const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(functio
 
       <EditorToolbar editor={editor} selectedText={selectedText} onFindSources={() => {
         setSourceMapperQuery(selectedText)
-        onOpenSources?.(selectedText && project.document ? {
-          text: selectedText,
-          documentRevision: revisionRef.current,
-          selectionId: selectionIdentity(project.id, project.document.id, revisionRef.current, editor.state.selection.from, editor.state.selection.to, selectedText),
-          from: editor.state.selection.from,
-          to: editor.state.selection.to,
-        } : null)
-      }} onAskCollaborator={() => onOpenCollaborator?.(selectedText && project.document ? {
-        text: selectedText,
-        documentRevision: revisionRef.current,
-        selectionId: selectionIdentity(project.id, project.document.id, revisionRef.current, editor.state.selection.from, editor.state.selection.to, selectedText),
-        from: editor.state.selection.from,
-        to: editor.state.selection.to,
-      } : null)} />
+        void publishSelection().then(() => onOpenSources?.(publishedSelectionRef.current))
+      }} onAskCollaborator={() => { void publishSelection().then(() => onOpenCollaborator?.(publishedSelectionRef.current)) }} />
 
       {/* Scrollable writing surface */}
       <div className="document-scroll flex-1 overflow-y-auto overscroll-contain">
