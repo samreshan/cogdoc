@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, Loader2, Plus, Save, Search, Video, Lightbulb, Clock3, X } from 'lucide-react'
 import { api, ApiError } from '@/lib/api-client'
 import type { ResearchFindingJourney } from '@/lib/types'
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import SourcesResults from './sources-results'
 import { FindingReviewPanel } from './finding-review-panel'
+import type { FindingDraftProposal } from '@/lib/document-collaborator-contract'
 
 function manualExcerpt(metadataJson: string) {
   try {
@@ -29,7 +30,11 @@ function sourceAccess(metadataJson: string, parseStatus: string) {
   return 'Metadata only; no passage is available in Cogdoc yet.'
 }
 
-export default function ManualFindingPanel({ projectId }: { projectId: string }) {
+export default function ManualFindingPanel({ projectId, initialExplanation, initialProposal }: {
+  projectId: string
+  initialExplanation?: { id: string; text: string }
+  initialProposal?: FindingDraftProposal
+}) {
   const [journey, setJourney] = useState<ResearchFindingJourney | null>(null)
   const [sourceTitle, setSourceTitle] = useState('')
   const [selectedExistingSource, setSelectedExistingSource] = useState('')
@@ -57,6 +62,27 @@ export default function ManualFindingPanel({ projectId }: { projectId: string })
   const [helpProviderStatus, setHelpProviderStatus] = useState<'configured' | 'deterministic_fallback' | null>(null)
   const [helpLoading, setHelpLoading] = useState(false)
   const [proposalIncorporated, setProposalIncorporated] = useState(false)
+  const usedExplanationId = useRef('')
+  const usedProposalId = useRef('')
+
+  useEffect(() => {
+    if (loading || !initialExplanation?.text.trim() || usedExplanationId.current === initialExplanation.id) return
+    usedExplanationId.current = initialExplanation.id
+    setExplanation(initialExplanation.text)
+    setNotice('Selected document text copied into the editable explanation. It has not been saved as a finding.')
+  }, [initialExplanation?.id, initialExplanation?.text, loading])
+
+  useEffect(() => {
+    if (loading || !initialProposal || usedProposalId.current === initialProposal.id) return
+    usedProposalId.current = initialProposal.id
+    setConclusion(initialProposal.conclusion)
+    setExplanation(initialProposal.rationale)
+    setUncertainty(initialProposal.uncertainty)
+    setLimitations(initialProposal.limitations)
+    setConflicts(initialProposal.conflicts)
+    setProposalIncorporated(true)
+    setNotice('Collaborator proposal copied into an editable finding draft. It is not reviewed or saved yet.')
+  }, [initialProposal, loading])
 
   const refresh = useCallback(async () => {
     try {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, CircleHelp, ExternalLink, FileWarning, Loader2 } from 'lucide-react'
+import { CheckCircle2, CircleHelp, ExternalLink, FilePlus2, FileWarning, Loader2 } from 'lucide-react'
 import { api } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 
@@ -9,7 +9,7 @@ type Finding = {
   id: string
   reviewState: string
   question: { id: string; wording: string }
-  revisions: Array<{ id: string; conclusion: string | null; uncertainty: string | null; limitations: string | null; reviews: Array<{ decision: string }> }>
+  revisions: Array<{ id: string; conclusion: string | null; researcherExplanation?: string | null; uncertainty: string | null; limitations: string | null; conflicts?: string | null; evidences?: Array<{ id: string; workspaceSourceId?: string | null; locatorValue?: string | null; workspaceSource?: { source?: { title?: string } } | null }>; reviews: Array<{ decision: string }> }>
 }
 
 function stateCopy(finding: Finding) {
@@ -20,7 +20,7 @@ function stateCopy(finding: Finding) {
   return { label: 'Draft finding', Icon: CircleHelp, className: 'bg-violet-50 text-violet-800' }
 }
 
-export default function FindingsWorkspace({ projectId, onOpenFinding }: { projectId: string; onOpenFinding: () => void }) {
+export default function FindingsWorkspace({ projectId, onOpenFinding, onInsertFinding }: { projectId: string; onOpenFinding: () => void; onInsertFinding?: (finding: Finding) => void }) {
   const [findings, setFindings] = useState<Finding[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -52,7 +52,7 @@ export default function FindingsWorkspace({ projectId, onOpenFinding }: { projec
     {!findings.length ? <p className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">No findings yet. Investigate a question, save your explanation, then capture a tentative answer or explicit evidence gap.</p> : findings.map((finding) => {
       const revision = finding.revisions[0]
       const status = stateCopy(finding)
-      return <article key={finding.id} className="rounded-xl border border-slate-200 bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[.12em] text-violet-700">Addresses: {finding.question.wording}</p><h4 className="mt-2 font-serif text-lg font-semibold text-slate-900">{revision?.conclusion || 'Inconclusive or unfinished finding'}</h4></div><span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${status.className}`}><status.Icon className="h-3.5 w-3.5" />{status.label}</span></div>{revision?.uncertainty ? <p className="mt-3 text-sm leading-6 text-slate-600"><span className="font-medium text-slate-700">Uncertainty:</span> {revision.uncertainty}</p> : null}{revision?.limitations ? <p className="mt-1 text-sm leading-6 text-slate-600"><span className="font-medium text-slate-700">Limitations:</span> {revision.limitations}</p> : null}<Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => void open(finding)}>Open question and finding <ExternalLink className="ml-2 h-3.5 w-3.5" /></Button></article>
+      return <article key={finding.id} className="rounded-xl border border-slate-200 bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold text-violet-700">Addresses: {finding.question.wording}</p><h4 className="mt-2 text-lg font-semibold text-slate-900">{revision?.conclusion || 'Inconclusive or unfinished finding'}</h4></div><span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${status.className}`}><status.Icon className="h-3.5 w-3.5" />{status.label}</span></div>{revision?.researcherExplanation ? <p className="mt-3 text-sm leading-6 text-slate-700">{revision.researcherExplanation}</p> : null}{revision?.uncertainty ? <p className="mt-3 text-sm leading-6 text-slate-600"><span className="font-medium text-slate-700">Uncertainty:</span> {revision.uncertainty}</p> : null}{revision?.limitations ? <p className="mt-1 text-sm leading-6 text-slate-600"><span className="font-medium text-slate-700">Limitations:</span> {revision.limitations}</p> : null}{revision?.conflicts ? <p className="mt-1 text-sm leading-6 text-slate-600"><span className="font-medium text-slate-700">Conflicts:</span> {revision.conflicts}</p> : null}{revision?.evidences?.length ? <p className="mt-2 text-xs text-slate-500">{revision.evidences.length} linked evidence item{revision.evidences.length === 1 ? '' : 's'}{revision.evidences[0]?.locatorValue ? `, including ${revision.evidences[0].locatorValue}` : ''}</p> : null}<div className="mt-4 flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" onClick={() => void open(finding)}>Open question and finding <ExternalLink className="ml-2 h-3.5 w-3.5" /></Button>{onInsertFinding && revision?.conclusion ? <Button type="button" variant="ghost" size="sm" onClick={() => onInsertFinding(finding)}><FilePlus2 className="mr-2 h-3.5 w-3.5" />Preview in document</Button> : null}</div></article>
     })}
   </section>
 }
