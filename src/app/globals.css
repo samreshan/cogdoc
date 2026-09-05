@@ -45,13 +45,13 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: #f1f2f6;
+  --foreground: #24262d;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: #7164f4;
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -62,7 +62,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: #7164f4;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -76,6 +76,21 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --cog-rail: #191b20;
+  --cog-rail-foreground: #f7f7fb;
+  --cog-workspace: #f0f1f5;
+  --cog-paper: #ffffff;
+  --cog-foreground: #24262d;
+  --cog-muted-foreground: #6d7180;
+  --cog-border: #dde0e8;
+  --cog-border-strong: #c9cdd8;
+  --cog-accent: #7164f4;
+  --cog-accent-strong: #5d50d8;
+  --cog-accent-soft: #efedff;
+  --cog-danger: #a43f58;
+  --cog-warning: #9b641e;
+  --cog-success: #32715d;
+  --cog-shadow-paper: 0 1px 2px rgb(31 35 48 / 5%), 0 20px 50px rgb(45 49 66 / 7%);
 }
 
 .dark {
@@ -118,6 +133,12 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-geist-sans), sans-serif;
+    font-size: 15px;
+  }
+
+  :focus-visible {
+    outline-color: var(--cog-accent);
   }
 }
 
@@ -144,8 +165,32 @@ html { scroll-behavior: smooth; }
 .tiptap-editor:has(> p:first-child:last-child > br.ProseMirror-trailingBreak:only-child)::before {
   content: attr(data-placeholder);
   position: absolute;
-  color: #a8a29e;
+  color: #9a9dab;
   pointer-events: none;
+}
+
+.document-paper {
+  box-shadow: var(--cog-shadow-paper);
+}
+
+.tiptap-editor {
+  position: relative;
+  min-height: 62vh;
+  max-width: 70ch;
+  margin: 0 auto;
+  color: var(--cog-foreground);
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 17px;
+  line-height: 1.76;
+  text-wrap: pretty;
+}
+
+.tiptap-editor p {
+  margin: 0 0 1.15em;
+}
+
+.tiptap-editor ::selection {
+  background: color-mix(in srgb, var(--cog-accent) 22%, white);
 }
 
 /* Placeholder for the contentEditable title */
@@ -183,13 +228,13 @@ h1[data-placeholder]:empty::before {
 .tiptap-editor h4,
 .tiptap-editor h5,
 .tiptap-editor h6 {
-  color: #202a26;
+  color: var(--cog-foreground);
   text-wrap: balance;
 }
 
 .tiptap-editor h1 {
   margin: 3.25rem 0 1.35rem;
-  border-bottom: 1px solid #cfc8bb;
+  border-bottom: 1px solid var(--cog-border);
   padding-bottom: 0.65rem;
   font-size: clamp(1.9rem, 4vw, 2.3rem);
   font-weight: 650;
@@ -201,7 +246,7 @@ h1[data-placeholder]:empty::before {
 
 .tiptap-editor h2 {
   margin: 2.75rem 0 1rem;
-  border-left: 3px solid #6f8d81;
+  border-left: 3px solid var(--cog-accent);
   padding-left: 0.7rem;
   font-size: 1.55rem;
   font-weight: 650;
@@ -214,7 +259,7 @@ h1[data-placeholder]:empty::before {
   font-size: 1.23rem;
   font-weight: 650;
   line-height: 1.3;
-  color: #30483f;
+  color: #353745;
 }
 
 .tiptap-editor h4 {
@@ -243,15 +288,15 @@ h1[data-placeholder]:empty::before {
   line-height: 1.4;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #5f6e68;
+  color: var(--cog-muted-foreground);
 }
 
 .tiptap-editor :is(h1, h2, h3, h4, h5, h6) + p { margin-top: 0; }
 
 .cogdoc-outline-heading--target {
-  outline: 2px solid #8da79d;
+  outline: 2px solid var(--cog-accent);
   outline-offset: 0.35rem;
-  background: #edf2ee;
+  background: var(--cog-accent-soft);
 }
 
 @media (prefers-reduced-motion: reduce) {
