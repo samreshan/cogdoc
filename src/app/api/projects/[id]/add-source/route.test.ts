@@ -8,14 +8,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn(async () => ({ id: 'u1' })) }))
-vi.mock('@/lib/db', () => ({
-  db: {
+vi.mock('@/lib/db', () => {
+  const models = {
     project: { findFirst: vi.fn(async () => ({ id: 'p1' })) },
     pdf: { create: vi.fn(), update: vi.fn() },
     pdfChunk: { createMany: vi.fn() },
-  },
-}))
+  }
+  return { db: { ...models, $transaction: vi.fn(async (callback: (tx: typeof models) => unknown) => callback(models)) } }
+})
 vi.mock('@/lib/safe-url', () => ({ fetchPublicHtml: vi.fn() }))
+vi.mock('@/lib/workspace-server', () => ({ appendAuditEvent: vi.fn(async () => ({ id: 'audit-1' })) }))
 
 import { POST } from '@/app/api/projects/[id]/add-source/route'
 import { fetchPublicHtml } from '@/lib/safe-url'

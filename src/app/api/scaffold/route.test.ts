@@ -5,14 +5,16 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@/lib/db', () => ({
-  db: {
+vi.mock('@/lib/db', () => {
+  const models = {
     project: { findUnique: vi.fn() },
     intervention: { create: vi.fn() },
-  },
-}))
+  }
+  return { db: { ...models, $transaction: vi.fn(async (callback: (tx: typeof models) => unknown) => callback(models)) } }
+})
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn() }))
 vi.mock('@/lib/ai-service', () => ({ getAIService: vi.fn() }))
+vi.mock('@/lib/workspace-server', () => ({ appendAuditEvent: vi.fn(async () => ({ id: 'audit-1' })) }))
 
 import { POST } from '@/app/api/scaffold/route'
 import { db } from '@/lib/db'
@@ -59,6 +61,7 @@ describe('POST /api/scaffold', () => {
     const created = createIntervention.mock.calls[0][0].data
     expect(created.engineType).toBe('scaffold')
     expect(created.promptTemplateTag).toBe('Structural Scaffold')
+    expect(created.responseText).toMatch(/\?$/)
   })
 })
 
@@ -73,7 +76,7 @@ describe('POST /api/scaffold — friction calibration (§9)', () => {
       createIntervention.mockClear()
       const res = await POST(makeReq({ projectId: 'proj-1', prompt: 'build', friction_mode: mode }))
       expect((await res.json()).scaffold).toBe(scaffold)
-      expect(createIntervention.mock.calls[0][0].data.responseText).toBe(scaffold)
+      expect(createIntervention.mock.calls[0][0].data.responseText).toMatch(/\?$/)
     }
   })
 

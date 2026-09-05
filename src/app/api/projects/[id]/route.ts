@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
+import { appendAuditEvent } from '@/lib/workspace-server'
 
 export async function GET(
   req: NextRequest,
@@ -43,13 +44,22 @@ export async function DELETE(
 ) {
   const { id } = await params
   const userId = await requireUserId(req)
-  const project = await db.project.findUnique({ where: { id }, select: { userId: true } })
+  const project = await db.project.findUnique({ where: { id }, select: { userId: true, title: true } })
   if (!project || project.userId !== userId) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
-  await db.project.update({
-    where: { id },
-    data: { archived: true, deletedAt: new Date() },
+  await db.$transaction(async (tx) => {
+    await tx.project.update({
+      where: { id },
+      data: { archived: true, deletedAt: new Date() },
+    })
+    await appendAuditEvent(tx, {
+      projectId: id,
+      userId,
+      type: 'workspace_deleted',
+      actor: 'student',
+      payload: { summary: `Archived research project: ${project.title}`, retentionDays: 30, compatibilityRoute: true },
+    })
   })
   return NextResponse.json({ ok: true })
 }

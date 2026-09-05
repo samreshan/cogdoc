@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
 const schema = readFileSync(path.join(root, 'prisma/schema.prisma'), 'utf8')
-const migrations = ['0002_rls_policies.sql', '0003_workspace_rls.sql', '0004_security_hardening.sql']
+const migrations = ['0002_rls_policies.sql', '0003_workspace_rls.sql', '0004_security_hardening.sql', '0005_research_ide_rls.sql']
   .map((name) => readFileSync(path.join(root, 'fastapi/migrations', name), 'utf8'))
   .join('\n')
 const hardening = readFileSync(
@@ -38,6 +38,13 @@ describe('Supabase security migration coverage', () => {
     expect(hardening).toMatch(/f\."projectId" = c\."projectId"/)
     expect(hardening).toMatch(/s\."projectId" = c\."projectId"/)
     expect(hardening).toMatch(/"createdById" = auth\.uid\(\)::text/)
+  })
+
+  it('protects the global library and every project-owned research IDE table', () => {
+    for (const table of ['LibrarySource', 'WorkspaceSource', 'ResearchNote', 'SourceAnnotation', 'ResearchAction', 'GroundedSynthesis', 'SynthesisFinding', 'SynthesisFindingPassage', 'AcademicProfile', 'ResearchJob']) {
+      expect(migrations).toContain(`ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY`)
+    }
+    expect(migrations).toContain('"userId" = auth.uid()::text')
   })
 
   it('provisions a private bucket and blocks browser roles restrictively', () => {

@@ -155,11 +155,11 @@ small visual-language deviation from generic word processors.
 
 ### 6. Onboarding persists at account level
 
-The first authenticated visit opens a four-step tutorial explaining workspaces,
-interventions, selection-based research, review, and export. Completion is
-stored as `User.onboardingCompletedAt`; local storage is only a failure-mode
-fallback. A persistent Tutorial button reopens the flow from every authenticated
-screen.
+The first authenticated visit opens one focused, responsive overview of the
+three-pane workspace and the research loop: navigate, write, inspect evidence,
+and answer highlighted questions. Completion is stored as
+`User.onboardingCompletedAt`; local storage is only a failure-mode fallback. A
+persistent Guide button reopens the overview from every authenticated screen.
 
 This adds a nullable database field to the original schema. The field contains
 no research content and is used only to avoid repeating onboarding.

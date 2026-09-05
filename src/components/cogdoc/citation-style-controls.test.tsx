@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const mocks = vi.hoisted(() => ({
@@ -9,6 +9,13 @@ const mocks = vi.hoisted(() => ({
   createWorkspace: vi.fn(),
   getWorkspace: vi.fn(),
   updateWorkspace: vi.fn(),
+  planResearchKickoff: vi.fn(),
+  draftResearchKickoff: vi.fn(),
+  findSources: vi.fn(),
+  addReference: vi.fn(),
+  verifyReference: vi.fn(),
+  saveDocument: vi.fn(),
+  recordDecision: vi.fn(),
   setView: vi.fn(),
   setActiveProject: vi.fn(),
   workspace: {
@@ -30,6 +37,13 @@ vi.mock('@/lib/api-client', () => ({
     createWorkspace: mocks.createWorkspace,
     getWorkspace: mocks.getWorkspace,
     updateWorkspace: mocks.updateWorkspace,
+    planResearchKickoff: mocks.planResearchKickoff,
+    draftResearchKickoff: mocks.draftResearchKickoff,
+    findSources: mocks.findSources,
+    addReference: mocks.addReference,
+    verifyReference: mocks.verifyReference,
+    saveDocument: mocks.saveDocument,
+    recordDecision: mocks.recordDecision,
   },
 }))
 vi.mock('@/lib/store', () => ({
@@ -53,19 +67,44 @@ beforeEach(() => {
     referencesReformatted: 3,
     referencesNeedingReview: 0,
   })
+  mocks.planResearchKickoff.mockResolvedValue({
+    assistantFallback: false,
+    plan: {
+      title: 'Evidence synthesis', description: 'Study how researchers evaluate evidence.',
+      outline: [
+        { heading: 'Context', purpose: 'Define the research context.' },
+        { heading: 'Evidence', purpose: 'Assess relevant findings.' },
+        { heading: 'Limits', purpose: 'Test alternative explanations.' },
+      ],
+      questions: [1, 2, 3].map((index) => ({ id: `q${index}`, question: `Research question ${index}?`, why: 'Make the reasoning explicit.' })),
+    },
+  })
+  mocks.draftResearchKickoff.mockResolvedValue({ draft: {
+    sections: [{ heading: 'Context', content: 'Working context.' }, { heading: 'Evidence', content: 'Working evidence.' }],
+    reflection: 'Does this match?', sourceNeeds: [],
+  } })
+  mocks.findSources.mockResolvedValue({ sources: [] })
+  mocks.saveDocument.mockResolvedValue({ ok: true, lastSaved: 'now', revision: 1 })
+  mocks.recordDecision.mockResolvedValue({ event: { id: 'audit-1' } })
 })
 
 describe('citation style controls', () => {
   it('lets the author choose a style while creating a workspace', async () => {
     const user = userEvent.setup()
     render(<Dashboard />)
-    await user.click(screen.getByRole('button', { name: /new assignment/i }))
-    await user.type(screen.getByLabelText('Title'), 'Evidence assignment')
+    await user.click(screen.getByRole('button', { name: /new project/i }))
+    await user.type(screen.getByPlaceholderText(/How does routine reliance/i), 'How do researchers evaluate evidence when using generative AI?')
     await user.selectOptions(screen.getByLabelText('Citation style'), 'apa')
-    await user.click(screen.getByRole('button', { name: 'Create workspace' }))
+    await user.click(screen.getByRole('button', { name: /start conversation/i }))
+    for (let index = 0; index < 3; index += 1) {
+      fireEvent.change(screen.getByPlaceholderText('Answer naturally…'), { target: { value: `This answer ${index + 1} explains my current view.` } })
+      await user.click(screen.getByRole('button', { name: index === 2 ? /make my outline/i : /continue/i }))
+    }
+    await user.click(await screen.findByRole('button', { name: /build cited structure/i }))
 
     await waitFor(() => expect(mocks.createWorkspace).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Evidence assignment',
+      title: 'Evidence synthesis',
+      workspaceType: 'research',
       citationStyle: 'apa',
     })))
   })

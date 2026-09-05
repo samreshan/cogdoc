@@ -36,6 +36,9 @@ import {
   fillTemplate,
   isHeuristicDelegative,
   parseVerdictJSON,
+  parseResearchDialogueDraft,
+  parseResearchKickoffPlan,
+  parseResearchKickoffDraft,
   geminiModel,
   configuredAIProvider,
   compatibleModel,
@@ -73,6 +76,46 @@ describe('geminiModel', () => {
   it('respects an explicit provider-specific model', () => {
     process.env.GEMINI_MODEL = 'gemini-custom'
     expect(geminiModel()).toBe('gemini-custom')
+  })
+})
+
+describe('parseResearchDialogueDraft', () => {
+  it('extracts a working draft, reflection, and bounded source needs', () => {
+    const result = parseResearchDialogueDraft('Result: {"draft":"A provisional account.","reflection":"Does this match your view?","sourceNeeds":["Longitudinal evidence"]}')
+    expect(result).toEqual({
+      draft: 'A provisional account.',
+      reflection: 'Does this match your view?',
+      sourceNeeds: ['Longitudinal evidence'],
+    })
+  })
+
+  it('rejects output that contains no draft', () => {
+    expect(() => parseResearchDialogueDraft('{"reflection":"Keep thinking"}')).toThrow(/empty research draft/)
+  })
+})
+
+describe('research kickoff response parsing', () => {
+  it('normalizes a bounded outline and three understanding questions', () => {
+    const result = parseResearchKickoffPlan(`Assistant result: ${JSON.stringify({
+      title: 'Independent judgement with AI',
+      description: 'A focused inquiry.',
+      outline: [
+        { heading: 'Frame', purpose: 'Define the relationship.' },
+        { heading: 'Evidence', purpose: 'Compare relevant findings.' },
+        { heading: 'Limits', purpose: 'Test competing explanations.' },
+      ],
+      questions: [
+        { question: 'What relationship do you expect?', why: 'Expose the proposed mechanism.' },
+        { question: 'What evidence would persuade you?', why: 'Define an evidence standard.' },
+        { question: 'What competing account matters?', why: 'Keep the inquiry falsifiable.' },
+      ],
+    })}`)
+    expect(result.outline).toHaveLength(3)
+    expect(result.questions.map((item) => item.id)).toEqual(['q1', 'q2', 'q3'])
+  })
+
+  it('rejects a kickoff draft that does not cover at least two sections', () => {
+    expect(() => parseResearchKickoffDraft('{"sections":[{"heading":"Only","content":"One paragraph"}]}')).toThrow(/invalid kickoff draft/i)
   })
 })
 
@@ -309,6 +352,23 @@ describe('GeminiAdapter.generateSocratic', () => {
     expect(result.question).toBe('What evidence supports this?')
   })
 
+  it('omits model-specific thinking controls from the Gemini request', async () => {
+    mockLLM.mockResolvedValue('What evidence supports this?')
+    templateMock.mockResolvedValue({ template: 'ask a {context} question' })
+
+    await new GeminiAdapter().generateSocratic('Provocation', 'some context')
+
+    const init = fetchMock.mock.calls.at(-1)?.[1] as RequestInit
+    const payload = JSON.parse(String(init.body)) as {
+      generationConfig: Record<string, unknown>
+    }
+    expect(payload.generationConfig).toEqual({
+      temperature: 0.4,
+      maxOutputTokens: 1024,
+    })
+    expect(payload.generationConfig).not.toHaveProperty('thinkingConfig')
+  })
+
   it('throws if the template is missing from DB', async () => {
     templateMock.mockResolvedValue(null)
     const ai = new GeminiAdapter()
@@ -356,6 +416,57 @@ describe('GeminiAdapter.generateScaffold', () => {
     const ai = new GeminiAdapter()
     const result = await ai.generateScaffold('build an argument', 'ctx')
     expect(result.scaffold).toBe('Claim: __ Evidence: __')
+  })
+})
+
+describe('GeminiAdapter.draftFromResearchDialogue', () => {
+  it('creates a working draft only from the completed dialogue', async () => {
+    mockLLM.mockResolvedValue('{"draft":"A careful working account.","reflection":"Is the limitation fair?","sourceNeeds":[]}')
+    const result = await new GeminiAdapter().draftFromResearchDialogue({
+      focus: 'I am studying how tools affect memory.',
+      evidence: 'Prior work suggests expectations affect later recall.',
+      tension: 'Tools may also release capacity for deeper reasoning.',
+      contribution: 'The distinction depends on how the tool is used.',
+    }, 'Nearby document context')
+    expect(result.draft).toBe('A careful working account.')
+    const request = JSON.parse(String((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body))
+    expect(request.contents[0].parts[0].text).toContain('The researcher has earned drafting help')
+    expect(request.contents[0].parts[0].text).toContain('Tools may also release capacity')
+  })
+})
+
+describe('GeminiAdapter research kickoff', () => {
+  it('plans a structure from the researcher conversation', async () => {
+    mockLLM.mockResolvedValue(JSON.stringify({
+      title: 'Independent judgement with AI', description: 'A focused inquiry.',
+      outline: [
+        { heading: 'Frame', purpose: 'Define the relationship.' },
+        { heading: 'Evidence', purpose: 'Compare the findings.' },
+        { heading: 'Limits', purpose: 'Test alternatives.' },
+      ],
+      questions: [
+        { question: 'What do you expect?', why: 'State the mechanism.' },
+        { question: 'What evidence matters?', why: 'State the standard.' },
+        { question: 'What else could explain it?', why: 'State an alternative.' },
+      ],
+    }))
+    const result = await new GeminiAdapter().planResearchKickoff('How AI affects independent research judgement', [
+      { question: 'What do you think?', answer: 'Independent checks may become less frequent.' },
+    ])
+    expect(result.questions).toHaveLength(3)
+    const request = JSON.parse(String((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body))
+    expect(request.contents[0].parts[0].text).toContain('Independent checks may become less frequent.')
+  })
+
+  it('restructures only the passage using the researcher answer', async () => {
+    mockLLM.mockResolvedValue('REVISED PASSAGE: AI use may weaken evaluation when outputs are accepted without independent verification.')
+    const result = await new GeminiAdapter().restructureFromIntervention({
+      passage: 'AI always weakens evaluation.', intervention: 'Where is the boundary?',
+      answer: 'It depends on independent verification.', rationale: 'The boundary is now explicit.',
+    })
+    expect(result).toBe('AI use may weaken evaluation when outputs are accepted without independent verification.')
+    const request = JSON.parse(String((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body))
+    expect(request.contents[0].parts[0].text).toContain('do not add facts or citations')
   })
 })
 

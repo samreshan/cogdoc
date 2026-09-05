@@ -36,7 +36,7 @@ const mockedApi = vi.mocked(api)
 const mockedStream = vi.mocked(consumeInterceptorStream)
 
 function intervention(id: string): Intervention {
-  return { id, engineType: 'citation', responseText: 'x', status: 'active', createdAt: new Date().toISOString() } as unknown as Intervention
+  return { id, engineType: 'citation', promptText: 'A verifiable claim here.', responseText: 'x', status: 'active', createdAt: new Date().toISOString() } as unknown as Intervention
 }
 
 const project = { id: 'proj-1', title: 'T' } as unknown as Project
@@ -81,6 +81,23 @@ describe('useEngineFiring / fireEngine', () => {
       await result.current.fireEngine('citation', 'Second claim sentence.', '')
     })
     expect(mockedApi.citationSentinel).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows only one engine request to claim the same phrase at a time', async () => {
+    let release: (() => void) | undefined
+    mockedApi.citationSentinel.mockImplementation(() => new Promise((resolve) => {
+      release = () => resolve({ intervention: intervention('iv-cit') } as never)
+    }))
+    const { result } = renderHook(() => useEngineFiring(() => ''))
+    let citationRequest!: Promise<void>
+    await act(async () => {
+      citationRequest = result.current.fireEngine('citation', 'Shared research phrase.', 'ctx')
+      await result.current.fireEngine('socratic', 'Shared research phrase.', 'ctx')
+    })
+    expect(mockedApi.citationSentinel).toHaveBeenCalledTimes(1)
+    expect(mockedApi.socraticSpacer).not.toHaveBeenCalled()
+    release?.()
+    await act(async () => citationRequest)
   })
 
   it('socratic idle trigger falls back to the last completed sentence from getText', async () => {

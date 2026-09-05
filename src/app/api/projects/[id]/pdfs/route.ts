@@ -13,6 +13,8 @@ import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 import { chunkText } from '@/lib/retrieval'
 import { ingestToVectorStore } from '@/lib/ai-gateway'
+import { linkLegacyPdfToLibrary } from '@/lib/research-source-server'
+import { appendAuditEvent } from '@/lib/workspace-server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -30,6 +32,7 @@ export async function POST(
   let filename: string
   let rawText: string
   let sizeBytes: number
+  let originalBytes: Buffer | null = null
 
   const contentType = req.headers.get('content-type') ?? ''
 
@@ -44,6 +47,7 @@ export async function POST(
       sizeBytes = file.size
       const arrayBuffer = await file.arrayBuffer()
       const buffer = Buffer.from(arrayBuffer)
+      originalBytes = buffer
       try {
         // Dynamic import to avoid bundler issues
         const { PDFParse } = await import('pdf-parse')
@@ -112,6 +116,11 @@ export async function POST(
 
   await db.pdf.update({ where: { id: pdf.id }, data: { parseStatus: 'ready' } })
 
+  // Compatibility route: mirror the project-scoped Pdf into the private,
+  // user-global library and retain original PDF bytes for page-level viewing.
+  void linkLegacyPdfToLibrary({ pdfId: pdf.id, projectId, userId, filename, rawText, bytes: originalBytes })
+    .catch((error) => console.warn(`[pdfs] global-library link failed for pdf=${pdf.id}:`, (error as Error).message))
+
   // Push the new chunks into the FastAPI vector store so vector retrieval has
   // something to retrieve against when USE_VECTOR_RETRIEVAL is on. SQLite is
   // the source of truth; this push is best-effort and MUST NOT fail the upload
@@ -149,6 +158,8 @@ export async function POST(
     )
     vectorIngest = 'failed'
   }
+
+  await db.$transaction((tx) => appendAuditEvent(tx, { projectId, userId, type: 'source_imported', actor: 'student', payload: { summary: `Imported source: ${filename}`, sourceId: pdf.id, filename, chunkCount: chunks.length, retainedOriginalBytes: Boolean(originalBytes), vectorIngest } }))
 
   return NextResponse.json({
     pdf: {

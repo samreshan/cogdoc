@@ -4,9 +4,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
-vi.mock('@/lib/db', () => ({
-  db: { project: { findUnique: vi.fn(), update: vi.fn() } },
-}))
+vi.mock('@/lib/db', () => {
+  const models = {
+    project: { findUnique: vi.fn(), update: vi.fn() },
+    auditEvent: { findFirst: vi.fn(), create: vi.fn() },
+  }
+  return { db: { ...models, $transaction: vi.fn(async (callback: (tx: typeof models) => unknown) => callback(models)) } }
+})
 vi.mock('@/lib/auth-supabase', () => ({ requireUserId: vi.fn().mockResolvedValue('u1') }))
 
 import { GET, DELETE } from '@/app/api/projects/[id]/route'
@@ -14,9 +18,13 @@ import { db } from '@/lib/db'
 
 const findUnique = db.project.findUnique as ReturnType<typeof vi.fn>
 const update = db.project.update as ReturnType<typeof vi.fn>
+const auditCreate = db.auditEvent.create as ReturnType<typeof vi.fn>
 
 beforeEach(() => {
-  findUnique.mockReset(); update.mockReset()
+  findUnique.mockReset(); update.mockReset(); auditCreate.mockReset()
+  ;(db.auditEvent.findFirst as ReturnType<typeof vi.fn>).mockReset()
+  ;(db.auditEvent.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null)
+  auditCreate.mockResolvedValue({ id: 'audit-1' })
 })
 
 function ctx(id: string) {
@@ -43,11 +51,12 @@ describe('GET /api/projects/[id]', () => {
 
 describe('DELETE /api/projects/[id]', () => {
   it('soft-deletes the owned project', async () => {
-    findUnique.mockResolvedValue({ userId: 'u1' })
+    findUnique.mockResolvedValue({ userId: 'u1', title: 'Research project' })
     update.mockResolvedValue({})
     const res = await DELETE(new NextRequest('http://localhost/api/projects/p1', { method: 'DELETE' }), ctx('p1'))
     expect(res.status).toBe(200)
     expect((await res.json()).ok).toBe(true)
     expect(update).toHaveBeenCalledWith({ where: { id: 'p1' }, data: { archived: true, deletedAt: expect.any(Date) } })
+    expect(auditCreate.mock.calls[0][0].data.type).toBe('workspace_deleted')
   })
 })

@@ -47,4 +47,36 @@ describe('SentencePopover accessibility', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close interventions' }))
     expect(useCogdoc.getState().hoveredSentenceKey).toBeNull()
   })
+
+  it('opens an inline researcher-answer form without resolving the intervention', () => {
+    useCogdoc.setState({
+      activeProject: {
+        id: 'project-1', title: 'Research', description: null, archived: false,
+        createdAt: '2026-08-28T00:00:00.000Z', updatedAt: '2026-08-28T00:00:00.000Z',
+        document: null, pdfs: [], interventions: [intervention], _count: { pdfs: 0, interventions: 1 },
+      } as Project,
+      activeInterventions: [intervention],
+      hoveredSentenceKey: 'this claim needs supporting evidence',
+      hoveredPosition: { top: 20, left: 20 },
+    })
+
+    render(<SentencePopover />)
+    fireEvent.click(screen.getByRole('button', { name: /Answer evidence check/i }))
+
+    expect(screen.getByLabelText('Your reasoning')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Evaluate answer' })).toBeInTheDocument()
+    expect(useCogdoc.getState().activeInterventions[0].status).toBe('active')
+  })
+
+  it('does not show contextual UI for document headings', () => {
+    useCogdoc.setState({
+      activeInterventions: [intervention],
+      hoveredSentenceKey: 'outline:outline-method',
+      hoveredPosition: { top: 20, left: 20 },
+    })
+
+    render(<SentencePopover />)
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
 })

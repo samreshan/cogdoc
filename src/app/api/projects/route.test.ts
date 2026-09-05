@@ -4,9 +4,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
-vi.mock('@/lib/db', () => ({
-  db: { project: { findMany: vi.fn(), create: vi.fn() } },
-}))
+vi.mock('@/lib/db', () => {
+  const models = {
+    project: { findMany: vi.fn(), create: vi.fn() },
+    auditEvent: { findFirst: vi.fn(), create: vi.fn() },
+  }
+  return { db: { ...models, $transaction: vi.fn(async (callback: (tx: typeof models) => unknown) => callback(models)) } }
+})
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn() }))
 
 import { GET, POST } from '@/app/api/projects/route'
@@ -16,9 +20,13 @@ import { getDefaultUser } from '@/lib/auth'
 const findMany = db.project.findMany as ReturnType<typeof vi.fn>
 const create = db.project.create as ReturnType<typeof vi.fn>
 const getUser = getDefaultUser as ReturnType<typeof vi.fn>
+const auditCreate = db.auditEvent.create as ReturnType<typeof vi.fn>
 
 beforeEach(() => {
-  findMany.mockReset(); create.mockReset(); getUser.mockReset()
+  findMany.mockReset(); create.mockReset(); getUser.mockReset(); auditCreate.mockReset()
+  ;(db.auditEvent.findFirst as ReturnType<typeof vi.fn>).mockReset()
+  ;(db.auditEvent.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null)
+  auditCreate.mockResolvedValue({ id: 'audit-1' })
   getUser.mockResolvedValue({ id: 'u1', email: 'writer@cogdoc.local' })
 })
 
@@ -42,6 +50,8 @@ describe('POST /api/projects', () => {
     const created = create.mock.calls[0][0].data
     expect(created.title).toBe('Untitled Project')
     expect(created.document).toEqual({ create: { content: '' } })
+    expect(auditCreate.mock.calls[0][0].data.type).toBe('workspace_created')
+    expect(auditCreate.mock.calls[0][0].data.eventHash).toBeTruthy()
   })
 
   it('uses provided title and description', async () => {

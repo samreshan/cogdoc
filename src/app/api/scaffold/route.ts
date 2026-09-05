@@ -10,6 +10,8 @@ import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 import { getAIService } from '@/lib/ai-service'
 import { applyGenerationGuard } from '@/lib/engine-guard'
+import { plainResearchQuestion } from '@/lib/intervention-language'
+import { appendAuditEvent } from '@/lib/workspace-server'
 import type { FrictionMode } from '@/lib/friction'
 
 export const runtime = 'nodejs'
@@ -40,17 +42,25 @@ export async function POST(req: NextRequest) {
   // Friction §9: enforce the non-generation invariant before persisting.
   const guarded = applyGenerationGuard(scaffold.scaffold, mode)
 
-  const intervention = await db.intervention.create({
-    data: {
-      userId,
-      projectId,
-      paragraphId: paragraphId ?? null,
-      promptTemplateTag: 'Structural Scaffold',
-      engineType: 'scaffold',
-      promptText: prompt,
-      responseText: guarded.text,
-      status: 'active',
-    },
+  const intervention = await db.$transaction(async (tx) => {
+    const created = await tx.intervention.create({
+      data: {
+        userId,
+        projectId,
+        paragraphId: paragraphId ?? null,
+        promptTemplateTag: 'Structural Scaffold',
+        engineType: 'scaffold',
+        promptText: prompt,
+        responseText: plainResearchQuestion(guarded.text, 'scaffold', context ?? prompt),
+        status: 'active',
+      },
+    })
+    await appendAuditEvent(tx, {
+      projectId, userId, type: 'intervention_created', actor: 'system',
+      modelVersion: process.env.AI_MODEL ?? process.env.GEMINI_MODEL ?? null, promptVersion: 'Structural Scaffold',
+      payload: { summary: 'Cogdoc raised a structure question', interventionId: created.id, engineType: 'scaffold', paragraphId: paragraphId ?? null },
+    })
+    return created
   })
 
   return NextResponse.json({

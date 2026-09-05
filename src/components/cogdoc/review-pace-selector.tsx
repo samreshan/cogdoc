@@ -25,6 +25,5 @@ export default function ReviewPaceSelector() {
     }
   }
 
-  return <Select value={workspace.reviewPace ?? 'deep'} onValueChange={(value) => change(value as 'rapid' | 'guided' | 'deep')}><SelectTrigger aria-label="Review pace" className="h-8 w-[126px] border-stone-300 bg-transparent text-xs">{saving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Gauge className="mr-1 h-3 w-3" />}<SelectValue /></SelectTrigger><SelectContent><SelectItem value="rapid">Rapid</SelectItem><SelectItem value="guided">Guided</SelectItem><SelectItem value="deep">Deep</SelectItem></SelectContent></Select>
+  return <Select value={workspace.reviewPace ?? 'deep'} onValueChange={(value) => change(value as 'rapid' | 'guided' | 'deep')}><SelectTrigger aria-label="Guidance level" className="h-8 w-[132px] border-stone-300 bg-transparent text-xs">{saving ? <Loader2 className="mr-1 h-3 w-3 animate-spin motion-reduce:animate-none" /> : <Gauge className="mr-1 h-3 w-3" />}<SelectValue /></SelectTrigger><SelectContent><SelectItem value="rapid">Light guidance</SelectItem><SelectItem value="guided">Balanced</SelectItem><SelectItem value="deep">Deep inquiry</SelectItem></SelectContent></Select>
 }
-

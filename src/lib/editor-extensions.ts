@@ -7,6 +7,9 @@ import Image from '@tiptap/extension-image'
 import { WavyUnderline } from '@/lib/extensions/wavy-underline'
 import { InterventionHighlight } from '@/lib/extensions/intervention-highlight'
 import { ReviewItemHighlight } from '@/lib/extensions/review-item-highlight'
+import { StructuredCitation } from '@/lib/extensions/citation-node'
+import { DocumentOutlineAnchors } from '@/lib/extensions/document-outline-anchors'
+import { ResearchActionHighlight } from '@/lib/extensions/research-action-highlight'
 
 export function createEditorExtensions() {
   return [
@@ -19,5 +22,8 @@ export function createEditorExtensions() {
     WavyUnderline,
     InterventionHighlight,
     ReviewItemHighlight,
+    ResearchActionHighlight,
+    DocumentOutlineAnchors,
+    StructuredCitation,
   ]
 }

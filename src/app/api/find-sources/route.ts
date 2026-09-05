@@ -51,6 +51,9 @@ interface SearchResult {
     publisher?: string | null
     formatted?: FormattedCitation
   }
+  rankScore?: number
+  qualitySignals?: string[]
+  uncertainty?: string | null
 }
 
 interface OpenAlexWork {
@@ -98,7 +101,7 @@ export async function POST(req: NextRequest) {
     let sources: SearchResult[] = []
     let provider: RecordProvider | null = null
     let reachableProviders = 0
-    const providersTried: RecordProvider[] = []
+    const providersTried: RecordProvider[] = ['openalex', 'crossref', 'semantic_scholar', 'gemini']
 
     const scholarlyProviders: Array<{
       name: Exclude<RecordProvider, 'gemini'>
@@ -109,39 +112,28 @@ export async function POST(req: NextRequest) {
       { name: 'semantic_scholar', search: semanticScholarFindSources },
     ]
 
-    for (const scholarly of scholarlyProviders) {
-      providersTried.push(scholarly.name)
-      try {
-        const matches = await scholarly.search(searchQuery)
+    // A source search is an explicit author action, so query all configured
+    // indexes and merge their evidence instead of stopping at the first hit.
+    const searches = [
+      ...scholarlyProviders.map((item) => ({ name: item.name as RecordProvider, run: () => item.search(searchQuery) })),
+      { name: 'gemini' as const, run: () => geminiFindSources(claim, searchQuery) },
+    ]
+    const settled = await Promise.allSettled(searches.map((item) => item.run()))
+    const collected: SearchResult[] = []
+    settled.forEach((result, index) => {
+      const name = searches[index].name
+      if (result.status === 'fulfilled') {
         reachableProviders += 1
-        if (matches.length > 0) {
-          sources = matches
-          provider = scholarly.name
-          break
-        }
-      } catch (error) {
-        console.warn(`${providerLabel(scholarly.name)} source search unavailable:`, (error as Error).message)
+        collected.push(...result.value)
+      } else {
+        console.warn(`${providerLabel(name)} source search unavailable:`, result.reason instanceof Error ? result.reason.message : String(result.reason))
       }
-    }
-
-    if (sources.length === 0) {
-      providersTried.push('gemini')
-      try {
-        sources = await geminiFindSources(claim, searchQuery)
-        reachableProviders += 1
-        if (sources.length > 0) provider = 'gemini'
-      } catch (geminiError) {
-        if (reachableProviders === 0) {
-          console.error('Source search failed:', geminiError)
-          return NextResponse.json({
-            error: 'Source search failed. OpenAlex, Crossref, Semantic Scholar, and grounded web search were unavailable.',
-            detail: (geminiError as Error).message,
-            providersTried,
-          }, { status: 502 })
-        }
-        console.warn('Grounded web fallback unavailable:', (geminiError as Error).message)
-      }
-    }
+    })
+    if (reachableProviders === 0) return NextResponse.json({
+      error: 'Source search failed. OpenAlex, Crossref, Semantic Scholar, and grounded web search were unavailable.', providersTried,
+    }, { status: 502 })
+    sources = mergeAndRankSources(collected)
+    provider = sources[0]?.recordProvider ?? null
 
     if (sources.length === 0) {
       return NextResponse.json({
@@ -186,9 +178,7 @@ export async function POST(req: NextRequest) {
       provider,
       providersTried,
       accessResolver: process.env.UNPAYWALL_EMAIL?.trim() ? 'unpaywall' : null,
-      ...(provider === 'crossref' ? { message: 'OpenAlex returned no matches; showing Crossref scholarly records.' } : {}),
-      ...(provider === 'semantic_scholar' ? { message: 'OpenAlex and Crossref returned no matches; showing Semantic Scholar records.' } : {}),
-      ...(provider === 'gemini' ? { message: 'No scholarly-index match was found; showing grounded web results.' } : {}),
+      message: `Merged and deduplicated records from ${reachableProviders} reachable provider${reachableProviders === 1 ? '' : 's'}. Ranking signals and uncertainty are included with each result.`,
     })
   } catch (e) {
     console.error('Find-sources failed:', e)
@@ -197,6 +187,46 @@ export async function POST(req: NextRequest) {
       detail: (e as Error).message,
     }, { status: 500 })
   }
+}
+
+function sourceIdentity(source: SearchResult): string {
+  const doi = source.citation?.doi?.toLowerCase().replace(/^https?:\/\/doi\.org\//, '')
+  if (doi) return `doi:${doi}`
+  try {
+    const url = new URL(source.url)
+    url.hash = ''
+    for (const key of [...url.searchParams.keys()]) if (/^(utm_|fbclid|gclid)/i.test(key)) url.searchParams.delete(key)
+    return `url:${url.toString().replace(/\/$/, '').toLowerCase()}`
+  } catch {
+    return `title:${source.title.toLowerCase().replace(/\W+/g, ' ').trim()}`
+  }
+}
+
+export function mergeAndRankSources(input: SearchResult[]): SearchResult[] {
+  const byIdentity = new Map<string, SearchResult>()
+  for (const candidate of input) {
+    const key = sourceIdentity(candidate)
+    const current = byIdentity.get(key)
+    if (!current) byIdentity.set(key, candidate)
+    else {
+      const richer = (candidate.citation?.authors.length ?? 0) + Number(Boolean(candidate.openAccessUrl)) > (current.citation?.authors.length ?? 0) + Number(Boolean(current.openAccessUrl)) ? candidate : current
+      const other = richer === candidate ? current : candidate
+      byIdentity.set(key, { ...other, ...richer, citation: richer.citation ?? other.citation, openAccessUrl: richer.openAccessUrl ?? other.openAccessUrl })
+    }
+  }
+  const year = new Date().getUTCFullYear()
+  return [...byIdentity.values()].map((source) => {
+    const signals: string[] = []
+    let score = source.relevance === 'high' ? 35 : source.relevance === 'medium' ? 22 : 10
+    if (source.citation?.doi) { score += 15; signals.push('DOI') }
+    if (source.citation?.authors.length) { score += 8; signals.push('authorship metadata') }
+    if (source.citation?.venue) { score += 6; signals.push('publication venue') }
+    if (source.openAccessUrl) { score += 10; signals.push('available full text') }
+    const published = Number(source.citation?.year)
+    if (Number.isFinite(published)) { score += Math.max(0, 8 - Math.floor((year - published) / 3)); signals.push('publication date') }
+    const uncertainty = !source.citation?.doi ? 'No DOI was returned; verify identity and publication status.' : !source.openAccessUrl ? 'Full text availability is unknown; relevance is based on metadata.' : null
+    return { ...source, rankScore: score, qualitySignals: signals, uncertainty }
+  }).sort((a, b) => (b.rankScore ?? 0) - (a.rankScore ?? 0) || a.title.localeCompare(b.title)).slice(0, 24)
 }
 
 /**

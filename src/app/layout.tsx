@@ -21,9 +21,9 @@ const newsreader = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: "Cogdoc | Accountable academic writing",
-  description: "An assignment and research workspace that checks citations, evidence, reasoning and code snapshots without claiming to prove authorship.",
-  keywords: ["Cogdoc", "academic writing", "assignment review", "research workspace", "citation verification"],
+  title: "Cogdoc | Research that keeps you thinking",
+  description: "A research and learning assistant that questions reasoning, maps source evidence, and drafts only after the researcher explains the idea.",
+  keywords: ["Cogdoc", "research assistant", "research workspace", "source mapping", "productive friction", "citation verification"],
   authors: [{ name: "Samreshan Sahani" }],
   icons: {
     icon: "/logo.svg",

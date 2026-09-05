@@ -9,15 +9,17 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@/lib/db', () => ({
-  db: {
+vi.mock('@/lib/db', () => {
+  const models = {
     project: { findUnique: vi.fn() },
     pdfChunk: { findMany: vi.fn() },
     intervention: { findMany: vi.fn(), create: vi.fn() },
     interventionEvidence: { findMany: vi.fn() },
-  },
-}))
+  }
+  return { db: { ...models, $transaction: vi.fn(async (callback: (tx: typeof models) => unknown) => callback(models)) } }
+})
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn() }))
+vi.mock('@/lib/workspace-server', () => ({ appendAuditEvent: vi.fn(async () => ({ id: 'audit-1' })) }))
 
 import { POST } from '@/app/api/blindspot/route'
 import { db } from '@/lib/db'

@@ -6,7 +6,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn() }))
-vi.mock('@/lib/db', () => ({ db: { pdf: { findFirst: vi.fn(), delete: vi.fn() }, user: { findUnique: vi.fn(), upsert: vi.fn(), update: vi.fn() } } }))
+vi.mock('@/lib/db', () => {
+  const models = {
+    pdf: { findFirst: vi.fn(), delete: vi.fn() },
+    user: { findUnique: vi.fn(), upsert: vi.fn(), update: vi.fn() },
+    auditEvent: { findFirst: vi.fn(), create: vi.fn() },
+  }
+  return { db: { ...models, $transaction: vi.fn(async (callback: (tx: typeof models) => unknown) => callback(models)) } }
+})
 
 import { GET as getUser, PATCH as patchUser } from '@/app/api/user/route'
 import { GET as getSettings } from '@/app/api/settings/route'
@@ -21,6 +28,8 @@ const pdfFindFirst = db.pdf.findFirst as ReturnType<typeof vi.fn>
 const userFindUnique = db.user.findUnique as ReturnType<typeof vi.fn>
 const userUpsert = db.user.upsert as ReturnType<typeof vi.fn>
 const userUpdate = db.user.update as ReturnType<typeof vi.fn>
+const auditFindFirst = db.auditEvent.findFirst as ReturnType<typeof vi.fn>
+const auditCreate = db.auditEvent.create as ReturnType<typeof vi.fn>
 
 function makeReq(cookie = '') {
   return new NextRequest('http://localhost/api/user', {
@@ -29,8 +38,10 @@ function makeReq(cookie = '') {
 }
 
 beforeEach(() => {
-  user.mockReset(); pdfFindFirst.mockReset(); pdfDelete.mockReset(); userFindUnique.mockReset(); userUpsert.mockReset(); userUpdate.mockReset()
+  user.mockReset(); pdfFindFirst.mockReset(); pdfDelete.mockReset(); userFindUnique.mockReset(); userUpsert.mockReset(); userUpdate.mockReset(); auditFindFirst.mockReset(); auditCreate.mockReset()
   user.mockResolvedValue({ id: 'u1' })
+  auditFindFirst.mockResolvedValue(null)
+  auditCreate.mockResolvedValue({ id: 'audit-1' })
 })
 
 describe('GET /api/user (fallback path — Supabase not configured)', () => {
@@ -114,7 +125,7 @@ describe('DELETE /api/pdfs/[id]', () => {
     return { params: Promise.resolve({ id }) }
   }
   it('deletes the pdf and cascades', async () => {
-    pdfFindFirst.mockResolvedValue({ id: 'p1', userId: 'u1' })
+    pdfFindFirst.mockResolvedValue({ id: 'p1', userId: 'u1', projectId: 'project-1', filename: 'source.pdf' })
     pdfDelete.mockResolvedValue({})
     const res = await deletePdf(new NextRequest('http://localhost/api/pdfs/p1', { method: 'DELETE' }), ctx('p1'))
     expect(res.status).toBe(200)

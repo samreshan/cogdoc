@@ -29,14 +29,15 @@ describe('OnboardingTour', () => {
     const complete = vi.spyOn(api, 'setOnboardingCompleted').mockResolvedValue({ onboardingCompletedAt: '2026-08-28T00:00:00.000Z' })
 
     render(<OnboardingTour />)
-    expect(await screen.findByText('Keep authorship yours. Make the research visible.')).toBeInTheDocument()
+    expect(await screen.findByText('One research workspace. Three quiet roles.')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Cogdoc workspace overview' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /skip for now/i }))
     await waitFor(() => expect(complete).toHaveBeenCalledWith(true))
     expect(window.localStorage.getItem('cogdoc-onboarding-complete')).toBe('1')
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Cogdoc tutorial' }))
-    expect(await screen.findByText('Keep authorship yours. Make the research visible.')).toBeInTheDocument()
+    expect(await screen.findByText('One research workspace. Three quiet roles.')).toBeInTheDocument()
   })
 
   it('does not force the dialog after account-level completion', async () => {
@@ -46,6 +47,6 @@ describe('OnboardingTour', () => {
     render(<OnboardingTour />)
 
     expect(await screen.findByRole('button', { name: 'Open Cogdoc tutorial' })).toBeInTheDocument()
-    expect(screen.queryByText('Keep authorship yours. Make the research visible.')).not.toBeInTheDocument()
+    expect(screen.queryByText('One research workspace. Three quiet roles.')).not.toBeInTheDocument()
   })
 })

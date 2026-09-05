@@ -27,7 +27,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import SourcesResults from './sources-results'
+import { quoteForReviewItem } from '@/lib/research-document-anchors'
+import { dedupeInterventionsByPhrase } from '@/lib/intervention-dedupe'
+import { interventionQuestion } from '@/lib/intervention-language'
 
 const ENGINE_META: Record<Intervention['engineType'], {
   label: string
@@ -90,8 +92,8 @@ const REVIEW_GROUPS: Array<{
   },
   {
     key: 'requirements',
-    label: 'Assignment requirements',
-    description: 'Brief and rubric coverage',
+    label: 'Research scope',
+    description: 'Question and scope coverage',
     icon: ListTree,
     types: ['rubric_gap'],
   },
@@ -105,22 +107,13 @@ const REVIEW_GROUPS: Array<{
 ]
 
 export function groupActiveInterventions(interventions: Intervention[]) {
+  const uniqueInterventions = dedupeInterventionsByPhrase(interventions)
   return ENGINE_ORDER.map((engineType) => ({
     engineType,
-    items: interventions
+    items: uniqueInterventions
       .filter((item) => item.engineType === engineType && item.status === 'active' && item.promptText)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   })).filter((group) => group.items.length > 0)
-}
-
-function quoteForReviewItem(item: ReviewItem): string | null {
-  if (!item.anchorJson) return null
-  try {
-    const parsed = JSON.parse(item.anchorJson) as { quote?: unknown }
-    return typeof parsed.quote === 'string' && parsed.quote.trim() ? parsed.quote.trim() : null
-  } catch {
-    return null
-  }
 }
 
 export function reviewItemContext(item: ReviewItem): string | null {
@@ -168,14 +161,20 @@ export default function ActionQueue() {
   const activeInterventions = useCogdoc((state) => state.activeInterventions)
   const focusEditorText = useCogdoc((state) => state.focusEditorText)
   const setReviewHighlightQuotes = useCogdoc((state) => state.setReviewHighlightQuotes)
+  const setReviewItems = useCogdoc((state) => state.setReviewItems)
   const bumpLibrary = useCogdoc((state) => state.bumpLibrary)
   const removeIntervention = useCogdoc((state) => state.removeIntervention)
+  const updateIntervention = useCogdoc((state) => state.updateIntervention)
   const bumpAnalytics = useCogdoc((state) => state.bumpAnalytics)
+  const setSourceMapperQuery = useCogdoc((state) => state.setSourceMapperQuery)
+  const openIdeTab = useCogdoc((state) => state.openIdeTab)
   const setActiveModal = useCogdoc((state) => state.setActiveModal)
   const [items, setItems] = useState<ReviewItem[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null)
   const [response, setResponse] = useState('')
+  const [signalResponse, setSignalResponse] = useState('')
+  const [signalFeedback, setSignalFeedback] = useState('')
   const [loading, setLoading] = useState(true)
   const [scanning, setScanning] = useState(false)
   const [acting, setActing] = useState(false)
@@ -183,7 +182,6 @@ export default function ActionQueue() {
   const [scanStale, setScanStale] = useState(false)
   const [openReviewGroups, setOpenReviewGroups] = useState<Set<ReviewGroupKey>>(new Set())
   const [sourceQuery, setSourceQuery] = useState('')
-  const [sourcesOpen, setSourcesOpen] = useState(false)
   const uploadInputRef = useRef<HTMLInputElement>(null)
   const [candidates, setCandidates] = useState<{
     passages: Array<{ chunkId: string; content: string; similarityScore: number; pageApprox: number; pdfFilename: string }>
@@ -195,6 +193,7 @@ export default function ActionQueue() {
     try {
       const result = await api.listReviewItems(workspace.id)
       setItems(result.reviewItems)
+      setReviewItems(result.reviewItems)
       setReviewHighlightQuotes(quotesForReviewItems(result.reviewItems))
       setScanStale(Boolean(result.stale))
       if (!selectedId) setSelectedId(result.reviewItems.find((item) => item.state !== 'resolved')?.id ?? null)
@@ -245,6 +244,11 @@ export default function ActionQueue() {
     focusEditorText(quote)
   }
 
+  function openSourceMapper(query: string) {
+    setSourceMapperQuery(query)
+    openIdeTab({ id: 'sources', kind: 'sources', label: 'Source mapper', closable: true })
+  }
+
   function selectItem(item: ReviewItem) {
     setSelectedId(item.id)
     setSelectedSignalId(null)
@@ -255,19 +259,48 @@ export default function ActionQueue() {
   function selectSignal(signal: Intervention) {
     setSelectedSignalId(signal.id)
     setSelectedId(null)
+    setSignalResponse('')
+    setSignalFeedback('')
     focusQuote(signal.promptText)
   }
 
-  async function resolveSignal(signal: Intervention, userAction: 'engaged' | 'dismissed') {
+  async function dismissSignal(signal: Intervention) {
     setActing(true)
     try {
-      await api.patchIntervention(signal.id, { userAction, status: 'resolved' })
+      await api.patchIntervention(signal.id, { userAction: 'dismissed', status: 'resolved' })
       removeIntervention(signal.id)
       bumpAnalytics()
       setSelectedSignalId(null)
-      toast.success(userAction === 'engaged' ? 'Intervention marked addressed' : 'Intervention dismissed')
+      toast.success('Intervention dismissed')
     } catch (error) {
       toast.error('Could not update this intervention', { description: (error as Error).message })
+    } finally {
+      setActing(false)
+    }
+  }
+
+  async function evaluateSignal(signal: Intervention) {
+    if (signalResponse.trim().length < 5) {
+      setSignalFeedback('Write a substantive answer before asking Cogdoc to evaluate it.')
+      return
+    }
+    setActing(true)
+    try {
+      const result = await api.answerIntervention(signal.id, signalResponse)
+      setSignalFeedback(result.evaluation.rationale)
+      updateIntervention(signal.id, result.intervention)
+      bumpAnalytics()
+      if (result.satisfied) {
+        bumpLibrary()
+        removeIntervention(signal.id)
+        setSelectedSignalId(null)
+        setSignalResponse('')
+        toast.success('Intervention satisfied', { description: 'Structured research lines were saved to the notebook.' })
+      } else {
+        toast.info('Follow-up needed', { description: result.evaluation.followUpQuestion ?? result.evaluation.rationale })
+      }
+    } catch (error) {
+      toast.error('Could not evaluate this answer', { description: (error as Error).message })
     } finally {
       setActing(false)
     }
@@ -279,6 +312,7 @@ export default function ActionQueue() {
     try {
       const result = await api.startReview(workspace.id, scope)
       setItems(result.reviewRun.items ?? [])
+      setReviewItems(result.reviewRun.items ?? [])
       setReviewHighlightQuotes(quotesForReviewItems(result.reviewRun.items ?? []))
       setScanStale(false)
       setSelectedId(result.reviewRun.items?.find((item) => item.state !== 'resolved')?.id ?? null)
@@ -361,7 +395,7 @@ export default function ActionQueue() {
         <Label htmlFor="action-queue-source-query" className="mt-3 text-[11px] text-stone-700">Claim or research question</Label>
         <div className="mt-1.5 flex gap-2">
           <Input id="action-queue-source-query" value={sourceQuery} onChange={(event) => setSourceQuery(event.target.value)} placeholder="Paste or write a claim" className="h-8 text-xs" />
-          <Button size="sm" onClick={() => setSourcesOpen(true)} disabled={sourceQuery.trim().length < 10} className="h-8 bg-[#173f35] px-2 hover:bg-[#245548]" aria-label="Find sources"><Search className="h-3.5 w-3.5" /></Button>
+          <Button size="sm" onClick={() => openSourceMapper(sourceQuery)} disabled={sourceQuery.trim().length < 5} className="h-8 bg-[#173f35] px-2 hover:bg-[#245548]" aria-label="Map indexed sources"><Search className="h-3.5 w-3.5" /></Button>
         </div>
       </section>
 
@@ -389,7 +423,7 @@ export default function ActionQueue() {
                       <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#386c5c]" />
                       <div className="min-w-0 flex-1">
                         {signal.promptText && <p className="line-clamp-1 font-serif text-xs font-medium leading-5 text-stone-800">“{signal.promptText}”</p>}
-                        <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-stone-500">{signal.responseText ?? 'Open this passage to review the guidance.'}</p>
+                        <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-stone-500">{interventionQuestion(signal)}</p>
                         <span className="mt-1 block text-[10px] font-medium text-[#28614f]">Locate and act</span>
                       </div>
                     </div>
@@ -445,7 +479,7 @@ export default function ActionQueue() {
         </div>}
         {!needsEvidenceLink && !needsDocumentRecheck && <Textarea value={response} onChange={(event) => setResponse(event.target.value)} rows={3} className="mt-3 resize-none text-xs" placeholder="Optional note about what you changed or confirmed…" />}
         <div className="mt-3 flex flex-wrap gap-2">
-          {needsReferenceReview && <Button size="sm" variant="outline" onClick={() => setActiveModal('library')} className="h-8 border-stone-300 text-xs"><BookOpen className="mr-1.5 h-3.5 w-3.5" />Open library</Button>}
+          {needsReferenceReview && <Button size="sm" variant="outline" aria-label="Open library references" onClick={() => { setActiveModal('library'); openIdeTab({ id: 'references', kind: 'references', label: 'References', closable: true }) }} className="h-8 border-stone-300 text-xs"><BookOpen className="mr-1.5 h-3.5 w-3.5" />Open references</Button>}
           {needsDocumentRecheck ? <Button size="sm" onClick={() => startReview('changed_blocks')} disabled={acting || scanning} className="flex-1 bg-[#173f35] hover:bg-[#245548]"><RefreshCw className="mr-1 h-3 w-3" />Recheck after editing</Button> : !needsEvidenceLink && <Button size="sm" onClick={() => resolveItem('resolve')} disabled={acting} className="flex-1 bg-[#173f35] hover:bg-[#245548]">{acting ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}Record action</Button>}
           <Button size="sm" variant="ghost" onClick={() => resolveItem('dismiss')} disabled={acting} title={selected.blocksCertification ? 'Keeps this item unresolved' : 'Dismiss advisory'} aria-label={selected.blocksCertification ? 'Dismiss response without resolving blocker' : 'Dismiss advisory'}><AlertTriangle className="h-3.5 w-3.5" /></Button>
         </div>
@@ -457,16 +491,19 @@ export default function ActionQueue() {
           <button onClick={() => setSelectedSignalId(null)} aria-label="Close intervention details" className="rounded p-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700"><X className="h-4 w-4" /></button>
         </div>
         {selectedSignal.promptText && <blockquote className="mt-3 border-l-2 border-[#9bb5aa] pl-3 font-serif text-xs leading-5 text-stone-600">“{selectedSignal.promptText}”</blockquote>}
-        {selectedSignal.responseText && <p className="mt-3 text-xs leading-5 text-stone-700">{selectedSignal.responseText}</p>}
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        <p className="mt-3 text-xs leading-5 text-stone-700">{interventionQuestion(selectedSignal)}</p>
+        {signalFeedback && <p role="status" className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-[11px] leading-4 text-amber-900">{signalFeedback}</p>}
+        <Label htmlFor={`queue-intervention-answer-${selectedSignal.id}`} className="mt-3 block text-[11px] text-stone-700">Your reasoning</Label>
+        <Textarea id={`queue-intervention-answer-${selectedSignal.id}`} value={signalResponse} onChange={(event) => setSignalResponse(event.target.value)} rows={3} className="mt-1.5 resize-none text-xs" placeholder="Answer with a reason, evidence, example, or limitation…" />
+        <div className="mt-3 grid grid-cols-2 gap-2">
           <Button size="sm" variant="outline" onClick={() => focusQuote(selectedSignal.promptText)} className="h-8 border-stone-300 text-xs"><MapPin className="mr-1.5 h-3.5 w-3.5" />Locate</Button>
-          <Button size="sm" variant="outline" onClick={() => { if (selectedSignal.promptText) { setSourceQuery(selectedSignal.promptText); setSourcesOpen(true) } }} disabled={!selectedSignal.promptText || selectedSignal.promptText.trim().length < 10} className="h-8 border-stone-300 text-xs"><Search className="mr-1.5 h-3.5 w-3.5" />Find sources</Button>
-          <Button size="sm" onClick={() => resolveSignal(selectedSignal, 'engaged')} disabled={acting} className="h-8 bg-[#173f35] text-xs hover:bg-[#245548]"><Check className="mr-1.5 h-3.5 w-3.5" />Mark addressed</Button>
-          <Button size="sm" variant="ghost" onClick={() => resolveSignal(selectedSignal, 'dismissed')} disabled={acting} className="h-8 text-xs text-stone-500 hover:text-stone-800"><X className="mr-1.5 h-3.5 w-3.5" />Dismiss</Button>
+          <Button size="sm" variant="outline" aria-label="Find sources with Source mapper" onClick={() => { if (selectedSignal.promptText) openSourceMapper(selectedSignal.promptText) }} disabled={!selectedSignal.promptText || selectedSignal.promptText.trim().length < 5} className="h-8 border-stone-300 text-xs"><Search className="mr-1.5 h-3.5 w-3.5" />Map sources</Button>
+          <Button size="sm" onClick={() => evaluateSignal(selectedSignal)} disabled={acting} className="h-8 bg-[#173f35] text-xs hover:bg-[#245548]">{acting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1.5 h-3.5 w-3.5" />}Evaluate answer</Button>
+          <Button size="sm" variant="ghost" onClick={() => dismissSignal(selectedSignal)} disabled={acting} className="h-8 text-xs text-stone-500 hover:text-stone-800"><X className="mr-1.5 h-3.5 w-3.5" />Dismiss</Button>
         </div>
+        <p className="mt-2 text-[9px] leading-4 text-stone-500">Satisfactory answers become structured notebook lines. Follow-ups keep this intervention active.</p>
       </footer>}
 
-      <SourcesResults open={sourcesOpen} onOpenChange={setSourcesOpen} claim={sourceQuery} />
     </aside>
   )
 }

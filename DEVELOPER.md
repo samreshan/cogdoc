@@ -6,7 +6,7 @@
 
 ## Prerequisites
 
-- **Node.js 20+** (or **Bun** — faster)
+- **Node.js 22+** (or **Bun** — faster)
 - **PostgreSQL 16+** (Supabase or external; pgvector recommended)
 - An **LLM API key** — Google Gemini, Groq, or any OpenAI-compatible provider
 
@@ -243,6 +243,27 @@ The Dockerfile is a 3-stage multi-stage build:
 See `README-DOCKER.md` for the full deployment guide including multi-arch builds, Supabase setup, and troubleshooting.
 
 ---
+
+## Research worker and migrations
+
+Apply `prisma/migrations/202608310001_research_ide/migration.sql` after the
+assignment-workspace migrations, then run `npm run research:worker` as a
+separate long-lived process. Jobs use database leases, bounded retries,
+idempotency keys, cancellation-safe completion, and exponential backoff; Redis
+is not required.
+
+The migration backfills every existing `Pdf` as a user-owned `LibrarySource`
+plus a project-owned `WorkspaceSource` without removing legacy rows. Existing
+PDF, reference, review, search, export, and certificate routes remain
+compatibility adapters. New uploads retain original PDF bytes in private
+storage. Metadata-only legacy records remain viewable and can be reattached to
+full text later.
+
+Research synthesis is an explicit author action. Each request must include one
+or more indexed passage IDs owned by the workspace, and each persisted finding
+keeps its passage join. The editor accepts structured, verified citation nodes
+only; bibliography output is generated deterministically from citation nodes
+actually present in the document.
 
 ## Testing
 

@@ -1,7 +1,7 @@
 /**
  * Typed API client for the Cogdoc frontend.
  */
-import type { Project, Intervention, Analytics, PdfSummary, ReferenceSummary, ReviewItem, ReviewRun, VerificationReport } from '@/lib/types'
+import type { Project, Intervention, InterventionAnswerResult, Analytics, PdfSummary, ReferenceSummary, ReviewItem, ReviewRun, VerificationReport, ResearchWorkspaceSnapshot, ResearchNote, ResearchAction, AcademicProfile, SourceMapResult, ResearchDialogueAnswers, ResearchDialogueDraft, ResearchKickoffDraft, ResearchKickoffOutlineItem, ResearchKickoffPlan, ResearchHistorySnapshot } from '@/lib/types'
 import type { FormattedCitation } from '@/lib/citation-format'
 
 export interface AssistantReadiness {
@@ -69,6 +69,43 @@ export const api = {
   updateWorkspace: (id: string, patch: Record<string, unknown>) =>
     jsonFetch<{ workspace: Project; referencesReformatted?: number; referencesNeedingReview?: number }>(`/api/workspaces/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   deleteWorkspace: (id: string) => jsonFetch<{ ok: boolean }>(`/api/workspaces/${id}`, { method: 'DELETE' }),
+  getResearchWorkspace: (id: string) => jsonFetch<ResearchWorkspaceSnapshot>(`/api/workspaces/${id}/research`),
+  getResearchHistory: (id: string) => jsonFetch<ResearchHistorySnapshot>(`/api/workspaces/${id}/history`),
+  recordDecision: (id: string, input: { type: string; summary: string; entityType?: string; entityId?: string; detail?: Record<string, unknown> }) =>
+    jsonFetch<{ event: { id: string; type: string; createdAt: string } }>(`/api/workspaces/${id}/history`, {
+      method: 'POST', body: JSON.stringify(input),
+    }),
+  mapSources: (id: string, question: string) => jsonFetch<SourceMapResult>(`/api/workspaces/${id}/source-map`, {
+    method: 'POST', body: JSON.stringify({ question }),
+  }),
+  draftFromResearchDialogue: (projectId: string, answers: ResearchDialogueAnswers) =>
+    jsonFetch<ResearchDialogueDraft>('/api/research-dialogue', {
+      method: 'POST', body: JSON.stringify({ projectId, answers }),
+    }),
+  planResearchKickoff: (topic: string, conversation: Array<{ question: string; answer: string }> = []) => jsonFetch<{ plan: ResearchKickoffPlan; assistantFallback: boolean }>('/api/research-kickoff', {
+    method: 'POST', body: JSON.stringify({ action: 'plan', topic, conversation }),
+  }),
+  draftResearchKickoff: (input: {
+    projectId: string
+    topic: string
+    outline: ResearchKickoffOutlineItem[]
+    responses: Array<{ question: string; answer: string }>
+  }) => jsonFetch<{ draft: ResearchKickoffDraft }>('/api/research-kickoff', {
+    method: 'POST', body: JSON.stringify({ action: 'draft', ...input }),
+  }),
+  getResearchSource: (projectId: string, sourceId: string) => jsonFetch<{
+    workspaceSource: ResearchWorkspaceSnapshot['sources'][number]
+    passages: Array<{ id: string; chunkIndex: number; pageApprox: number; content: string }>
+    hasPrivateFile: boolean
+  }>(`/api/workspaces/${projectId}/sources/${sourceId}`),
+  createResearchNote: (projectId: string, input: Record<string, unknown>) =>
+    jsonFetch<{ note: ResearchNote }>(`/api/workspaces/${projectId}/notebook`, { method: 'POST', body: JSON.stringify(input) }),
+  updateResearchAction: (projectId: string, actionId: string, patch: Record<string, unknown>) =>
+    jsonFetch<{ action: ResearchAction }>(`/api/workspaces/${projectId}/actions`, { method: 'PATCH', body: JSON.stringify({ actionId, ...patch }) }),
+  requestSynthesis: (projectId: string, input: { kind: string; prompt: string; passageIds: string[] }) =>
+    jsonFetch<{ synthesis: { id: string; status: string } }>(`/api/workspaces/${projectId}/syntheses`, { method: 'POST', body: JSON.stringify({ ...input, confirmedByAuthor: true }) }),
+  saveAcademicProfile: (projectId: string, input: Record<string, unknown> & { profileId?: string }) =>
+    jsonFetch<{ profile: AcademicProfile }>(`/api/workspaces/${projectId}/profiles`, { method: input.profileId ? 'PATCH' : 'POST', body: JSON.stringify(input) }),
   importWorkspaceFile: async (id: string, file: File, kind: 'docx' | 'brief' | 'source' | 'code' = 'docx') => {
     const form = new FormData()
     form.append('file', file)
@@ -188,7 +225,12 @@ export const api = {
     projectId: string, context: string, stub?: string,
     paragraphId?: string, frictionMode?: 'socratic' | 'coach' | 'assistant',
   ) =>
-    jsonFetch<{ ghostQuestion: string; intervention: Intervention }>('/api/socratic-spacer', {
+    jsonFetch<{
+      ghostQuestion: string
+      intervention: Intervention
+      assistantFallback: boolean
+      assistantMessage?: string
+    }>('/api/socratic-spacer', {
       method: 'POST',
       body: JSON.stringify({ projectId, context, stub, paragraphId, friction_mode: frictionMode }),
     }),
@@ -233,6 +275,11 @@ export const api = {
     jsonFetch<{ intervention: Intervention }>(`/api/interventions/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
+    }),
+  answerIntervention: (id: string, answer: string) =>
+    jsonFetch<InterventionAnswerResult>(`/api/interventions/${id}/responses`, {
+      method: 'POST',
+      body: JSON.stringify({ answer }),
     }),
 
   // Analytics

@@ -156,8 +156,112 @@ h1[data-placeholder]:empty::before {
 }
 
 /* Marked sentences are hoverable — signal it (decoration spans + legacy marks) */
-.cogdoc-mark {
+.cogdoc-mark,
+.cogdoc-review-mark,
+.cogdoc-action-mark {
   cursor: pointer;
+}
+
+.cogdoc-action-mark {
+  border-bottom: 2px solid #527d6e;
+  background: #edf2ee;
+  border-radius: 2px;
+  padding: 1px 2px;
+  margin: 0 -1px;
+}
+
+.cogdoc-outline-heading {
+  scroll-margin-top: 5rem;
+  transition: background-color 160ms ease, outline-color 160ms ease;
+}
+
+/* Editorial heading hierarchy. These styles are intentionally static: the
+   document outline owns navigation, so headings do not advertise hover UI. */
+.tiptap-editor h1,
+.tiptap-editor h2,
+.tiptap-editor h3,
+.tiptap-editor h4,
+.tiptap-editor h5,
+.tiptap-editor h6 {
+  color: #202a26;
+  text-wrap: balance;
+}
+
+.tiptap-editor h1 {
+  margin: 3.25rem 0 1.35rem;
+  border-bottom: 1px solid #cfc8bb;
+  padding-bottom: 0.65rem;
+  font-size: clamp(1.9rem, 4vw, 2.3rem);
+  font-weight: 650;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+}
+
+.tiptap-editor h1:first-child { margin-top: 0; }
+
+.tiptap-editor h2 {
+  margin: 2.75rem 0 1rem;
+  border-left: 3px solid #6f8d81;
+  padding-left: 0.7rem;
+  font-size: 1.55rem;
+  font-weight: 650;
+  line-height: 1.22;
+  letter-spacing: -0.015em;
+}
+
+.tiptap-editor h3 {
+  margin: 2.15rem 0 0.75rem;
+  font-size: 1.23rem;
+  font-weight: 650;
+  line-height: 1.3;
+  color: #30483f;
+}
+
+.tiptap-editor h4 {
+  margin: 1.8rem 0 0.6rem;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tiptap-editor h5 {
+  margin: 1.55rem 0 0.5rem;
+  font-size: 1rem;
+  font-style: italic;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.tiptap-editor h6 {
+  margin: 1.4rem 0 0.45rem;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5f6e68;
+}
+
+.tiptap-editor :is(h1, h2, h3, h4, h5, h6) + p { margin-top: 0; }
+
+.cogdoc-outline-heading--target {
+  outline: 2px solid #8da79d;
+  outline-offset: 0.35rem;
+  background: #edf2ee;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cogdoc-outline-heading { transition: none; }
+}
+
+@media (max-width: 640px) {
+  .tiptap-editor h1 { font-size: 1.8rem; }
+  .tiptap-editor h2 { font-size: 1.38rem; }
+  .tiptap-editor h3 { font-size: 1.14rem; }
 }
 
 .tiptap-editor table {
@@ -180,6 +284,8 @@ h1[data-placeholder]:empty::before {
 .tiptap-editor pre { overflow-x: auto; border-left: 3px solid #386c5c; background: #ece9e1; padding: 1rem; font-family: var(--font-geist-mono), monospace; font-size: 0.85rem; line-height: 1.65; }
 .tiptap-editor a { color: #245548; text-decoration: underline; text-underline-offset: 0.18em; }
 .tiptap-editor blockquote { border-left: 2px solid #a8a29e; padding-left: 1rem; color: #57534e; }
+.cogdoc-citation { display: inline; border-bottom: 1px solid #7d9b8f; color: #245548; background: #edf2ee; padding: 0 0.14em; border-radius: 0.18rem; font-family: var(--font-geist-sans), sans-serif; font-size: 0.82em; white-space: nowrap; }
+.cogdoc-citation--unverified { border-bottom-color: #b45309; background: #fff7ed; color: #92400e; }
 
 /* ── Cogdoc pet animations ─────────────────────────────────────────── */
 @keyframes cogdoc-pet-bounce {

@@ -2,8 +2,10 @@
 # Cogdoc — development docker-compose (Next.js + FastAPI + Postgres+pgvector)
 #
 # Sprint 3 portfolio artifact: a multi-service deployment that matches the
-# target architecture in PRODUCT.md §10.1. The app-level services use env vars
-# from .env.local; Postgres is the canonical workspace and pgvector store.
+# target architecture in PRODUCT.md §10.1. Run Compose with
+# `--env-file .env.local`; the app receives that file directly and selected
+# embedding values are interpolated into FastAPI. Postgres is the canonical
+# workspace and pgvector store.
 #
 # Usage:
 #   docker compose -f docker-compose.dev.yml up         # all three services
@@ -39,13 +41,14 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Point at the Postgres service (future pgvector home)
+      # Both services must use the same database: retrieved chunk IDs are
+      # foreign keys into the application-owned PdfChunk table.
       DATABASE_URL: "postgresql://cogdoc:cogdoc_dev@postgres:5432/cogdoc"
+      SUPABASE_DB_URL: "postgresql://cogdoc:cogdoc_dev@postgres:5432/cogdoc"
       # ADR-0008: create_app_from_env picks the embedder + store from these.
       # Unset → hermetic HashingEmbedder + in-memory store (offline dev).
       EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-hashing}"
-      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
-      SUPABASE_DB_URL: "${SUPABASE_DB_URL:-}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-${AI_API_KEY:-}}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,17 +60,45 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: cogdoc:local
     container_name: cogdoc-app
     ports:
       - "3000:3000"
+    env_file:
+      - path: .env.local
+        required: false
     environment:
       DATABASE_URL: "postgresql://cogdoc:cogdoc_dev@postgres:5432/cogdoc"
       FASTAPI_URL: "http://rag:8000"
       USE_VECTOR_RETRIEVAL: "true"
+      COGDOC_SKIP_WIZARD: "1"
+      # The image runs with NODE_ENV=production, so the dev-only fallback is
+      # intentionally ignored. This explicit mode is safe for private local use.
+      COGDOC_SINGLE_USER_MODE: "${COGDOC_SINGLE_USER_MODE:-1}"
+      COGDOC_STORAGE_DIR: "/data/assets"
+    volumes:
+      - cogdoc_appdata:/data
     depends_on:
       rag:
         condition: service_started
     profiles: ["full"]
 
+  # PostgreSQL-backed queue worker for reprioritization and synthesis jobs.
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cogdoc:local
+    container_name: cogdoc-worker
+    entrypoint: ["node", "scripts/research-worker.mjs"]
+    environment:
+      DATABASE_URL: "postgresql://cogdoc:cogdoc_dev@postgres:5432/cogdoc"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles: ["full"]
+
 volumes:
   cogdoc_pgdata:
+  cogdoc_appdata:

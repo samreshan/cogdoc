@@ -13,4 +13,10 @@ describe('canonical document compatibility', () => {
     expect(parseDocumentContent('')).toEqual({ type: 'doc', content: [{ type: 'paragraph' }] })
     expect(() => JSON.parse(canonicalDocumentString('{broken'))).not.toThrow()
   })
+
+  it('renders structured citation metadata in text and HTML exports', () => {
+    const content = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Evidence ' }, { type: 'structuredCitation', attrs: { referenceId: 'r1', author: 'Chen', year: '2025', locator: 'p. 14' } }] }] })
+    expect(documentToPlainText(content)).toContain('(Chen, 2025, p. 14)')
+    expect(documentToHtml(content)).toContain('data-reference-id="r1"')
+  })
 })

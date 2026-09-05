@@ -17,6 +17,7 @@ import { Sparkles, ShieldCheck, ListTree, BookOpen, X, Check, Quote, ExternalLin
 import { useState } from 'react'
 import { toast } from 'sonner'
 import type { Intervention, EngineType, Verdict } from '@/lib/types'
+import { interventionQuestion } from '@/lib/intervention-language'
 
 const ENGINE_META: Record<EngineType, { label: string; icon: typeof Sparkles; color: string; bg: string; border: string }> = {
   interceptor: { label: 'Interceptor', icon: Sparkles, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' },
@@ -119,7 +120,7 @@ export default function LivingMargin() {
                 {i.engineType === 'citation' ? (
                   <div className="space-y-2">
                     {i.responseText && (
-                      <p className="text-sm text-stone-800 leading-relaxed">{i.responseText}</p>
+                      <p className="text-sm text-stone-800 leading-relaxed">{interventionQuestion(i)}</p>
                     )}
                     {i.evidences && i.evidences.length > 0 && (
                       <div className="space-y-1.5">
@@ -157,7 +158,7 @@ export default function LivingMargin() {
                   </div>
                 ) : (
                   <p className="text-sm text-stone-800 leading-relaxed whitespace-pre-wrap">
-                    {i.responseText}
+                    {interventionQuestion(i)}
                   </p>
                 )}
 

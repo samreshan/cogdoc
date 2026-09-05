@@ -14,7 +14,7 @@ import { supabase } from '@/lib/supabase-browser'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { BookOpenCheck, MailCheck, SearchCheck, ShieldCheck, Sparkles } from 'lucide-react'
+import { BookOpenCheck, MailCheck, SearchCheck, ShieldCheck } from 'lucide-react'
 
 type Mode = 'signin' | 'signup'
 
@@ -85,9 +85,7 @@ export default function Login() {
         <section className="flex flex-col justify-between border-b border-stone-200 p-7 sm:p-10 lg:min-h-[38rem] lg:border-b-0 lg:border-r lg:p-12">
           <div>
             <div className="mb-12 flex items-center gap-2.5">
-              <span className="flex size-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
-                <Sparkles className="size-4" aria-hidden="true" />
-              </span>
+              <span className="size-4 shrink-0 rounded-full bg-black" aria-hidden="true" />
               <span
                 className="text-xl font-semibold text-stone-900"
                 style={{ fontFamily: 'var(--font-newsreader), Georgia, serif' }}
@@ -97,16 +95,16 @@ export default function Login() {
             </div>
 
             <p className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-emerald-800">
-              Accountable academic writing
+              Research without cognitive autopilot
             </p>
             <h1
               className="mt-4 max-w-xl text-4xl font-medium leading-[1.08] tracking-[-0.025em] text-stone-900 sm:text-5xl"
               style={{ fontFamily: 'var(--font-newsreader), Georgia, serif' }}
             >
-              Build research you can account for.
+              Understand more than the words you produce.
             </h1>
             <p className="mt-5 max-w-lg text-base leading-7 text-stone-600">
-              Develop claims, find scholarly sources, verify citations, and keep every edit under your control.
+              Explore competing perspectives, inspect scholarly evidence, and draft only after you have worked through the idea.
             </p>
 
             <div className="mt-8 grid gap-3 text-sm text-stone-700 sm:grid-cols-3 lg:grid-cols-1">
@@ -120,14 +118,14 @@ export default function Login() {
               </p>
               <p className="flex items-center gap-3">
                 <ShieldCheck className="size-4 shrink-0 text-emerald-700" aria-hidden="true" />
-                Preserve author control
+                Preserve researcher understanding
               </p>
             </div>
           </div>
 
           <div className="mt-12 border-t border-stone-200 pt-5 text-xs leading-5 text-stone-500">
             <p>Designed to strengthen research literacy in support of SDG 4: Quality Education.</p>
-            <p className="mt-2">Cogdoc does not prove authorship, detect plagiarism, or replace your judgement.</p>
+            <p className="mt-2">Cogdoc introduces productive friction so AI support strengthens your judgement instead of replacing it.</p>
           </div>
         </section>
 
@@ -145,7 +143,7 @@ export default function Login() {
             </h2>
             <p className="mt-2 text-sm leading-6 text-stone-500">
               {mode === 'signin'
-                ? 'Continue to your projects, sources, and review queue.'
+                ? 'Continue to your projects, sources, and research questions.'
                 : 'Create a private workspace for your research and writing.'}
             </p>
 

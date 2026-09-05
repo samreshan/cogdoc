@@ -35,6 +35,7 @@ import {
 import {
   reviewItemHighlightKey,
 } from '@/lib/extensions/review-item-highlight'
+import { researchActionHighlightKey } from '@/lib/extensions/research-action-highlight'
 import { useEngineFiring } from '@/lib/use-engine-firing'
 import type { EngineType } from '@/lib/types'
 import { Button } from '@/components/ui/button'
@@ -47,8 +48,8 @@ import { ApiError } from '@/lib/api-client'
 import { clearRecoveryDraft, loadRecoveryDraft, saveRecoveryDraft } from '@/lib/draft-recovery'
 import { findEditorTextRange } from '@/lib/editor-focus'
 import EditorToolbar from './editor-toolbar'
-import SourcesResults from './sources-results'
 import { createEditorExtensions } from '@/lib/editor-extensions'
+import type { StructuredCitationAttrs } from '@/lib/extensions/citation-node'
 
 export default function EditorTiptap() {
   const project = useCogdoc((s) => s.activeProject)
@@ -63,12 +64,19 @@ export default function EditorTiptap() {
   const editorFocusQuote = useCogdoc((s) => s.editorFocusQuote)
   const clearEditorFocus = useCogdoc((s) => s.clearEditorFocus)
   const reviewHighlightQuotes = useCogdoc((s) => s.reviewHighlightQuotes)
+  const researchActions = useCogdoc((s) => s.researchActions)
+  const editorOutlineTarget = useCogdoc((s) => s.editorOutlineTarget)
+  const clearEditorOutlineFocus = useCogdoc((s) => s.clearEditorOutlineFocus)
+  const editorSelectionBookmark = useCogdoc((s) => s.editorSelectionBookmark)
+  const setEditorSelectionBookmark = useCogdoc((s) => s.setEditorSelectionBookmark)
+  const pendingCitation = useCogdoc((s) => s.pendingCitation)
+  const clearPendingCitation = useCogdoc((s) => s.clearPendingCitation)
+  const setSourceMapperQuery = useCogdoc((s) => s.setSourceMapperQuery)
+  const openIdeTab = useCogdoc((s) => s.openIdeTab)
   const frictionMode = useCogdoc((s) => s.frictionMode)
 
   const [promptInput, setPromptInput] = useState('')
   const [selectedText, setSelectedText] = useState('')
-  const [researchClaim, setResearchClaim] = useState('')
-  const [sourcesOpen, setSourcesOpen] = useState(false)
   const [, setToolbarVersion] = useState(0)
   const [wordCount, setWordCount] = useState(0)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'offline' | 'recovering' | 'conflict'>('idle')
@@ -92,10 +100,80 @@ export default function EditorTiptap() {
         style:
           'font-family: var(--font-newsreader), Georgia, serif; font-size: 18px; line-height: 1.8; color: #2a2520; max-width: 680px; margin: 0 auto; min-height: 50vh;',
         'data-placeholder':
-          'Start writing here. Cogdoc analyzes every sentence — interventions appear as underlines you can hover to read.',
+          'Start with what you understand. Cogdoc will question assumptions, surface evidence gaps, and help you explore other views.',
       },
     },
   })
+
+  useEffect(() => {
+    if (!editor || !project) return
+    const insert = (event: Event) => {
+      const detail = (event as CustomEvent<StructuredCitationAttrs>).detail
+      if (!detail?.referenceId || !detail.verified) {
+        toast.error('Verify citation metadata before inserting it')
+        return
+      }
+      void api.recordDecision(project.id, {
+        type: 'citation_inserted', summary: `Inserted citation: ${detail.title}`,
+        entityType: 'reference', entityId: detail.referenceId, detail: { locator: detail.locator ?? null },
+      }).then(() => { editor.commands.insertCitation(detail) }).catch((error) => {
+        toast.error('Citation was not inserted', { description: `Decision history could not be recorded: ${(error as Error).message}` })
+      })
+    }
+    window.addEventListener('cogdoc:insert-citation', insert)
+    return () => window.removeEventListener('cogdoc:insert-citation', insert)
+  }, [editor, project])
+
+  useEffect(() => {
+    if (!editor) return
+    const insert = (event: Event) => {
+      const draft = String((event as CustomEvent<{ draft?: string }>).detail?.draft ?? '').trim()
+      if (!draft) return
+      const paragraphs = draft
+        .split(/\n{2,}/)
+        .map((text) => text.replace(/\s*\n\s*/g, ' ').trim())
+        .filter(Boolean)
+        .map((text) => ({ type: 'paragraph', content: [{ type: 'text', text }] }))
+      if (!paragraphs.length) return
+      editor.chain().focus().insertContent(paragraphs).run()
+    }
+    window.addEventListener('cogdoc:insert-research-draft', insert)
+    return () => window.removeEventListener('cogdoc:insert-research-draft', insert)
+  }, [editor])
+
+  useEffect(() => {
+    if (!editor) return
+    const replace = (event: Event) => {
+      const detail = (event as CustomEvent<{ passage?: string; replacement?: string }>).detail
+      const passage = String(detail?.passage ?? '').trim()
+      const replacement = String(detail?.replacement ?? '').trim()
+      if (!passage || !replacement) return
+      const range = findEditorTextRange(editor.state.doc, passage)
+      if (!range) {
+        toast.error('The highlighted passage has changed', { description: 'Review the proposal and apply it manually.' })
+        return
+      }
+      editor.chain().focus().insertContentAt(range, replacement).run()
+    }
+    window.addEventListener('cogdoc:replace-research-passage', replace)
+    return () => window.removeEventListener('cogdoc:replace-research-passage', replace)
+  }, [editor])
+
+  useEffect(() => {
+    if (!editor || !pendingCitation || !project) return
+    const bookmark = editorSelectionBookmark?.to ?? editor.state.selection.to
+    const position = Math.max(1, Math.min(bookmark, editor.state.doc.content.size))
+    const citation = pendingCitation
+    void api.recordDecision(project.id, {
+      type: 'citation_inserted', summary: `Inserted citation: ${citation.title}`,
+      entityType: 'reference', entityId: citation.referenceId, detail: { locator: citation.locator ?? null },
+    }).then(() => {
+      editor.chain().focus().setTextSelection(position).insertCitation(citation).run()
+      toast.success('Citation inserted at your saved cursor', { description: 'The bibliography will use citations present in the document.' })
+    }).catch((error) => {
+      toast.error('Citation was not inserted', { description: `Decision history could not be recorded: ${(error as Error).message}` })
+    }).finally(clearPendingCitation)
+  }, [editor, pendingCitation, editorSelectionBookmark, clearPendingCitation, project])
 
   const { fireEngine, checkBlindspot } = useEngineFiring(
     useCallback(() => editor?.getText() ?? '', [editor]),
@@ -144,17 +222,14 @@ export default function EditorTiptap() {
       idleRef.current?.ping()
       const text = editor.getText()
       setWordCount(text.split(/\s+/).filter(Boolean).length)
-      // Sentence completion → fire matching engines, staggered 500ms so
-      // several engines on one sentence don't trip LLM rate limits (429).
+      // Sentence completion → choose one primary intervention for this phrase.
       const endChar = text.trim().slice(-1)
       if (reviewPace !== 'rapid' && (endChar === '.' || endChar === '?' || endChar === '!')) {
         const sentence = extractLastSentence(text)
         if (sentence.split(/\s+/).length >= 4) {
           const { context } = extractContext(text)
           const engines = pickEnginesForSentence(sentence).filter((engine) => reviewPace === 'deep' || engine === 'citation' || engine === 'interceptor')
-          engines.forEach((eng, idx) => {
-            setTimeout(() => fireEngine(eng, sentence, context), idx * 500)
-          })
+          engines.forEach((eng) => void fireEngine(eng, sentence, context))
         }
       }
     }
@@ -169,6 +244,7 @@ export default function EditorTiptap() {
     if (!editor) return
     const handleSelection = () => {
       const { from, to } = editor.state.selection
+      setEditorSelectionBookmark({ from, to })
       setSelectedText(from === to ? '' : editor.state.doc.textBetween(from, to, ' ').trim().slice(0, 2_000))
       setToolbarVersion((version) => version + 1)
     }
@@ -179,7 +255,7 @@ export default function EditorTiptap() {
       editor.off('selectionUpdate', handleSelection)
       editor.off('transaction', handleSelection)
     }
-  }, [editor])
+  }, [editor, setEditorSelectionBookmark])
 
   // ── Idle detector at the friction-scaled 45s (IR §2.3.6) ────────────────
   useEffect(() => {
@@ -239,6 +315,15 @@ export default function EditorTiptap() {
     )
   }, [editor, reviewHighlightQuotes])
 
+  // Automatic next actions that point at an exact draft quote are visible in
+  // the document and expose the same context available in the navigator.
+  useEffect(() => {
+    if (!editor) return
+    editor.view.dispatch(
+      editor.state.tr.setMeta(researchActionHighlightKey, researchActions),
+    )
+  }, [editor, researchActions])
+
   // The review queue and live writing signals use this handoff to reveal a
   // sentence in long documents without requiring the author to hunt for an
   // underline manually.
@@ -253,6 +338,22 @@ export default function EditorTiptap() {
     editor.chain().focus().setTextSelection(range).scrollIntoView().run()
   }, [editor, editorFocusQuote, clearEditorFocus])
 
+  useEffect(() => {
+    if (!editor || !editorOutlineTarget) return
+    const target = [...editor.view.dom.querySelectorAll<HTMLElement>('[data-outline-id]')]
+      .find((element) => element.dataset.outlineId === editorOutlineTarget)
+    clearEditorOutlineFocus()
+    if (!target) {
+      toast('This heading changed and its link could not be located.')
+      return
+    }
+    window.history.replaceState(null, '', `#${editorOutlineTarget}`)
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    target.focus({ preventScroll: true })
+    target.classList.add('cogdoc-outline-heading--target')
+    window.setTimeout(() => target.classList.remove('cogdoc-outline-heading--target'), 1200)
+  }, [editor, editorOutlineTarget, clearEditorOutlineFocus])
+
   // Cleanup
   useEffect(() => {
     return () => {
@@ -261,8 +362,20 @@ export default function EditorTiptap() {
   }, [])
 
   // ── Hover handling for sentence marks (popovers over underlines) ────────
-  function revealInterventionMark(target: EventTarget | null): boolean {
+  function revealInlineContext(target: EventTarget | null): boolean {
     if (!(target instanceof HTMLElement)) return false
+    const actionMark = target.closest<HTMLElement>('.cogdoc-action-mark')
+    if (actionMark?.dataset.actionId) {
+      const rect = actionMark.getBoundingClientRect()
+      setHovered(`action:${actionMark.dataset.actionId}`, { top: rect.bottom, left: rect.left })
+      return true
+    }
+    const reviewMark = target.closest<HTMLElement>('.cogdoc-review-mark')
+    if (reviewMark?.dataset.reviewQuote) {
+      const rect = reviewMark.getBoundingClientRect()
+      setHovered(`review:${reviewMark.dataset.reviewQuote}`, { top: rect.bottom, left: rect.left })
+      return true
+    }
     const mark = target.closest<HTMLElement>('.cogdoc-mark')
     const key = mark?.dataset.sentenceKey
     if (!mark || !key) return false
@@ -272,7 +385,7 @@ export default function EditorTiptap() {
   }
 
   function handleMouseOver(e: React.MouseEvent) {
-    revealInterventionMark(e.target)
+    revealInlineContext(e.target)
   }
 
   // Submit a prompt to the Interceptor
@@ -299,7 +412,7 @@ export default function EditorTiptap() {
   // Paragraph completion (Enter) → Scaffold + Blindspot
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!editor) return
-    if ((e.key === 'Enter' || e.key === ' ') && revealInterventionMark(e.target)) {
+    if ((e.key === 'Enter' || e.key === ' ') && revealInlineContext(e.target)) {
       e.preventDefault()
       return
     }
@@ -345,9 +458,9 @@ export default function EditorTiptap() {
   }
 
   return (
-    <div className="flex flex-col h-full" onKeyDown={handleKeyDown} style={{ background: '#faf7f0' }}>
+    <div className="flex h-full flex-col bg-[#f7f6f3]" onKeyDown={handleKeyDown}>
       {/* Subtle toolbar */}
-      <div className="px-6 py-1.5 flex items-center justify-between gap-4 border-b border-stone-200/50">
+      <div className="flex min-h-9 items-center justify-between gap-4 border-b border-[#ebe7df] bg-[#fffefb] px-6 py-1.5">
         <div className="flex items-center gap-3 text-xs text-stone-500">
           {saveState === 'saving' ? (
             <span className="flex items-center gap-1.5">
@@ -383,8 +496,8 @@ export default function EditorTiptap() {
             </>
           )}
         </div>
-        <div className="text-[11px] text-stone-400">
-          Sentences with interventions are <span style={{ textDecoration: 'underline wavy #78716c', textUnderlineOffset: '3px' }}>underlined</span> — hover or focus to review
+        <div className="hidden items-center gap-2 text-[9px] text-stone-400 md:flex" aria-label="Intervention engines are listening">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#68897d]" /><span>Cogdoc is listening for evidence and reasoning gaps</span>
         </div>
       </div>
 
@@ -396,18 +509,18 @@ export default function EditorTiptap() {
       )}
 
       <EditorToolbar editor={editor} selectedText={selectedText} onFindSources={() => {
-        setResearchClaim(selectedText)
-        setSourcesOpen(true)
+        setSourceMapperQuery(selectedText)
+        openIdeTab({ id: 'sources', kind: 'sources', label: 'Source mapper', closable: true })
       }} />
 
       {/* Scrollable writing surface */}
       <div className="flex-1 overflow-y-auto">
-        <div className="relative w-full max-w-[1000px] mx-auto px-8 py-16">
+        <div className="relative mx-auto min-h-full w-full max-w-[880px] border-x border-[#ece8e0] bg-[#fffefb] px-8 py-14 sm:px-14 sm:py-16">
           {/* Writing surface — focus mode dims all but the last paragraph */}
           <div
             onMouseOver={handleMouseOver}
-            onFocus={(event) => revealInterventionMark(event.target)}
-            onClick={(event) => revealInterventionMark(event.target)}
+            onFocus={(event) => revealInlineContext(event.target)}
+            onClick={(event) => revealInlineContext(event.target)}
             className={`transition-opacity ${focusMode ? 'focus-within:[&_p:not(:last-child)]:opacity-40' : ''}`}
           >
             <EditorContent editor={editor} />
@@ -416,7 +529,7 @@ export default function EditorTiptap() {
       </div>
 
       {/* Discreet prompt bar */}
-      <div className="border-t border-stone-200/50 px-6 py-2.5" style={{ background: '#fffefb' }}>
+      <div className="border-t border-[#e8e4dc] bg-[#fffefb] px-6 py-3">
         <div className="max-w-[680px] mx-auto flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
           <Textarea
@@ -450,8 +563,6 @@ export default function EditorTiptap() {
       <div data-sentence-popover>
         <SentencePopover />
       </div>
-
-      <SourcesResults open={sourcesOpen} onOpenChange={setSourcesOpen} claim={researchClaim} />
 
       {/* Running pixelated pets — animate across the screen when engines fire */}
       <RunningPets />

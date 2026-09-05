@@ -14,6 +14,7 @@ import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 import { chunkText } from '@/lib/retrieval'
 import { fetchPublicHtml } from '@/lib/safe-url'
+import { appendAuditEvent } from '@/lib/workspace-server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 45
@@ -115,6 +116,7 @@ export async function POST(
   })
 
   await db.pdf.update({ where: { id: pdf.id }, data: { parseStatus: 'ready' } })
+  await db.$transaction((tx) => appendAuditEvent(tx, { projectId, userId, type: 'web_source_imported', actor: 'student', payload: { summary: `Imported web source: ${sourceTitle}`, sourceId: pdf.id, url, chunkCount: chunks.length } }))
 
   return NextResponse.json({
     ok: true,

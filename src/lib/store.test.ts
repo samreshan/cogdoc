@@ -54,6 +54,12 @@ beforeEach(() => {
     hoveredPosition: null,
     editorFocusQuote: null,
     reviewHighlightQuotes: [],
+    reviewItems: [],
+    researchActions: [],
+    editorOutlineTarget: null,
+    editorSelectionBookmark: null,
+    pendingCitation: null,
+    sourceMapperQuery: '',
     activeModal: 'none',
     libraryVersion: 0,
     analyticsVersion: 0,
@@ -110,11 +116,17 @@ describe('active project', () => {
 describe('interventions', () => {
   it('pushes and caps at 30 interventions', () => {
     for (let i = 0; i < 35; i++) {
-      useCogdoc.getState().pushIntervention(makeIntervention({ id: `iv-${i}` }))
+      useCogdoc.getState().pushIntervention(makeIntervention({ id: `iv-${i}`, promptText: `Distinct phrase ${i}.` }))
     }
     expect(useCogdoc.getState().activeInterventions).toHaveLength(30)
     // the last 30 are retained
     expect(useCogdoc.getState().activeInterventions[29].id).toBe('iv-34')
+  })
+
+  it('keeps only one active intervention for the same normalized phrase', () => {
+    useCogdoc.getState().pushIntervention(makeIntervention({ id: 'socratic', engineType: 'socratic', promptText: 'The same  research phrase.' }))
+    useCogdoc.getState().pushIntervention(makeIntervention({ id: 'citation', engineType: 'citation', promptText: '  THE SAME research phrase.  ' }))
+    expect(useCogdoc.getState().activeInterventions.map((item) => item.id)).toEqual(['citation'])
   })
 
   it('marks an intervention as fading (resolved status)', () => {
@@ -179,6 +191,29 @@ describe('review highlight anchors', () => {
     useCogdoc.getState().setReviewHighlightQuotes(['A reviewable sentence.'])
     useCogdoc.getState().setActiveProject(makeProject({ id: 'p2' }))
     expect(useCogdoc.getState().reviewHighlightQuotes).toEqual([])
+  })
+})
+
+describe('outline navigation requests', () => {
+  it('holds a heading target until the editor consumes it', () => {
+    useCogdoc.getState().focusEditorOutline('outline-method')
+    expect(useCogdoc.getState().editorOutlineTarget).toBe('outline-method')
+    useCogdoc.getState().clearEditorOutlineFocus()
+    expect(useCogdoc.getState().editorOutlineTarget).toBeNull()
+  })
+})
+
+describe('research handoffs', () => {
+  it('retains the author cursor and a verified citation across center tabs', () => {
+    useCogdoc.getState().setEditorSelectionBookmark({ from: 17, to: 17 })
+    useCogdoc.getState().requestCitationInsertion({ referenceId: 'ref-1', title: 'Study', author: 'Sharma', year: '2025', locator: null, verified: true, metadataVersion: 'matched:1' })
+    expect(useCogdoc.getState().editorSelectionBookmark).toEqual({ from: 17, to: 17 })
+    expect(useCogdoc.getState().pendingCitation?.referenceId).toBe('ref-1')
+  })
+
+  it('hands an intervention question to the source mapper', () => {
+    useCogdoc.getState().setSourceMapperQuery('What evidence supports this claim?')
+    expect(useCogdoc.getState().sourceMapperQuery).toBe('What evidence supports this claim?')
   })
 })
 

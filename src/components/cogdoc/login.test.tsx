@@ -44,7 +44,7 @@ describe('Login', () => {
     render(<Login />)
     expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content')
     expect(screen.getByText(/sdg 4/i)).toBeTruthy()
-    expect(screen.getByText(/does not prove authorship/i)).toBeTruthy()
+    expect(screen.getByText(/productive friction/i)).toBeTruthy()
   })
 
   it('calls signInWithPassword with the entered credentials on submit', async () => {

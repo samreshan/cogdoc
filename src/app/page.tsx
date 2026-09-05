@@ -6,8 +6,6 @@ import { configureSupabaseBrowser, supabase } from '@/lib/supabase-browser'
 import Dashboard from '@/components/cogdoc/dashboard'
 import EditorShell from '@/components/cogdoc/editor-shell'
 import Login from '@/components/cogdoc/login'
-import WorkspaceHome from '@/components/cogdoc/workspace-home'
-import VerificationWorkspace from '@/components/cogdoc/verification-workspace'
 import OnboardingTour from '@/components/cogdoc/onboarding-tour'
 import { AuthConfigurationError, AuthLoading } from '@/components/cogdoc/auth-gate-state'
 
@@ -64,7 +62,8 @@ export default function Home() {
 
   let content = <Dashboard />
   if (view === 'editor' && activeProject) content = <EditorShell />
-  if (view === 'workspace' && activeProject) content = <WorkspaceHome />
-  if (view === 'verification' && activeProject) content = <VerificationWorkspace />
+  // Legacy links that still target the former project overview now open the
+  // research IDE directly.
+  if (view === 'workspace' && activeProject) content = <EditorShell />
   return <>{content}<OnboardingTour /></>
 }

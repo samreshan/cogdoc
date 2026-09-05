@@ -28,8 +28,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { FileText, Upload, Trash2, Loader2, FilePlus, BookOpen, Check, AlertCircle, ExternalLink, RefreshCw, ShieldCheck, Copy } from 'lucide-react'
+import { FileText, Upload, Trash2, Loader2, FilePlus, BookOpen, Check, AlertCircle, ExternalLink, RefreshCw, ShieldCheck, Copy, Quote } from 'lucide-react'
 import { toast } from 'sonner'
+import { structuredCitationForReference } from '@/lib/citation-insertion'
 
 export function buildReferenceList(references: ReferenceSummary[]): string {
   return references
@@ -43,6 +44,8 @@ export default function ResearchLibrary() {
   const project = useCogdoc((s) => s.activeProject)
   const libraryVersion = useCogdoc((s) => s.libraryVersion)
   const bumpLibrary = useCogdoc((s) => s.bumpLibrary)
+  const requestCitationInsertion = useCogdoc((s) => s.requestCitationInsertion)
+  const openIdeTab = useCogdoc((s) => s.openIdeTab)
   const [pdfs, setPdfs] = useState<PdfSummary[]>([])
   const [references, setReferences] = useState<ReferenceSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -54,6 +57,7 @@ export default function ResearchLibrary() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [checkingReferenceId, setCheckingReferenceId] = useState<string | null>(null)
   const [confirmingReferenceId, setConfirmingReferenceId] = useState<string | null>(null)
+  const [citationLocators, setCitationLocators] = useState<Record<string, string>>({})
 
   const refresh = useCallback(async () => {
     if (!project) return
@@ -158,6 +162,13 @@ export default function ResearchLibrary() {
     }
   }
 
+  function insertReference(reference: ReferenceSummary) {
+    const citation = structuredCitationForReference(reference, citationLocators[reference.id] ?? '')
+    if (!citation) { toast.error('Verify this metadata before inserting the citation'); return }
+    requestCitationInsertion(citation)
+    openIdeTab({ id: 'document', kind: 'document', label: 'Draft', closable: false })
+  }
+
   async function copyText(text: string, label: string, description?: string) {
     try {
       await navigator.clipboard.writeText(text)
@@ -173,7 +184,7 @@ export default function ResearchLibrary() {
     void copyText(
       list,
       'Reference list',
-      'Includes every saved record. Remove uncited works and verify each entry before submitting.',
+      'Includes every saved record. Remove uncited works and check each entry against the original source.',
     )
   }
 
@@ -317,7 +328,7 @@ export default function ResearchLibrary() {
           )}
 
           {!loading && references.length > 0 && <section className="pt-4" aria-label="Saved references">
-            <div className="mb-2 flex items-center justify-between"><h4 className="font-mono text-[10px] uppercase tracking-[0.15em] text-stone-500">Saved references</h4><span className="text-[10px] text-stone-400">Verify before submitting</span></div>
+            <div className="mb-2 flex items-center justify-between"><h4 className="font-mono text-[10px] uppercase tracking-[0.15em] text-stone-500">Saved references</h4><span className="text-[10px] text-stone-400">Check against the source</span></div>
             <div className="space-y-2">
               {references.map((reference) => <article key={reference.id} className="rounded-lg border border-stone-200 bg-white p-3">
                 <div className="flex items-start gap-2">
@@ -328,9 +339,10 @@ export default function ResearchLibrary() {
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px]">
                       <span className={reference.metadataStatus === 'confirmed' || reference.metadataStatus === 'matched' ? 'text-emerald-700' : 'text-amber-700'}>{reference.metadataStatus === 'confirmed' ? 'Author confirmed' : reference.metadataStatus === 'matched' ? `Registry match${reference.metadataConfidence ? ` · ${Math.round(reference.metadataConfidence * 100)}%` : ''}` : reference.metadataStatus === 'mismatch' ? 'Registry mismatch' : 'Metadata needs verification'}</span>
                       {reference.source && <span className="text-[#28614f]">Linked to {reference.source.filename}</span>}
-                      <button type="button" onClick={() => void copyText(reference.rawText, 'Reference', 'Verify this entry against the original source before submitting.')} className="ml-auto flex items-center gap-1 text-stone-500 hover:text-stone-800" aria-label="Copy saved reference"><Copy className="h-3 w-3" />Copy</button>
+                      <button type="button" onClick={() => void copyText(reference.rawText, 'Reference', 'Check this entry against the original source before relying on it.')} className="ml-auto flex items-center gap-1 text-stone-500 hover:text-stone-800" aria-label="Copy saved reference"><Copy className="h-3 w-3" />Copy</button>
                       {reference.url && <a href={reference.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-stone-500 hover:text-stone-800"><ExternalLink className="h-3 w-3" />Original</a>}
                     </div>
+                    <div className="mt-3 flex items-center gap-2 border-t border-stone-100 pt-2"><Input value={citationLocators[reference.id] ?? ''} onChange={(event) => setCitationLocators((current) => ({ ...current, [reference.id]: event.target.value }))} placeholder="Locator, e.g. p. 14" className="h-7 min-w-0 flex-1 text-[10px]" /><Button type="button" size="sm" onClick={() => insertReference(reference)} disabled={!['matched', 'confirmed'].includes(reference.metadataStatus)} className="h-7 bg-[#173f35] px-2 text-[10px] hover:bg-[#245548]"><Quote className="mr-1 h-3 w-3" />Insert at cursor</Button></div>
                     {reference.metadataStatus !== 'confirmed' && <div className="mt-2 flex flex-wrap gap-2">
                       <Button type="button" size="sm" variant="outline" onClick={() => verifyReference(reference)} disabled={checkingReferenceId === reference.id} className="h-7 border-stone-300 px-2 text-[10px]">{checkingReferenceId === reference.id ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}Check registry</Button>
                       <Button type="button" size="sm" variant="ghost" onClick={() => confirmReference(reference)} disabled={confirmingReferenceId === reference.id} className="h-7 px-2 text-[10px] text-stone-600">{confirmingReferenceId === reference.id ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <ShieldCheck className="mr-1 h-3 w-3" />}I checked the original</Button>

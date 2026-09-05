@@ -31,6 +31,16 @@ export function fakeAI(overrides: Partial<AIService> = {}): AIService {
     }),
     generateScaffold: async () => ({ scaffold: 'Claim: __', raw: 'Claim: __' }),
     generateSuggestion: async () => ({ suggestion: 'a short phrase', raw: 'a short phrase' }),
+    answerFromEvidence: async () => null,
+    evaluateInterventionAnswer: async () => ({ satisfied: false, rationale: 'More detail is needed.', followUpQuestion: 'What evidence supports it?' }),
+    draftFromResearchDialogue: async () => ({ draft: 'A working research draft.', reflection: 'Does this still represent your view?', sourceNeeds: [] }),
+    planResearchKickoff: async () => ({
+      title: 'Research project', description: 'A focused inquiry.',
+      outline: [{ heading: 'Context', purpose: 'Define the problem.' }, { heading: 'Evidence', purpose: 'Assess available evidence.' }, { heading: 'Implications', purpose: 'Explain what follows.' }],
+      questions: [{ id: 'q1', question: 'What do you think is happening?', why: 'Shows your current model.' }, { id: 'q2', question: 'What evidence would support it?', why: 'Tests evidence expectations.' }, { id: 'q3', question: 'What competing view matters?', why: 'Surfaces alternatives.' }],
+    }),
+    draftResearchKickoff: async () => ({ sections: [{ heading: 'Context', content: 'Working context.' }, { heading: 'Evidence', content: 'Working evidence.' }], reflection: 'Does this match your view?', sourceNeeds: [] }),
+    restructureFromIntervention: async ({ passage }) => passage,
     ...overrides,
   }
 }

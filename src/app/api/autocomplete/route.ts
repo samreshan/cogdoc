@@ -16,6 +16,7 @@ import { getAIService } from '@/lib/ai-service'
 import { sanitizeSuggestion } from '@/lib/autocomplete'
 import { applyGenerationGuard } from '@/lib/engine-guard'
 import type { FrictionMode } from '@/lib/friction'
+import { appendAuditEvent } from '@/lib/workspace-server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -47,18 +48,26 @@ export async function POST(req: NextRequest) {
     : 'What assumption, evidence, or implication should you examine next?'
   const guarded = applyGenerationGuard(cue, mode)
 
-  const intervention = await db.intervention.create({
-    data: {
-      userId,
-      projectId,
-      paragraphId: paragraphId ?? null,
-      promptTemplateTag: null,
-      engineType: 'socratic',
-      promptText: draft.slice(-200),
-      responseText: guarded.text,
-      status: 'active',
-      userAction: 'ignored', // updated on the commit-interaction PATCH
-    },
+  const intervention = await db.$transaction(async (tx) => {
+    const created = await tx.intervention.create({
+      data: {
+        userId,
+        projectId,
+        paragraphId: paragraphId ?? null,
+        promptTemplateTag: null,
+        engineType: 'socratic',
+        promptText: draft.slice(-200),
+        responseText: guarded.text,
+        status: 'active',
+        userAction: 'ignored', // updated on the commit-interaction PATCH
+      },
+    })
+    await appendAuditEvent(tx, {
+      projectId, userId, type: 'intervention_created', actor: 'system',
+      modelVersion: process.env.AI_MODEL ?? process.env.GEMINI_MODEL ?? null, promptVersion: 'devils-autocomplete-v2',
+      payload: { summary: 'Cogdoc raised a writing question', interventionId: created.id, engineType: 'socratic', paragraphId: paragraphId ?? null },
+    })
+    return created
   })
 
   return NextResponse.json({ suggestion: '', cue: guarded.text, insertable: false, intervention })

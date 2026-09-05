@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
+import { appendAuditEvent } from '@/lib/workspace-server'
 
 export async function GET(req = new NextRequest('http://localhost/api/projects')) {
   const userId = await requireUserId(req)
@@ -27,14 +28,24 @@ export async function POST(req: NextRequest) {
   const title = (body.title ?? '').trim() || 'Untitled Project'
   const description = (body.description ?? '').trim() || null
 
-  const project = await db.project.create({
-    data: {
+  const project = await db.$transaction(async (tx) => {
+    const created = await tx.project.create({
+      data: {
+        userId,
+        title,
+        description,
+        document: { create: { content: '' } },
+      },
+      include: { document: true },
+    })
+    await appendAuditEvent(tx, {
+      projectId: created.id,
       userId,
-      title,
-      description,
-      document: { create: { content: '' } },
-    },
-    include: { document: true },
+      type: 'workspace_created',
+      actor: 'student',
+      payload: { summary: `Created research project: ${title}`, compatibilityRoute: true },
+    })
+    return created
   })
   return NextResponse.json({ project }, { status: 201 })
 }

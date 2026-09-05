@@ -15,6 +15,8 @@ import { getAIService } from '@/lib/ai-service'
 import { retrieveTopK } from '@/lib/retrieval'
 import { isVectorRetrievalEnabled, retrieveVectorChunks } from '@/lib/ai-gateway'
 import { applyGenerationGuard } from '@/lib/engine-guard'
+import { plainResearchQuestion } from '@/lib/intervention-language'
+import { appendAuditEvent } from '@/lib/workspace-server'
 import type { FrictionMode } from '@/lib/friction'
 
 export const runtime = 'nodejs'
@@ -58,26 +60,34 @@ export async function POST(req: NextRequest) {
   const guarded = applyGenerationGuard(verdict.explanation, mode)
 
   // Step 3: Persist intervention + evidence junction
-  const intervention = await db.intervention.create({
-    data: {
-      userId,
-      projectId,
-      paragraphId: paragraphId ?? null,
-      promptTemplateTag: 'Lens',
-      engineType: 'citation',
-      promptText: claim,
-      responseText: guarded.text,
-      verdict: verdict.verdict,
-      status: 'active',
-      evidences: {
-        create: retrieved.map((r) => ({
-          chunkId: r.chunkId,
-          similarityScore: r.similarityScore,
-          citedExcerpt: r.content.slice(0, 500),
-        })),
+  const intervention = await db.$transaction(async (tx) => {
+    const created = await tx.intervention.create({
+      data: {
+        userId,
+        projectId,
+        paragraphId: paragraphId ?? null,
+        promptTemplateTag: 'Lens',
+        engineType: 'citation',
+        promptText: claim,
+        responseText: plainResearchQuestion(guarded.text, 'citation', claim),
+        verdict: verdict.verdict,
+        status: 'active',
+        evidences: {
+          create: retrieved.map((r) => ({
+            chunkId: r.chunkId,
+            similarityScore: r.similarityScore,
+            citedExcerpt: r.content.slice(0, 500),
+          })),
+        },
       },
-    },
-    include: { evidences: { include: { chunk: { select: { pageApprox: true, pdf: { select: { filename: true } } } } } } },
+      include: { evidences: { include: { chunk: { select: { pageApprox: true, pdf: { select: { filename: true } } } } } } },
+    })
+    await appendAuditEvent(tx, {
+      projectId, userId, type: 'intervention_created', actor: 'system',
+      modelVersion: process.env.AI_MODEL ?? process.env.GEMINI_MODEL ?? null, promptVersion: 'Lens',
+      payload: { summary: 'Cogdoc raised a citation question', interventionId: created.id, engineType: 'citation', verdict: verdict.verdict, evidenceCount: retrieved.length },
+    })
+    return created
   })
 
   // Step 4: Return payload for margin UI

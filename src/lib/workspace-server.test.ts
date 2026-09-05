@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { auditEventDigest, verifyAuditChain } from '@/lib/workspace-server'
+import { describe, expect, it, vi } from 'vitest'
+import { appendAuditEvent, auditEventDigest, verifyAuditChain } from '@/lib/workspace-server'
 
 function event(previousHash: string | null, createdAt: Date, payloadJson = '{}') {
   const value = {
@@ -18,6 +18,21 @@ function event(previousHash: string | null, createdAt: Date, payloadJson = '{}')
 }
 
 describe('audit event integrity', () => {
+  it('takes a project-scoped transaction lock before extending the chain', async () => {
+    const executeRaw = vi.fn(async () => 1)
+    const findFirst = vi.fn(async () => ({ eventHash: 'previous-hash' }))
+    const create = vi.fn(async ({ data }) => ({ id: 'audit-1', ...data }))
+
+    await appendAuditEvent({ $executeRaw: executeRaw, auditEvent: { findFirst, create } } as never, {
+      projectId: 'workspace-1', userId: 'student-1', type: 'citation_inserted',
+      payload: { summary: 'Inserted a citation' },
+    })
+
+    expect(executeRaw).toHaveBeenCalledOnce()
+    expect(executeRaw.mock.invocationCallOrder[0]).toBeLessThan(findFirst.mock.invocationCallOrder[0])
+    expect(create.mock.calls[0][0].data.previousHash).toBe('previous-hash')
+  })
+
   it('accepts a complete hash chain and rejects tampered payloads', () => {
     const first = event(null, new Date('2026-08-22T00:00:00.000Z'))
     const second = event(first.eventHash, new Date('2026-08-22T00:00:01.000Z'), '{"resolved":true}')

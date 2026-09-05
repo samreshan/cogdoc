@@ -1,7 +1,7 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-node_modules
+# =============================================================================
+# Dependencies & Package Managers
+# =============================================================================
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -9,58 +9,151 @@ node_modules
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+.pnpm-store/
 
-# testing
-/coverage
-
-# next.js
+# =============================================================================
+# Next.js & Web Build Outputs
+# =============================================================================
 /.next/
 /out/
-
-# production
-/build
-/.data/
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-!.env.example
-
-# vercel
-.vercel
-
-
-# typescript
+/build/
+/dist/
 *.tsbuildinfo
 next-env.d.ts
-local-*
-.claude
-.z-ai-config
-*.log
-dev.log
-dev.out.log
-test
-prompt
+.vercel/
+.turbo/
 
-server.log
-# Skills directory
-/skills/
+# =============================================================================
+# Environment Variables & Secrets
+# =============================================================================
+.env
+.env*
+!.env.example
+*.pem
+*.key
+*.crt
+*.cert
+*.pfx
+*.p12
 
-# Python / FastAPI
+# =============================================================================
+# Python & FastAPI
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
 fastapi/.venv/
 fastapi/__pycache__/
-**/__pycache__/
-*.pyc
 fastapi/.pytest_cache/
 fastapi/htmlcov/
 fastapi/.coverage
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+*.egg-info/
+.eggs/
+
+# =============================================================================
+# Testing & Coverage
+# =============================================================================
+/coverage/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.nyc_output/
+.vitest/
+
+# =============================================================================
+# Databases & Local Runtime Storage
+# =============================================================================
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+db/*.db
+db/*.db-journal
+db/*.db-shm
+db/*.db-wal
+/.data/
+.data/
+
+# =============================================================================
+# Logs & Process Identifiers
+# =============================================================================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+dev.log
+dev.out.log
+server.log
+*.pid
+.zscripts/*.pid
+
+# =============================================================================
+# Temporary, Cache & Scratch Files
+# =============================================================================
+.tmp/
+tmp/
+temp/
+*.tmp
+*.temp
+tool-results/
+*.inspect.ndjson
+~$*
+
+# =============================================================================
+# Operating System Files
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# =============================================================================
+# IDEs, Editors & Agent Tooling
+# =============================================================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.swp
+*.swo
+*~
+.claude/
+.z-ai-config/
+.z-ai-config
 .gstack/
+.zcode/
+.gemini/
+/skills/
+local-*
+prompt
+test
+
+
+# Docs
+docs/*
+
+# Demo

@@ -133,8 +133,8 @@ and defects.
 1. The unauthenticated entry explains the research workflow and product boundary;
    visible labels, keyboard focus, validation errors, loading state, setup error,
    and the skip link remain usable at narrow and desktop viewports.
-2. A first-time account receives onboarding; completing or skipping it persists,
-   and Tutorial reopens it from every authenticated view.
+2. A first-time account receives the focused workspace overview; completing or
+   skipping it persists, and Guide reopens it from every authenticated view.
 3. Create Assignment and Research workspaces, choose APA and Harvard, import a
    DOCX, and recover an interrupted draft.
 4. Tab to an intervention underline. Its accessible label announces the count;

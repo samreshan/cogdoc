@@ -36,6 +36,9 @@ export function buildReviewItemDecorations(doc: PMNode, quotes: string[]): Decor
     if (!range) return []
     return [Decoration.inline(range.from, range.to, {
       class: 'cogdoc-review-mark',
+      role: 'button',
+      tabindex: '0',
+      'aria-label': 'Open the review action for this passage',
       'data-review-quote': quote.slice(0, 300),
       style: reviewItemUnderlineStyle,
     })]

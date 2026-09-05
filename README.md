@@ -1,290 +1,280 @@
 # Cogdoc
 
-**A student-first assignment and research workspace that verifies citations, evidence, reasoning, and the exact reviewed snapshot.**
+Cogdoc is a research-first writing workspace that helps people explore evidence,
+test their reasoning, and draft without handing their understanding over to AI.
+It combines a notebook editor, source management, grounded research tools, and
+four intervention engines that surface vague claims, missing evidence, weak
+reasoning, and structural gaps.
 
-Cogdoc accepts a DOCX or a blank draft, builds a calm action queue, and records how critical academic issues were handled. It can issue a cryptographically signed **Cogdoc Process Verified** record for an immutable snapshot. That record never claims AI-free or human authorship, correctness, originality, or institutional approval. Cogdoc asks questions and suggests evidence; it never inserts submission-ready prose.
+This project was built as a BSc (Hons) IT Final Year Project at Asia Pacific
+University in 2026.
 
-Built as a Final Year Project for BSc (Hons) IT at Asia Pacific University, 2026.
+## What Cogdoc does
 
----
+- Starts a research workspace from a topic or an existing document.
+- Uses a three-pane Research IDE with a project navigator, tabbed work area,
+  and contextual evidence inspector.
+- Imports DOCX files, PDFs, pasted text, code archives, and research notes.
+- Searches scholarly metadata through OpenAlex, Crossref, and Semantic Scholar.
+- Maps questions and claims to indexed source passages.
+- Inserts verified citation nodes and derives bibliographies from citations
+  actually used in the document.
+- Records research decisions and intervention outcomes in an append-only,
+  tamper-evident history.
+- Exports Markdown, plain text, HTML, DOCX, and printable PDF output.
 
-## Why Cogdoc?
+The four intervention engines are:
 
-Generative AI tools (ChatGPT, Gemini, Grammarly) make writing faster — but they also enable **cognitive offloading**: students copy-paste AI-generated text, trust unverified citations, and stop engaging in the higher-order thinking that academic writing is supposed to cultivate. The IR survey of 33 respondents confirmed:
+| Engine | Purpose |
+| --- | --- |
+| Interceptor | Challenges vague, absolute, or delegative writing. |
+| Socratic Spacer | Prompts deeper thinking after a pause or question. |
+| Citation Sentinel | Checks factual claims against indexed evidence. |
+| Scaffold | Offers an empty claim/evidence/limitation/implication structure. |
 
-- **69.6%** copy-paste AI text into drafts without modification
-- **72.2%** spend less time thinking about structure when using AI
-- Only **26.3%** strongly verify AI-generated citations against original sources
+Cogdoc selects one relevant intervention for a phrase, lets the researcher
+answer it inline, and keeps accepted reasoning as structured notes. Generated
+material remains editable and is never presented as proof of authorship,
+correctness, originality, or institutional approval.
 
-Cogdoc's answer is **productive friction**: AI that refuses to write for you, but instead interrupts, questions, challenges, and verifies — preserving your cognitive responsibility.
+## Technology
 
----
+- Next.js 16, React 19, and TypeScript
+- Tailwind CSS 4 and shadcn/ui primitives
+- Tiptap/ProseMirror editor
+- Prisma with PostgreSQL or Supabase
+- Optional FastAPI retrieval service with pgvector
+- Supabase authentication and private object storage for shared deployments
+- Vitest, Testing Library, and ESLint
 
-## The four AI engines
+## Prerequisites
 
-| Engine | Color | When it fires | What it does |
-|---|---|---|---|
-| **Interceptor** | 🟡 Amber | Vague language ("basically", "stuff") or absolute claims ("always", "never") | Reframes the sentence as a Socratic question that forces specificity |
-| **Socratic Spacer** | 🌹 Rose | Idle pause (2s) or question sentences | Provokes deeper thinking with a challenging question |
-| **Citation Sentinel** | 🟢 Emerald | Factual claims ("research shows", "%", "study") | Verifies the claim against your uploaded PDF library using RAG retrieval |
-| **Scaffold** | 🔵 Sky | Long sentences (25+ words) or paragraph completion | Offers a Claim/Evidence/Limitation/Implication outline — empty, you fill it in |
+For local development you need:
 
-Each engine offers **actionable next-steps** (not generic Engage/Dismiss):
-- **Interceptor**: Rewrite this · Find evidence · Answer this
-- **Socratic**: Answer this · Show scaffold · Find sources
-- **Citation Sentinel**: Find sources · Rewrite claim · View evidence
-- **Scaffold**: Apply scaffold · Answer this
+- Node.js 22 or newer and npm
+- Docker with Docker Compose, or a PostgreSQL 16+ server
+- An optional Gemini, Groq, Ollama, or OpenAI-compatible model endpoint for
+  model-backed features
 
----
+## Local setup
 
-## Quick start (Docker — recommended)
-
-```bash
-docker build -t cogdoc:latest .
-docker run -it -p 3000:3000 -v cogdoc_data:/data cogdoc:latest
-```
-
-The first run launches an interactive wizard that configures:
-1. **AI provider** — Google Gemini / Groq / OpenAI-compatible / skip
-2. **Database** — Supabase Postgres / external Postgres
-3. **Supabase auth** — optional (single-user mode by default)
-4. **App settings** — token budget, idle threshold
-
-Subsequent runs skip the wizard (config persisted in the `cogdoc_data` volume):
-```bash
-docker run -d -p 3000:3000 -v cogdoc_data:/data cogdoc:latest
-```
-
-Open **http://localhost:3000**.
-
-### Multi-arch build (AMD64 + ARM64)
-
-```bash
-docker buildx create --use --name multiarch --driver docker-container
-docker buildx build --platform linux/amd64,linux/arm64 -t yourregistry/cogdoc:latest --push .
-```
-
-Runs on Apple Silicon, AWS Graviton, Raspberry Pi 4/5, and standard x86_64 servers.
-
----
-
-## Quick start (local dev)
+The development Compose file provides PostgreSQL with pgvector. The Next.js app
+runs locally so it can hot-reload.
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d postgres
 cp .env.example .env.local
-bun install
-bun run db:push        # create the PostgreSQL workspace schema
-bun run seed           # seed default user + 4 prompt templates
-bun run dev            # start dev server on :3000
+npm ci
+npm run db:generate
+npm run db:push
+npm run seed
+npm run dev
 ```
 
-Open http://localhost:3000.
+Open [http://localhost:3000](http://localhost:3000).
 
----
+The default `DATABASE_URL` in `.env.example` matches the development Postgres
+container. Edit `.env.local` before starting the app if you use another
+database or want to enable an AI provider. Never commit `.env.local`.
 
-## Features
-
-### Writing
-- **Notebook-style editor** with Newsreader serif font, 18px body, 1.8 line-height
-- **Auto-save** (debounced 1.5s) with live save-state indicator
-- **Keyboard shortcuts**: Cmd/Ctrl+B (bold), Cmd/Ctrl+I (italic), Esc (clear selection)
-- **Focus mode** — dims all paragraphs except the one you're editing
-- **Word count** in the toolbar
-
-### AI engines (all fire automatically)
-- **Sentence-completion trigger** — typing `.`, `?`, `!` analyzes the sentence and fires all matching engines (staggered 500ms to avoid rate-limiting)
-- **Idle trigger** — 2-second pause fires Socratic Spacer
-- **Paragraph-completion trigger** — Enter on a new paragraph fires Scaffold
-- **Multi-engine per sentence** — one sentence can trigger Interceptor + Citation + Socratic simultaneously
-- **Multi-colored underlines** — each engine adds its own colored wavy underline, stacked via CSS `text-decoration`
-
-### Interventions
-- **Underlined sentences** — wavy underline colored by engine, appears 2.5s after the engine fires
-- **Accessible intervention popover** — hover, click, or keyboard-focus an underline to see stacked, engine-specific actions
-- **Fuzzy matching** — underlines survive minor edits to the sentence
-- **Full audit log** — every intervention is persisted with prompt, response, verdict, cited evidence, user action, timestamps
-
-### Research library
-- **PDF upload** (drag-and-drop) — parsed via `pdf-parse`, chunked into ~500-token passages
-- **Paste text** — for web articles, e-book excerpts, or notes
-- **Scholarly discovery** — OpenAlex first, then Crossref and Semantic Scholar, with optional grounded-web fallback
-- **Open-access resolution** — OpenAlex and Unpaywall links are labeled separately from indexed metadata
-- **CSL citation suggestions** — APA 7 or Harvard Cite Them Right references and in-text citations from the same deterministic processor
-- **Reference-list convenience** — copy one saved citation or an alphabetized list, with an explicit reminder to remove uncited works and verify metadata
-- **Citation provenance** — every Citation Sentinel verdict links to the cited chunks with similarity score and page number
-
-### Export
-- **Markdown** (.md) — for importing into Notion, Obsidian, GitHub
-- **Plain text** (.txt) — for email or simple editors
-- **HTML** (.html) — styled standalone page
-- **Normalized academic Word** (.docx) — one-inch margins, Times New Roman 12 pt body, 1.5 spacing, heading hierarchy, semantic tables/quotes/code, and page numbers
-- **Print / PDF** — via browser print dialog
-
-Word export is a consistent academic baseline, not an institution-specific
-submission template. Authors should apply any faculty cover page, margin,
-pagination, or reference-layout requirements before submission.
-
-### Analytics
-- Total interventions, engagement rate, breakdowns by engine / action / verdict
-- Visible in the Stats modal (top bar)
-
-### History
-- Full intervention history with filters
-- Visible in the History modal (top bar)
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────┐
-│  Browser                                         │
-│  ├─ Notebook Editor (contenteditable)            │
-│  ├─ Underlined Sentences (hover to see popover)  │
-│  └─ Pixelated Pets (animate when engines fire)   │
-└───────────────────────┬─────────────────────────┘
-                        │ sentence completed
-┌───────────────────────▼─────────────────────────┐
-│  Next.js App (single deployable)                 │
-│  ├─ Content Analyzer → routes to engines         │
-│  ├─ 4 AI Engines:                                │
-│  │   Diogenes  Socrates  Galileo  Aristotle      │
-│  ├─ Find Sources (web search + add to library)   │
-│  └─ AI Service (provider abstraction)            │
-└──────┬────────────────┬──────────────────────────┘
-       │                │
-       ▼                ▼
-┌──────────┐    ┌──────────────┐
-│ Database │    │ LLM API      │
-│ SQLite/  │    │ Gemini/Groq/ │
-│ Postgres │    │ OpenAI       │
-└──────────┘    └──────────────┘
-```
-
-**See also**: `download/cogdoc/diagram_pngs/02_architecture_simple.png` for the rendered Mermaid diagram, and `08_writing_loop.png` for the user-facing writing loop.
-
-**Stack**: Next.js 16 · TypeScript 5 · Tailwind CSS 4 · shadcn/ui · Prisma ORM · Zustand · Framer Motion · z-ai-web-dev-sdk · pdf-parse
-
-**Data model**: Workspace-compatible Project records plus immutable document versions, references, citations, claims, evidence links, review runs/items/responses, append-only audit events, code snapshots, verification reports, certificates, and revocable shares — see `prisma/schema.prisma`.
-
-**AI provider abstraction**: All engines call `AIService` (interface) → `ZAIAdapter` (concrete). Swapping to OpenAI or a local LLM is one new adapter class. Prompt templates are versioned in DB — edits don't require redeploy.
-
----
-
-## Configuration
-
-All env vars (set via Docker wizard or directly):
-
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | — | Required PostgreSQL/Supabase URL |
-| `COGDOC_CERTIFICATE_PRIVATE_KEY` | generated by Docker | Ed25519 PKCS#8 PEM or base64 PEM |
-| `COGDOC_STORAGE_DIR` | `.data/assets` | Private local-development asset store |
-| `AI_PROVIDER` | `gemini` | `gemini` / `ollama` / `groq` / `custom` |
-| `AI_BASE_URL` | — | OpenAI-compatible base URL; Ollama defaults to `http://127.0.0.1:11434/v1` outside Docker |
-| `AI_API_KEY` | — | API key |
-| `AI_MODEL` | `gemini-3.5-flash-lite` | Model name |
-| `OPENALEX_API_KEY` | — | Optional free key for a larger scholarly-search allowance |
-| `OPENALEX_MAILTO` | — | Contact address for courteous OpenAlex requests |
-| `CROSSREF_MAILTO` | — | Contact address for Crossref metadata requests |
-| `SEMANTIC_SCHOLAR_API_KEY` | — | Optional free key for a dedicated Semantic Scholar request allowance |
-| `UNPAYWALL_EMAIL` | — | Contact email required for legal open-access DOI resolution |
-| `IDLE_THRESHOLD` | `2` | Seconds of idle before Socratic fires |
-| `DAILY_TOKEN_BUDGET` | `100000` | Per-user daily LLM token budget |
-| `NEXT_PUBLIC_SUPABASE_URL` | — | Supabase project URL for shared deployments |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | — | Browser-safe Supabase publishable key |
-| `SUPABASE_SERVICE_ROLE_KEY` | — | Server-only private-storage credential; never expose to browsers |
-| `SUPABASE_JWT_SECRET` | — | Optional server-side JWT verification |
-| `COGDOC_SINGLE_USER_MODE` | — | Explicit private one-user production mode; never use for a shared deployment |
-
-See `.env.example` for the full template.
-
-Shared production deployments must configure Supabase auth and apply the RLS
-and private-storage migrations. See [Production authentication, RLS, and
-private storage](docs/deployment/security.md) for deployment order,
-verification, service-role boundaries, and rollback guidance.
-
-For local Postgres, `docker-compose.dev.yml` enables pgvector automatically on
-new database volumes. If the volume predates that initializer, run this once
-before `npm run db:push`:
+If an older Docker volume does not contain pgvector, enable it once:
 
 ```bash
 docker compose -f docker-compose.dev.yml exec -T postgres \
   psql -U cogdoc -d cogdoc -c 'CREATE EXTENSION IF NOT EXISTS vector;'
 ```
 
-### Optional local inference
+### Optional vector retrieval service
 
-Gemini remains the default test provider. To run the intervention engines
-locally through Ollama instead, start Ollama and configure the existing generic
-AI variables:
+Start the FastAPI service alongside PostgreSQL:
 
 ```bash
-ollama pull qwen3:8b
-ollama serve
+docker compose -f docker-compose.dev.yml --profile full up -d postgres rag
 ```
+
+Then set these values in `.env.local` and restart the Next.js server:
+
+```env
+FASTAPI_URL="http://localhost:8000"
+USE_VECTOR_RETRIEVAL="true"
+```
+
+Without FastAPI, Cogdoc keeps working with its PostgreSQL-backed exact and
+keyword retrieval path. See `fastapi/requirements.txt` and the development
+Compose file for embedding-provider options.
+
+### AI provider examples
+
+Gemini through its OpenAI-compatible endpoint:
+
+```env
+AI_PROVIDER="gemini"
+AI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai"
+AI_API_KEY="your-key"
+AI_MODEL="gemini-3.5-flash-lite"
+```
+
+Local Ollama:
 
 ```env
 AI_PROVIDER="ollama"
 AI_BASE_URL="http://127.0.0.1:11434/v1"
-AI_MODEL="qwen3:8b"
 AI_API_KEY=""
+AI_MODEL="qwen3:8b"
 ```
 
-When Cogdoc itself runs inside Docker and Ollama runs on the host, use
-`http://host.docker.internal:11434/v1` as `AI_BASE_URL`. Model weights are not
-downloaded automatically because hardware capacity and deployment policy vary.
-The editor's **Assistant** control performs a bounded, non-generating readiness
-check and reports whether the configured model is reachable.
+## Docker deployment
 
----
+Build the production image:
 
-## Documentation
+```bash
+docker build -t cogdoc:latest .
+```
 
-- **[Assignment/research workspace implementation](./docs/implementation/assignment-research-workspace.md)** — shipped flow, certificate invariants, deployment, and operational boundaries
-- **[Production research assistance and UX ADR](./docs/ADRs/0010-production-research-assistance-and-ux.md)** — intervention navigation, scholarly search, citation suggestions, onboarding, model strategy, deviations, and SDG 4 boundary
-- **[Production-readiness objective audit](./docs/implementation/production-readiness-audit.md)** — requirement-by-requirement implementation evidence and the rendered, deployment, and evaluation gates that remain
-- **[Release readiness and acceptance](./docs/deployment/release-readiness.md)** — automated evidence, environment setup, provider failover, manual accessibility, operational gates, and honest release posture
-- **[USER_GUIDE.md](./USER_GUIDE.md)** — for writers and examiners (non-technical)
-- **[DEVELOPER.md](./DEVELOPER.md)** — for developers (setup, schema, how to add an engine, how to swap the LLM)
-- **[README-DOCKER.md](./README-DOCKER.md)** — Docker deployment guide
-- **[download/cogdoc/Cogdoc_System_Architecture_Design.pdf](./download/cogdoc/)** — full architecture design document (36 pages, 7 diagrams, 7 ADRs, 3NF schema walkthrough)
+For an interactive first run, supply a reachable PostgreSQL database when the
+wizard asks for configuration:
 
----
+```bash
+docker run -it -p 3000:3000 -v cogdoc_data:/data cogdoc:latest
+```
+
+Configuration is persisted in the `cogdoc_data` volume. Subsequent runs can be
+detached:
+
+```bash
+docker run -d -p 3000:3000 -v cogdoc_data:/data cogdoc:latest
+```
+
+See [README-DOCKER.md](./README-DOCKER.md) for environment-based deployment,
+multi-architecture builds, health checks, and troubleshooting.
+
+## Configuration
+
+Copy `.env.example` and configure only the services you use. Important values
+include:
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Required PostgreSQL or Supabase connection URL. |
+| `AI_PROVIDER` | `gemini`, `ollama`, `groq`, or `custom`. |
+| `AI_BASE_URL` | Base URL for the selected model endpoint. |
+| `AI_API_KEY` | Provider API key; may be empty for a local endpoint. |
+| `AI_MODEL` | Model identifier sent to the provider. |
+| `FASTAPI_URL` | Optional retrieval-service URL. |
+| `USE_VECTOR_RETRIEVAL` | Enables the FastAPI vector path when `true`. |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL for shared deployments. |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser-safe Supabase key. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only private-storage credential. |
+| `COGDOC_STORAGE_DIR` | Local private-file fallback directory. |
+| `COGDOC_CERTIFICATE_PRIVATE_KEY` | Ed25519 key used for product attestations. |
+| `COGDOC_SINGLE_USER_MODE` | Explicit opt-in for a private, one-user production install. |
+
+Shared or public deployments must configure authentication, Row Level Security,
+and private storage. Follow [docs/deployment/security.md](./docs/deployment/security.md)
+before exposing the application.
+
+## Commands
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the development server on port 3000. |
+| `npm run build` | Create the standalone production build. |
+| `npm start` | Run the standalone production server. |
+| `npm run lint` | Run ESLint. |
+| `npm test` | Run the Vitest suite once. |
+| `npm run test:coverage` | Run tests with coverage thresholds. |
+| `npm run gate` | Run the repository quality gate. |
+| `npm run db:generate` | Generate the Prisma client. |
+| `npm run db:push` | Apply the Prisma schema to the configured database. |
+| `npm run db:migrate` | Create and apply a development migration. |
+| `npm run seed` | Seed the default user and intervention templates. |
+| `npm run research:worker` | Process queued research jobs. |
+| `npm run demo:research` | Create and verify the persisted demo workspace. |
+| `npm run demo:research:embed` | Seed the demo and ingest it into FastAPI. |
+| `npm run security:verify` | Verify configured security policies. |
+
+## Architecture
+
+```text
+Browser
+  └─ Next.js application and API routes
+       ├─ Tiptap research editor and intervention UI
+       ├─ AI provider abstraction
+       ├─ Prisma ── PostgreSQL / Supabase
+       ├─ Supabase Auth and private storage (optional locally)
+       └─ FastAPI ── embeddings and pgvector retrieval (optional)
+```
+
+Next.js is the authenticated backend-for-frontend and owns workspace state,
+authorization, audit records, source metadata, and model requests. PostgreSQL is
+the canonical database. FastAPI is an optional retrieval boundary; its absence
+does not prevent the core editor and keyword retrieval from running.
 
 ## Project structure
 
-```
+```text
 src/
-├── app/
-│   ├── api/                    # API routes (projects, engines, pdfs, etc.)
-│   ├── globals.css
-│   ├── layout.tsx              # Root layout (Newsreader + Geist fonts)
-│   └── page.tsx                # Dashboard / Editor view switch
-├── components/
-│   ├── cogdoc/
-│   │   ├── dashboard.tsx       # Project list + create
-│   │   ├── editor-shell.tsx    # Top bar + modals (Library/Stats/History/Export)
-│   │   ├── editor.tsx          # contenteditable + engine firing + highlighting
-│   │   ├── sentence-popover.tsx # Hover popover with actionable insights
-│   │   ├── research-library.tsx # PDF upload + paste-text
-│   │   └── analytics-panel.tsx # Stats charts
-│   └── ui/                     # shadcn/ui components
-├── lib/
-│   ├── ai-service.ts           # AIService interface + ZAIAdapter
-│   ├── content-analyzer.ts     # Sentence classification → engine routing
-│   ├── retrieval.ts            # Keyword-overlap RAG retrieval
-│   ├── sentence-highlight.ts   # <mark> wrapping with multi-color underlines
-│   ├── store.ts                # Zustand global state
-│   ├── types.ts                # Shared TypeScript types
-│   └── db.ts                   # Prisma client
-└── prisma/
-    ├── schema.prisma           # SQLite schema
-    └── schema.postgres.prisma  # Postgres schema (Supabase-ready)
+├─ app/                    Next.js pages and API routes
+├─ components/cogdoc/      Product UI and Research IDE
+├─ components/ui/          Shared UI primitives
+├─ hooks/                  React hooks
+├─ lib/                    Domain, editor, AI, auth, retrieval, and export logic
+└─ test/                   Shared Vitest setup
+prisma/                    Canonical schema and migrations
+fastapi/                   Optional retrieval and embedding service
+scripts/                   Seed, worker, migration, and verification tools
+docs/                      ADRs, implementation notes, deployment guidance
+public/                    Static browser assets
 ```
 
----
+## Tests and validation
+
+Run the main checks before submitting changes:
+
+```bash
+npm run lint
+npm test
+npm run build
+```
+
+The full gate also runs coverage and the FastAPI test suite when its Python
+environment is available:
+
+```bash
+npm run gate
+```
+
+## Demo workspace
+
+Create a repeatable research demonstration containing private sample PDFs,
+indexed passages, notebook material, citations, a grounded comparison, a
+ranked action queue, and examples from all four intervention engines:
+
+```bash
+npm run demo:research
+```
+
+The command replaces only the workspace carrying Cogdoc's explicit demo marker.
+For a walkthrough and verification details, see
+[docs/implementation/research-demo.md](./docs/implementation/research-demo.md).
+
+## Documentation
+
+- [USER_GUIDE.md](./USER_GUIDE.md) — product guide for writers and examiners
+- [DEVELOPER.md](./DEVELOPER.md) — implementation and extension guide
+- [README-DOCKER.md](./README-DOCKER.md) — Docker deployment guide
+- [Production security](./docs/deployment/security.md) — auth, RLS, and storage
+- [Release readiness](./docs/deployment/release-readiness.md) — deployment and acceptance gates
+- [Production-readiness audit](./docs/implementation/production-readiness-audit.md) — requirement evidence
+- [Research demo](./docs/implementation/research-demo.md) — reproducible demo instructions
+- [Local full-stack walkthrough](./walkthrough.md) — Docker env, startup, and feature tour
+
+## Uploading this source package
+
+The distributable ZIP intentionally excludes installed dependencies, build and
+test output, caches, logs, local databases, Git metadata, and secret environment
+files. After extracting it on another machine, restore dependencies with
+`npm ci` and create `.env.local` from `.env.example`.
 
 ## License
 

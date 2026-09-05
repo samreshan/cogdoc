@@ -144,6 +144,10 @@ export function stripHtml(html: string): string {
 
 function nodeText(node: ProseMirrorNode): string {
   if (node.type === 'text') return node.text ?? ''
+  if (node.type === 'structuredCitation') {
+    const locator = String(node.attrs?.locator ?? '').trim()
+    return `(${String(node.attrs?.author ?? 'Unknown')}, ${String(node.attrs?.year ?? 'n.d.')}${locator ? `, ${locator}` : ''})`
+  }
   const children = (node.content ?? []).map(nodeText)
   if (node.type === 'hardBreak') return '\n'
   if (node.type === 'listItem') return `${children.join('')}\n`
@@ -191,6 +195,10 @@ function renderMarks(text: string, marks: ProseMirrorNode['marks']): string {
 
 function nodeHtml(node: ProseMirrorNode): string {
   if (node.type === 'text') return renderMarks(node.text ?? '', node.marks)
+  if (node.type === 'structuredCitation') {
+    const locator = String(node.attrs?.locator ?? '').trim()
+    return `<span data-cogdoc-citation data-reference-id="${escapeHtml(String(node.attrs?.referenceId ?? ''))}">(${escapeHtml(String(node.attrs?.author ?? 'Unknown'))}, ${escapeHtml(String(node.attrs?.year ?? 'n.d.'))}${locator ? `, ${escapeHtml(locator)}` : ''})</span>`
+  }
   const children = (node.content ?? []).map(nodeHtml).join('')
   switch (node.type) {
     case 'doc': return children

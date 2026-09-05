@@ -15,7 +15,7 @@
 import { isGenerationAllowed, type FrictionMode } from '@/lib/friction'
 
 /** The Spark Gap question an over-generating response is replaced with. */
-export const SPARK_GAP_FALLBACK = 'What must be true for this to hold?'
+export const SPARK_GAP_FALLBACK = 'What do you mean here?'
 
 export interface GuardResult {
   /** The text to persist (original if allowed, fallback if rejected). */

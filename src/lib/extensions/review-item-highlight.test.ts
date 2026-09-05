@@ -24,6 +24,7 @@ describe('ReviewItemHighlight', () => {
 
     expect(decorations).toHaveLength(1)
     expect(decorations[0]).toMatchObject({ from: 18, to: 49 })
+    expect(decorations[0].type.attrs).toMatchObject({ role: 'button', tabindex: '0' })
   })
 
   it('ignores missing and very short anchors', () => {

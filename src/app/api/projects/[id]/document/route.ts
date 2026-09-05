@@ -10,6 +10,7 @@ import { requireUserId } from '@/lib/auth-supabase'
 import { canonicalDocumentString } from '@/lib/document-content'
 import { sha256 } from '@/lib/crypto'
 import { appendAuditEvent } from '@/lib/workspace-server'
+import { enqueueClericalResearchJobs } from '@/lib/research-jobs'
 
 export async function PUT(
   req: NextRequest,
@@ -58,6 +59,11 @@ export async function PUT(
     })
     return saved
   })
+
+  // Autosave stays low-latency; clerical research work runs on the leased
+  // PostgreSQL queue and may safely retry without changing the saved draft.
+  void enqueueClericalResearchJobs(id, 'document_save', `${document.id}:${document.revision}`)
+    .catch((error) => console.warn('Research jobs could not be enqueued:', (error as Error).message))
 
   return NextResponse.json({ ok: true, lastSaved: document.lastSaved, revision: document.revision, contentHash })
 }

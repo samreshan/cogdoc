@@ -78,6 +78,16 @@ describe('groupActiveInterventions', () => {
 
     expect(groups[0].items.map((item) => item.id)).toEqual(['item-2', 'item-1'])
   })
+
+  it('shows only the highest-priority intervention when engines target the same phrase', () => {
+    const groups = groupActiveInterventions([
+      intervention('item-1', 'socratic', { promptText: 'The same phrase.' }),
+      intervention('item-2', 'citation', { promptText: '  THE SAME PHRASE. ' }),
+    ])
+    expect(groups).toHaveLength(1)
+    expect(groups[0].engineType).toBe('citation')
+    expect(groups[0].items.map((item) => item.id)).toEqual(['item-2'])
+  })
 })
 
 describe('review action presentation', () => {
@@ -150,7 +160,8 @@ describe('ActionQueue navigation', () => {
 
     expect(useCogdoc.getState().editorFocusQuote).toBe('This exact claim needs supporting evidence.')
     const detail = screen.getByLabelText('Selected intervention')
-    expect(within(detail).getByRole('button', { name: /mark addressed/i })).toBeInTheDocument()
+    expect(within(detail).getByRole('textbox', { name: 'Your reasoning' })).toBeInTheDocument()
+    expect(within(detail).getByRole('button', { name: /evaluate answer/i })).toBeInTheDocument()
     expect(within(detail).getByRole('button', { name: /find sources/i })).toBeInTheDocument()
     list.mockRestore()
   })

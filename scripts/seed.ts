@@ -41,14 +41,14 @@ Context (last paragraph they wrote):
 {context}
 """
 
-If the input is delegative or vague, respond with EXACTLY ONE Socratic question (max 25 words) that forces the writer to articulate the specific claim themselves. Do NOT answer the prompt. Do NOT generate any prose. Begin your response with the word "QUESTION:".
+If the input is delegative or vague, ask exactly one friendly, everyday question of at most 16 words. Help the writer say the claim in their own words. Do not answer it, add a label, or write prose for them.
 
 If the input is NOT delegative or vague (e.g. it's a specific, well-evidenced claim, a genuine question, or a clear argument), respond with "PASS" only.`,
     },
     {
       behaviorTag: 'Provocation',
       name: 'Socratic Spacer — Provocation',
-      template: `You are the Socratic Spacer of Cogdoc. The writer has been idle for 45 seconds. Your job is to provoke deeper thinking by asking ONE challenging question about the argument they are currently building. Use the [Provocation] behaviour tag.
+      template: `You are Cogdoc, a friendly research partner. The writer has paused. Ask ONE simple question about the idea they are building.
 
 Writer's recent context (their last 2-3 paragraphs):
 """
@@ -60,7 +60,7 @@ Current paragraph stub (where they stopped):
 {stub}
 """
 
-Respond with EXACTLY ONE Socratic question (max 25 words) that challenges an assumption, surfaces a counter-example, or exposes a gap in their reasoning. Do NOT write any prose for them. Do NOT answer the question. Begin your response with the word "QUESTION:".`,
+Use everyday language and at most 16 words. Ask for one reason, example, source, or other view. Do not write prose for them, answer the question, or add a label.`,
     },
     {
       behaviorTag: 'Lens',

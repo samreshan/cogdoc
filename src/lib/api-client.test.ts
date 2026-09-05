@@ -123,6 +123,14 @@ describe('interventions + analytics', () => {
     expect(fetchMock.mock.calls[0][1].method).toBe('PATCH')
   })
 
+  it('answerIntervention submits the researcher answer for evaluation', async () => {
+    fetchMock.mockResolvedValue(mockJsonResponse({ satisfied: false }))
+    await api.answerIntervention('iv-1', 'My evidence-aware answer')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/interventions/iv-1/responses')
+    expect(fetchMock.mock.calls[0][1].method).toBe('POST')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ answer: 'My evidence-aware answer' })
+  })
+
   it('getAnalytics hits the analytics endpoint', async () => {
     fetchMock.mockResolvedValue(mockJsonResponse({ total: 0, byEngine: {}, byAction: {}, byVerdict: {}, engagementRate: 0 }))
     await api.getAnalytics('p1')
@@ -142,5 +150,42 @@ describe('find-sources + add-source', () => {
     await api.addSource('p1', 'https://x.com', 'Title')
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ url: 'https://x.com', title: 'Title' })
     expect(fetchMock.mock.calls[0][0]).toBe('/api/projects/p1/add-source')
+  })
+})
+
+describe('research kickoff', () => {
+  it('plans an outline from the researcher conversation before creating a project', async () => {
+    fetchMock.mockResolvedValue(mockJsonResponse({ plan: {}, assistantFallback: false }))
+    const conversation = [{ question: 'What do you think?', answer: 'Verification habits shape the effect.' }]
+    await api.planResearchKickoff('How AI affects independent evidence evaluation', conversation)
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/research-kickoff')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      action: 'plan', topic: 'How AI affects independent evidence evaluation', conversation,
+    })
+  })
+
+  it('submits only the reviewed outline and researcher answers for drafting', async () => {
+    fetchMock.mockResolvedValue(mockJsonResponse({ draft: {} }))
+    const input = {
+      projectId: 'p1', topic: 'AI and evidence',
+      outline: [{ heading: 'Frame', purpose: 'Define it.' }],
+      responses: [{ question: 'Why?', answer: 'Because verification practice changes the relationship.' }],
+    }
+    await api.draftResearchKickoff(input)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ action: 'draft', ...input })
+  })
+})
+
+describe('research history', () => {
+  it('reads project history and records explicit decisions', async () => {
+    fetchMock.mockResolvedValue(mockJsonResponse({ events: [], interventions: [] }))
+    await api.getResearchHistory('p1')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/workspaces/p1/history')
+
+    fetchMock.mockClear()
+    fetchMock.mockResolvedValue(mockJsonResponse({ event: { id: 'audit-1' } }, true, 201))
+    await api.recordDecision('p1', { type: 'citation_inserted', summary: 'Inserted a citation', entityId: 'ref-1' })
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/workspaces/p1/history')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ type: 'citation_inserted', summary: 'Inserted a citation', entityId: 'ref-1' })
   })
 })

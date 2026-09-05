@@ -2,12 +2,10 @@
  * Content Analyzer — decides which engines to fire for each completed sentence.
  *
  * Design principles:
- *  1. ALL four engines should fire proactively throughout a writing session,
- *     not just one. A single sentence can trigger multiple engines.
- *  2. Each engine has its own classification logic — if any matches, that
- *     engine fires. Multiple engines can match the same sentence.
- *  3. Per-engine cooldowns prevent spam, but are short enough that a single
- *     sentence can trigger 2-3 engines in quick succession.
+ *  1. All four engines evaluate their own cue class throughout a session.
+ *  2. A phrase may match several cue classes; editor orchestration selects one
+ *     primary engine so the researcher receives one coherent intervention.
+ *  3. Per-engine cooldowns remain a second guard against repeated requests.
  */
 
 export type EngineType = 'socratic' | 'citation' | 'interceptor' | 'scaffold'
@@ -113,9 +111,8 @@ export function extractLastSentence(text: string): string {
 }
 
 /**
- * Per-engine cooldowns (ms). Short enough that multiple engines can fire
- * on the same sentence in quick succession, long enough to prevent spam
- * when typing multiple sentences rapidly.
+ * Per-engine cooldowns (ms). These prevent repeated requests when several
+ * phrases are completed rapidly.
  */
 export const ENGINE_COOLDOWNS: Record<EngineType, number> = {
   socratic: 2_000,   // 2s — fires on almost every sentence

@@ -4,6 +4,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { dedupeInterventionsByPhrase } from '@/lib/intervention-dedupe'
+import type { Intervention } from '@/lib/types'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -25,5 +27,5 @@ export async function GET(req: NextRequest) {
       },
     },
   })
-  return NextResponse.json({ interventions })
+  return NextResponse.json({ interventions: dedupeInterventionsByPhrase(interventions as unknown as Intervention[]) })
 }

@@ -1,264 +1,104 @@
 'use client'
 
+import { useCallback, useEffect, useState } from 'react'
+import { ArrowLeft, BrainCircuit, Download, EyeOff, FileCode, FileText, FileType, Focus, PanelLeft, PanelRight, Search } from 'lucide-react'
 import { useCogdoc } from '@/lib/store'
-import { Button } from '@/components/ui/button'
-import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { BookOpen, BarChart3, History, ArrowLeft, Focus, Eye, EyeOff, Download, FileText, FileType, FileCode } from 'lucide-react'
-import EditorTiptap from './editor-tiptap'
-import ResearchLibrary from './research-library'
-import AnalyticsPanel from './analytics-panel'
-import ReviewPaceSelector from './review-pace-selector'
-import AssistantStatus from './assistant-status'
-import ActionQueue from './action-queue'
-import { useEffect, useState } from 'react'
 import { api } from '@/lib/api-client'
-import type { Intervention } from '@/lib/types'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Badge } from '@/components/ui/badge'
-
-const ENGINE_LABELS: Record<string, string> = {
-  interceptor: 'Interceptor',
-  socratic: 'Socratic Spacer',
-  citation: 'Citation Sentinel',
-  scaffold: 'Scaffold',
-}
-
-const VERDICT_COLORS: Record<string, string> = {
-  supported: 'text-emerald-700 bg-emerald-50',
-  partially_supported: 'text-amber-700 bg-amber-50',
-  unsupported: 'text-rose-700 bg-rose-50',
-  insufficient_evidence: 'text-stone-600 bg-stone-50',
-}
+import type { ResearchWorkspaceSnapshot } from '@/lib/types'
+import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import AssistantStatus from './assistant-status'
+import ReviewPaceSelector from './review-pace-selector'
+import ResearchNavigator from './research-navigator'
+import ResearchWorkPane from './research-work-pane'
+import ResearchInspector from './research-inspector'
+import { researchShortcutFor } from '@/lib/research-shortcuts'
+import ResearchDialogue from './research-dialogue'
 
 export default function EditorShell() {
-  const project = useCogdoc((s) => s.activeProject)
-  const setView = useCogdoc((s) => s.setView)
-  const activeModal = useCogdoc((s) => s.activeModal)
-  const setActiveModal = useCogdoc((s) => s.setActiveModal)
-  const focusMode = useCogdoc((s) => s.focusMode)
-  const toggleFocusMode = useCogdoc((s) => s.toggleFocusMode)
-  const analyticsVersion = useCogdoc((s) => s.analyticsVersion)
-  const setFrictionMode = useCogdoc((s) => s.setFrictionMode)
+  const project = useCogdoc((state) => state.activeProject)
+  const setView = useCogdoc((state) => state.setView)
+  const focusMode = useCogdoc((state) => state.focusMode)
+  const toggleFocusMode = useCogdoc((state) => state.toggleFocusMode)
+  const setFrictionMode = useCogdoc((state) => state.setFrictionMode)
+  const navigatorVisible = useCogdoc((state) => state.navigatorVisible)
+  const inspectorVisible = useCogdoc((state) => state.inspectorVisible)
+  const toggleNavigator = useCogdoc((state) => state.toggleNavigator)
+  const toggleInspector = useCogdoc((state) => state.toggleInspector)
+  const showNavigator = useCogdoc((state) => state.showNavigator)
+  const showInspector = useCogdoc((state) => state.showInspector)
+  const mobilePane = useCogdoc((state) => state.mobilePane)
+  const setMobilePane = useCogdoc((state) => state.setMobilePane)
+  const openIdeTab = useCogdoc((state) => state.openIdeTab)
+  const setResearchActions = useCogdoc((state) => state.setResearchActions)
+  const libraryVersion = useCogdoc((state) => state.libraryVersion)
+  const [data, setData] = useState<ResearchWorkspaceSnapshot | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [dialogueOpen, setDialogueOpen] = useState(false)
 
-  const [history, setHistory] = useState<Intervention[]>([])
-
-  function handleBack() {
-    setView('workspace')
-  }
-
-  function downloadExport(format: 'md' | 'txt' | 'html') {
+  const refresh = useCallback(async () => {
     if (!project) return
-    window.open(`/api/projects/${project.id}/export?format=${format}`, '_blank')
-  }
+    setLoading(true)
+    try { setData(await api.getResearchWorkspace(project.id)); setLoadError('') }
+    catch (error) { setLoadError((error as Error).message) }
+    finally { setLoading(false) }
+  }, [project])
 
-  // Fetch history when the history modal opens
-  useEffect(() => {
-    if (activeModal === 'history' && project) {
-      api.listInterventions(project.id).then(({ interventions }) => setHistory(interventions)).catch(() => {})
-    }
-  }, [activeModal, project, analyticsVersion])
-
-  // Preserve the legacy engine cadence internally while the user-facing
-  // product uses the clearer Rapid / Guided / Deep review pace.
+  useEffect(() => { void refresh() }, [refresh, libraryVersion])
+  useEffect(() => { setResearchActions(data?.actions ?? []) }, [data?.actions, setResearchActions])
   useEffect(() => {
     const mapping = { rapid: 'assistant', guided: 'coach', deep: 'socratic' } as const
     setFrictionMode(mapping[project?.reviewPace ?? 'deep'])
   }, [project?.reviewPace, setFrictionMode])
 
+  useEffect(() => {
+    function shortcuts(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null
+      const editing = Boolean(target?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName ?? ''))
+      const action = researchShortcutFor({
+        key: event.key,
+        code: event.code,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        editing,
+      })
+      if (!action) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (action === 'toggle-navigator') return toggleNavigator()
+      if (action === 'toggle-inspector') return toggleInspector()
+      const pane = action === 'focus-navigator' ? 'navigator' : action === 'focus-inspector' ? 'inspector' : 'work'
+      if (pane === 'navigator') showNavigator()
+      if (pane === 'inspector') showInspector()
+      setMobilePane(pane)
+      requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-ide-pane="${pane}"]`)?.focus()))
+    }
+    window.addEventListener('keydown', shortcuts, true)
+    return () => window.removeEventListener('keydown', shortcuts, true)
+  }, [setMobilePane, showInspector, showNavigator, toggleInspector, toggleNavigator])
+
   if (!project) return null
+  const projectId = project.id
+  const navigator = <div data-ide-pane="navigator" tabIndex={-1} className="h-full outline-none"><ResearchNavigator project={project} data={data} loading={loading} onRefresh={refresh} /></div>
+  const work = <div data-ide-pane="work" tabIndex={-1} className="h-full outline-none"><ResearchWorkPane project={project} data={data} onRefresh={refresh} /></div>
+  const inspector = <div data-ide-pane="inspector" tabIndex={-1} className="h-full outline-none"><ResearchInspector project={project} data={data} loading={loading} onRefresh={refresh} /></div>
+  function download(format: 'md' | 'html' | 'docx') { window.open(`/api/projects/${projectId}/export?format=${format}`, '_blank') }
 
-  return (
-    <div id="main-content" className="flex h-[100dvh] flex-col" style={{ background: '#faf7f0' }}>
-      {/* Minimal top bar */}
-      <header className="border-b border-stone-200/50 px-6 py-2.5 flex items-center justify-between gap-4 shrink-0" style={{ background: '#fffefb' }}>
-        <div className="flex items-center gap-3 min-w-0">
-          <Button variant="ghost" size="sm" onClick={handleBack} className="text-stone-500 hover:text-stone-900 h-8 px-2">
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-          <div className="min-w-0">
-            <h1
-              className="text-sm font-semibold text-stone-900 truncate max-w-xs"
-              style={{ fontFamily: 'var(--font-newsreader), Georgia, serif' }}
-            >
-              {project.title}
-            </h1>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1">
-          <AssistantStatus />
-          <ReviewPaceSelector />
-          <Button
-            variant="ghost" size="sm"
-            onClick={toggleFocusMode}
-            className={`h-8 px-2.5 text-xs ${focusMode ? 'text-amber-700 bg-amber-50' : 'text-stone-500 hover:text-stone-900'}`}
-            title="Focus mode: dims other paragraphs"
-          >
-            {focusMode ? <EyeOff className="w-3.5 h-3.5 mr-1" /> : <Focus className="w-3.5 h-3.5 mr-1" />}
-            Focus
-          </Button>
-          <Button
-            variant="ghost" size="sm"
-            onClick={() => setView('verification')}
-            className="h-8 px-2.5 text-xs text-stone-500 hover:text-stone-900"
-          >
-            <FileType className="w-3.5 h-3.5 mr-1" /> Verify
-          </Button>
-          <Button
-            variant="ghost" size="sm"
-            onClick={() => setActiveModal('review')}
-            className="h-8 px-2.5 text-xs text-stone-500 hover:text-stone-900 lg:hidden"
-          >
-            Review
-          </Button>
-          <Button
-            variant="ghost" size="sm"
-            onClick={() => setActiveModal('library')}
-            className="h-8 px-2.5 text-xs text-stone-500 hover:text-stone-900"
-          >
-            <BookOpen className="w-3.5 h-3.5 mr-1" /> Library
-          </Button>
-          <Button
-            variant="ghost" size="sm"
-            onClick={() => setActiveModal('stats')}
-            className="h-8 px-2.5 text-xs text-stone-500 hover:text-stone-900"
-          >
-            <BarChart3 className="w-3.5 h-3.5 mr-1" /> Stats
-          </Button>
-          <Button
-            variant="ghost" size="sm"
-            onClick={() => setActiveModal('history')}
-            className="h-8 px-2.5 text-xs text-stone-500 hover:text-stone-900"
-          >
-            <History className="w-3.5 h-3.5 mr-1" /> History
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 px-2.5 text-xs text-stone-500 hover:text-stone-900">
-                <Download className="w-3.5 h-3.5 mr-1" /> Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => downloadExport('md')}>
-                <FileText className="w-4 h-4 mr-2" /> Markdown (.md)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => downloadExport('txt')}>
-                <FileText className="w-4 h-4 mr-2" /> Plain text (.txt)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => downloadExport('html')}>
-                <FileCode className="w-4 h-4 mr-2" /> HTML (.html)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.open(`/api/projects/${project.id}/export?format=docx`, '_blank')}>
-                <FileType className="w-4 h-4 mr-2" /> Normalized academic Word (.docx)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.print()}>
-                <FileType className="w-4 h-4 mr-2" /> Print / PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
-
-      {/* Editor fills the rest — the Tiptap/ProseMirror surface (ADR-0006
-          close-out; the legacy contentEditable editor is deleted). */}
-      <div className="grid flex-1 min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-h-0"><EditorTiptap /></div>
-        <div className="hidden min-h-0 lg:block"><ActionQueue /></div>
-      </div>
-
-      {/* Library modal */}
-      <Dialog open={activeModal === 'review'} onOpenChange={(o) => !o && setActiveModal('none')}>
-        <DialogContent className="h-[82vh] max-w-md p-0 overflow-hidden">
-          <DialogHeader className="sr-only">
-            <DialogTitle>Review action queue</DialogTitle>
-            <DialogDescription>Browse prioritized interventions and document checks, then locate or resolve each item.</DialogDescription>
-          </DialogHeader>
-          <ActionQueue />
-        </DialogContent>
-      </Dialog>
-
-      {/* Library modal */}
-      <Dialog open={activeModal === 'library'} onOpenChange={(o) => !o && setActiveModal('none')}>
-        <DialogContent className="max-w-2xl max-h-[80vh] p-0 overflow-hidden">
-          <DialogHeader className="px-6 pt-6 pb-0">
-            <DialogTitle className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-stone-600" /> Research Library
-            </DialogTitle>
-            <DialogDescription>Upload source text, inspect saved references, and verify citation metadata.</DialogDescription>
-          </DialogHeader>
-          <div className="h-[60vh]">
-            <ResearchLibrary />
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Stats modal */}
-      <Dialog open={activeModal === 'stats'} onOpenChange={(o) => !o && setActiveModal('none')}>
-        <DialogContent className="max-w-md max-h-[80vh] p-0 overflow-hidden">
-          <DialogHeader className="px-6 pt-6 pb-0">
-            <DialogTitle className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-stone-600" /> Analytics
-            </DialogTitle>
-            <DialogDescription>Review intervention activity and how guidance was handled in this workspace.</DialogDescription>
-          </DialogHeader>
-          <div className="h-[60vh]">
-            <AnalyticsPanel />
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* History modal */}
-      <Dialog open={activeModal === 'history'} onOpenChange={(o) => !o && setActiveModal('none')}>
-        <DialogContent className="max-w-2xl max-h-[80vh] p-0 overflow-hidden">
-          <DialogHeader className="px-6 pt-6 pb-0">
-            <DialogTitle className="flex items-center gap-2">
-              <History className="w-5 h-5 text-stone-600" /> Intervention History
-            </DialogTitle>
-            <DialogDescription>Inspect earlier interventions, verdicts, and recorded author actions.</DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="h-[60vh]">
-            <div className="p-4 space-y-2">
-              {history.length === 0 ? (
-                <p className="text-sm text-stone-500 text-center py-8">No interventions yet.</p>
-              ) : (
-                history.map((i) => (
-                  <div key={i.id} className="border border-stone-200 rounded-lg p-3 bg-white">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <Badge variant="secondary" className="text-[10px]">
-                        {ENGINE_LABELS[i.engineType] ?? i.engineType}
-                      </Badge>
-                      <div className="flex items-center gap-2">
-                        {i.verdict && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${VERDICT_COLORS[i.verdict] ?? ''}`}>
-                            {i.verdict.replace(/_/g, ' ')}
-                          </span>
-                        )}
-                        {i.userAction && (
-                          <span className="text-[10px] text-stone-400">{i.userAction}</span>
-                        )}
-                        <span className="text-[10px] text-stone-400">
-                          {new Date(i.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                    </div>
-                    {i.promptText && (
-                      <p className="text-[11px] text-stone-500 italic mb-1 line-clamp-1">
-                        &ldquo;{i.promptText.slice(0, 100)}&rdquo;
-                      </p>
-                    )}
-                    <p className="text-sm text-stone-800 line-clamp-3">{i.responseText}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
+  return <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[#f7f6f3] text-[#292d2b]">
+    <header className="z-20 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-[#e4e0d8] bg-[#fffefb] px-3 sm:px-4" aria-label="Research IDE toolbar">
+      <div className="flex min-w-0 items-center gap-1.5"><Button variant="ghost" size="icon" onClick={() => setView('dashboard')} className="h-8 w-8 text-stone-500 hover:bg-[#f2f0ea]" aria-label="Back to projects"><ArrowLeft className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={toggleNavigator} className={`hidden h-8 w-8 lg:inline-flex ${navigatorVisible ? 'text-[#386c5c]' : 'text-stone-400'}`} aria-label={`${navigatorVisible ? 'Hide' : 'Show'} navigator`} title="Toggle navigator (Ctrl/⌘ Shift B)"><PanelLeft className="h-4 w-4" /></Button><div className="ml-1 min-w-0"><h1 className="max-w-48 truncate font-serif text-sm font-semibold tracking-[-0.01em] sm:max-w-sm">{project.title}</h1><p className="hidden text-[9px] text-stone-400 sm:block">Research project</p></div></div>
+      <div className="flex shrink-0 items-center gap-1"><div className="hidden items-center gap-1 xl:flex"><AssistantStatus /><ReviewPaceSelector /></div><Button variant="outline" size="sm" onClick={() => setDialogueOpen(true)} className="h-8 border-[#d9d4ca] bg-white px-2.5 text-[11px] text-[#28594a] hover:bg-[#f4f2ed]"><BrainCircuit className="mr-1.5 h-3.5 w-3.5" />Think with Cogdoc</Button><Button variant="ghost" size="icon" onClick={() => openIdeTab({ id: 'sources', kind: 'sources', label: 'Sources', closable: true })} className="hidden h-8 w-8 text-stone-500 sm:inline-flex" aria-label="Open source mapper" title="Sources"><Search className="h-3.5 w-3.5" /></Button><Button variant="ghost" size="icon" onClick={toggleFocusMode} className={`h-8 w-8 ${focusMode ? 'bg-[#f2eee5] text-[#8a552d]' : 'text-stone-500'}`} aria-label="Toggle focus mode" title="Focus mode">{focusMode ? <EyeOff className="h-3.5 w-3.5" /> : <Focus className="h-3.5 w-3.5" />}</Button><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 text-stone-500" aria-label="Export research document"><Download className="h-3.5 w-3.5" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => download('docx')}><FileType className="mr-2 h-4 w-4" />Word document</DropdownMenuItem><DropdownMenuItem onClick={() => download('md')}><FileText className="mr-2 h-4 w-4" />Markdown</DropdownMenuItem><DropdownMenuItem onClick={() => download('html')}><FileCode className="mr-2 h-4 w-4" />HTML</DropdownMenuItem></DropdownMenuContent></DropdownMenu><Button variant="ghost" size="icon" onClick={toggleInspector} className={`hidden h-8 w-8 lg:inline-flex ${inspectorVisible ? 'text-[#386c5c]' : 'text-stone-400'}`} aria-label={`${inspectorVisible ? 'Hide' : 'Show'} inspector`} title="Toggle inspector (Ctrl/⌘ Shift I)"><PanelRight className="h-4 w-4" /></Button></div>
+    </header>
+    {loadError && <button onClick={refresh} className="shrink-0 border-b border-amber-300 bg-amber-50 px-3 py-1.5 text-center text-[10px] text-amber-900">Research index unavailable: {loadError}. Existing editor features remain usable. Click to retry.</button>}
+    <div className="hidden min-h-0 flex-1 lg:block"><ResizablePanelGroup direction="horizontal" autoSaveId={`cogdoc-research-ide:${project.id}`}>{navigatorVisible && <><ResizablePanel id="navigator" order={1} defaultSize={18} minSize={15} maxSize={27}>{navigator}</ResizablePanel><ResizableHandle withHandle className="bg-[#e4e0d8] hover:bg-[#a8bbb4] focus-visible:ring-[#386c5c]" /></>}<ResizablePanel id="work" order={2} defaultSize={59} minSize={38}>{work}</ResizablePanel>{inspectorVisible && <><ResizableHandle withHandle className="bg-[#e4e0d8] hover:bg-[#a8bbb4] focus-visible:ring-[#386c5c]" /><ResizablePanel id="inspector" order={3} defaultSize={23} minSize={19} maxSize={34}>{inspector}</ResizablePanel></>}</ResizablePanelGroup></div>
+    <div className="min-h-0 flex-1 lg:hidden">{mobilePane === 'navigator' ? navigator : mobilePane === 'inspector' ? inspector : work}</div>
+    <nav className="grid h-12 shrink-0 grid-cols-3 border-t border-[#e4e0d8] bg-[#fffefb] lg:hidden" aria-label="Focused pane switcher"><MobilePane active={mobilePane === 'navigator'} icon={PanelLeft} label="Navigator" onClick={() => setMobilePane('navigator')} /><MobilePane active={mobilePane === 'work'} icon={FileText} label="Work" onClick={() => setMobilePane('work')} /><MobilePane active={mobilePane === 'inspector'} icon={PanelRight} label="Inspector" onClick={() => setMobilePane('inspector')} /></nav>
+    <ResearchDialogue open={dialogueOpen} onOpenChange={setDialogueOpen} project={project} />
+  </div>
 }
+
+function MobilePane({ active, icon: Icon, label, onClick }: { active: boolean; icon: typeof PanelLeft; label: string; onClick: () => void }) { return <button onClick={onClick} aria-current={active ? 'page' : undefined} className={`flex items-center justify-center gap-1.5 border-r border-[#e8e4dc] text-[10px] font-medium last:border-0 ${active ? 'bg-[#f0f3f0] text-[#28594a]' : 'text-stone-500'}`}><Icon className="h-3.5 w-3.5" />{label}</button> }

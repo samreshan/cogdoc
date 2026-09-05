@@ -4,6 +4,7 @@ import { requireUserId } from '@/lib/auth-supabase'
 import { appendAuditEvent } from '@/lib/workspace-server'
 import { lookupReferenceMetadata, metadataConfidence } from '@/lib/reference-metadata'
 import { formatCitation } from '@/lib/citation-format'
+import { linkReferenceToLibrary } from '@/lib/research-source-server'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId(req)
@@ -105,6 +106,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
     return saved
   })
+
+  void linkReferenceToLibrary({ referenceId: reference.id, projectId: id, userId, title, doi, url, metadata: { provider, venue, year, authors } })
+    .catch((error) => console.warn('Reference could not be linked to the global library:', (error as Error).message))
 
   return NextResponse.json({ reference, alreadySaved: false }, { status: 201 })
 }

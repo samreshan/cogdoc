@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
 import { findBlindspot, type LibraryPassage } from '@/lib/blindspot'
+import { appendAuditEvent } from '@/lib/workspace-server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -60,16 +61,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ blindspot: null })
   }
 
-  const intervention = await db.intervention.create({
-    data: {
-      userId,
-      projectId,
-      promptTemplateTag: 'Lens',
-      engineType: 'blindspot',
-      promptText: draft.slice(0, 200),
-      responseText: result.text.slice(0, 500),
-      status: 'active',
-    },
+  const intervention = await db.$transaction(async (tx) => {
+    const created = await tx.intervention.create({
+      data: {
+        userId,
+        projectId,
+        promptTemplateTag: 'Lens',
+        engineType: 'blindspot',
+        promptText: draft.slice(0, 200),
+        responseText: result.text.slice(0, 500),
+        status: 'active',
+      },
+    })
+    await appendAuditEvent(tx, {
+      projectId, userId, type: 'intervention_created', actor: 'system',
+      modelVersion: 'deterministic', promptVersion: 'blindspot-lens-v1',
+      payload: { summary: 'Cogdoc surfaced an overlooked source passage', interventionId: created.id, engineType: 'blindspot', chunkId: result.chunk_id },
+    })
+    return created
   })
 
   return NextResponse.json({

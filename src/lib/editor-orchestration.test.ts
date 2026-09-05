@@ -18,11 +18,10 @@ import {
 } from '@/lib/editor-orchestration'
 
 describe('pickEnginesForSentence', () => {
-  it('returns the content-analyzer engines for a sentence', () => {
-    // a vague factual claim → interceptor + citation per content-analyzer
+  it('returns one primary engine when several cue classes match a phrase', () => {
+    // A vague factual claim matches two cue classes; claim clarity wins.
     const engines = pickEnginesForSentence('basically the study shows an effect.')
-    expect(Array.isArray(engines)).toBe(true)
-    expect(engines.length).toBeGreaterThan(0)
+    expect(engines).toEqual(['interceptor'])
   })
 
   it('returns an empty list for a sentence with no triggers', () => {

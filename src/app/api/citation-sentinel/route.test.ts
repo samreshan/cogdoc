@@ -11,14 +11,16 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@/lib/db', () => ({
-  db: {
+vi.mock('@/lib/db', () => {
+  const models = {
     project: { findUnique: vi.fn() },
     intervention: { create: vi.fn() },
-  },
-}))
+  }
+  return { db: { ...models, $transaction: vi.fn(async (callback: (tx: typeof models) => unknown) => callback(models)) } }
+})
 vi.mock('@/lib/auth', () => ({ getDefaultUser: vi.fn() }))
 vi.mock('@/lib/ai-service', () => ({ getAIService: vi.fn() }))
+vi.mock('@/lib/workspace-server', () => ({ appendAuditEvent: vi.fn(async () => ({ id: 'audit-1' })) }))
 // Mock retrieval so we control the "retrieved chunks" without DB coupling.
 vi.mock('@/lib/retrieval', () => ({
   retrieveTopK: vi.fn(),
@@ -191,7 +193,7 @@ describe('POST /api/citation-sentinel — vector retrieval flag (USE_VECTOR_RETR
 })
 
 describe('POST /api/citation-sentinel — friction calibration (§9)', () => {
-  it('persists a guard-allowed explanation verbatim', async () => {
+  it('persists a simple question instead of an explanation', async () => {
     retrieve.mockResolvedValue(CHUNKS)
     const explanation = 'Source [1] directly supports this.'
     getService.mockReturnValue(
@@ -207,7 +209,8 @@ describe('POST /api/citation-sentinel — friction calibration (§9)', () => {
     createIntervention.mockResolvedValue({ id: 'iv-1', evidences: [] })
 
     await POST(makeReq({ projectId: 'proj-1', claim: 'a claim', friction_mode: 'coach' }))
-    expect(createIntervention.mock.calls[0][0].data.responseText).toBe(explanation)
+    expect(createIntervention.mock.calls[0][0].data.responseText).toMatch(/\?$/)
+    expect(createIntervention.mock.calls[0][0].data.responseText).not.toBe(explanation)
   })
 
   it('replaces a multi-paragraph explanation with the Spark Gap in every mode', async () => {

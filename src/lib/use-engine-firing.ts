@@ -19,6 +19,7 @@ import { getCooldown } from '@/lib/friction'
 import { extractLastSentence } from '@/lib/content-analyzer'
 import { consumeInterceptorStream } from '@/lib/ai-gateway'
 import type { EngineType, Intervention } from '@/lib/types'
+import { canonicalInterventionPhrase } from '@/lib/intervention-dedupe'
 
 export interface UseEngineFiringResult {
   /**
@@ -44,6 +45,7 @@ export function useEngineFiring(getText: () => string): UseEngineFiringResult {
   const lastFireRef = useRef<Record<EngineType, number>>({
     socratic: 0, interceptor: 0, citation: 0, scaffold: 0,
   })
+  const phrasesInFlightRef = useRef(new Set<string>())
 
   const fireEngine = useCallback(
     async (engine: EngineType, sentence: string, context: string) => {
@@ -56,6 +58,15 @@ export function useEngineFiring(getText: () => string): UseEngineFiringResult {
       if (engine === 'socratic' && !effective) {
         effective = extractLastSentence(getText())
         if (!effective) return
+      }
+
+      const phraseKey = canonicalInterventionPhrase(effective)
+      if (phraseKey) {
+        const alreadyActive = useCogdoc.getState().activeInterventions.some((item) =>
+          item.status === 'active' && canonicalInterventionPhrase(item.promptText) === phraseKey,
+        )
+        if (alreadyActive || phrasesInFlightRef.current.has(phraseKey)) return
+        phrasesInFlightRef.current.add(phraseKey)
       }
 
       setEngineLoading(engine, true)
@@ -98,6 +109,7 @@ export function useEngineFiring(getText: () => string): UseEngineFiringResult {
       } catch (e) {
         console.error(`${engine} failed:`, e)
       } finally {
+        if (phraseKey) phrasesInFlightRef.current.delete(phraseKey)
         setEngineLoading(engine, false)
       }
     },

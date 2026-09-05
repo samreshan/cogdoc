@@ -13,6 +13,7 @@ import { requireUserId, authed } from '@/lib/auth-supabase'
 import { getAIService } from '@/lib/ai-service'
 import { applyGenerationGuard } from '@/lib/engine-guard'
 import type { FrictionMode } from '@/lib/friction'
+import { appendAuditEvent } from '@/lib/workspace-server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -62,17 +63,25 @@ export async function POST(req: NextRequest) {
     // response before persisting. Over-generating prose → Spark Gap fallback.
     const guarded = applyGenerationGuard(socratic.question, mode)
 
-    const intervention = await db.intervention.create({
-      data: {
-        userId,
-        projectId,
-        paragraphId: paragraphId ?? null,
-        promptTemplateTag: 'The Spark Gap',
-        engineType: 'interceptor',
-        promptText: prompt,
-        responseText: guarded.text,
-        status: 'active',
-      },
+    const intervention = await db.$transaction(async (tx) => {
+      const created = await tx.intervention.create({
+        data: {
+          userId,
+          projectId,
+          paragraphId: paragraphId ?? null,
+          promptTemplateTag: 'The Spark Gap',
+          engineType: 'interceptor',
+          promptText: prompt,
+          responseText: guarded.text,
+          status: 'active',
+        },
+      })
+      await appendAuditEvent(tx, {
+        projectId, userId, type: 'intervention_created', actor: 'system',
+        modelVersion: process.env.AI_MODEL ?? process.env.GEMINI_MODEL ?? null, promptVersion: 'The Spark Gap',
+        payload: { summary: 'Cogdoc raised a clarity question', interventionId: created.id, engineType: 'interceptor', paragraphId: paragraphId ?? null },
+      })
+      return created
     })
 
     return NextResponse.json({

@@ -8,7 +8,8 @@ import {
   Quote, ChevronDown, ChevronUp, AlertTriangle,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import type { EngineType, Verdict } from '@/lib/types'
+import type { EngineType, Intervention, Verdict } from '@/lib/types'
+import { interventionQuestion } from '@/lib/intervention-language'
 
 const ENGINE_META: Record<EngineType, {
   label: string; icon: typeof Sparkles; color: string; bg: string; border: string; accent: string
@@ -114,7 +115,7 @@ export default function FloatingInterventions() {
                   <CitationBody intervention={i} />
                 ) : (
                   <p className="text-sm text-stone-800 leading-relaxed whitespace-pre-wrap">
-                    {i.responseText}
+                    {interventionQuestion(i)}
                   </p>
                 )}
 
@@ -142,14 +143,14 @@ export default function FloatingInterventions() {
   )
 }
 
-function CitationBody({ intervention }: { intervention: { responseText: string | null; evidences?: Array<{ id: string; similarityScore: number; citedExcerpt: string; chunk: { pageApprox: number; pdf: { filename: string } } }> } }) {
+function CitationBody({ intervention }: { intervention: Intervention }) {
   const [expanded, setExpanded] = useState(false)
   const evidences = intervention.evidences ?? []
 
   return (
     <div className="space-y-2">
       {intervention.responseText && (
-        <p className="text-sm text-stone-800 leading-relaxed">{intervention.responseText}</p>
+        <p className="text-sm text-stone-800 leading-relaxed">{interventionQuestion(intervention)}</p>
       )}
       {evidences.length > 0 && (
         <div>

@@ -1,8 +1,9 @@
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { canonicalDocumentString, documentToPlainText } from '@/lib/document-content'
 import { sha256 } from '@/lib/crypto'
 
 type Transaction = Prisma.TransactionClient
+type AuditTransaction = Pick<Prisma.TransactionClient, 'auditEvent'> & Partial<Pick<Prisma.TransactionClient, '$executeRaw'>>
 
 interface AuditDigestInput {
   projectId: string
@@ -72,7 +73,7 @@ export async function createDocumentVersion(
 }
 
 export async function appendAuditEvent(
-  tx: Transaction,
+  tx: AuditTransaction,
   input: {
     projectId: string
     userId: string
@@ -84,6 +85,15 @@ export async function appendAuditEvent(
     promptVersion?: string | null
   },
 ) {
+  // All production callers append inside a database transaction. The
+  // project-scoped advisory lock serializes concurrent autosave/intervention
+  // events so two valid writes cannot fork the tamper-evident hash chain.
+  if (tx.$executeRaw) {
+    // `$queryRaw` attempts to deserialize the PostgreSQL `void` returned by
+    // pg_advisory_xact_lock and fails with Prisma P2010. `$executeRaw` keeps
+    // the lock semantics without asking Prisma to decode a result column.
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.projectId}, 0))`)
+  }
   const previous = await tx.auditEvent.findFirst({
     where: { projectId: input.projectId },
     orderBy: { createdAt: 'desc' },

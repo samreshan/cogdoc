@@ -105,7 +105,7 @@ describe('POST /api/find-sources — pipeline', () => {
     })
   })
 
-  it('uses Crossref as the non-LLM scholarly fallback', async () => {
+  it('merges Crossref with the other discovery providers', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(openAlexResponse([]))
       .mockResolvedValueOnce(crossrefResponse([{
@@ -118,12 +118,14 @@ describe('POST /api/find-sources — pipeline', () => {
         'container-title': ['Journal of Evidence'],
         volume: '7', issue: '2', page: '14-29', publisher: 'Example Press',
       }]))
+      .mockResolvedValueOnce(semanticScholarResponse([]))
+      .mockResolvedValueOnce(geminiResponse('[]'))
 
     const res = await POST(req({ claim: 'a sufficiently long claim about longitudinal evidence' }))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.provider).toBe('crossref')
-    expect(body.providersTried).toEqual(['openalex', 'crossref'])
+    expect(body.providersTried).toEqual(['openalex', 'crossref', 'semantic_scholar', 'gemini'])
     expect(body.sources[0]).toMatchObject({
       title: 'Crossref indexed study',
       url: 'https://doi.org/10.1000/crossref',
@@ -136,7 +138,7 @@ describe('POST /api/find-sources — pipeline', () => {
         formatted: expect.objectContaining({ processor: 'citation-js/citeproc-js' }),
       },
     })
-    expect(fetchSpy).toHaveBeenCalledTimes(2)
+    expect(fetchSpy).toHaveBeenCalledTimes(4)
   })
 
   it('resolves a legal open-access location through Unpaywall when configured', async () => {
@@ -147,6 +149,8 @@ describe('POST /api/find-sources — pipeline', () => {
         DOI: '10.1000/open-copy', title: ['Open study'],
         author: [{ family: 'Chen' }], issued: { 'date-parts': [[2022]] },
       }]))
+      .mockResolvedValueOnce(semanticScholarResponse([]))
+      .mockResolvedValueOnce(geminiResponse('[]'))
       .mockResolvedValueOnce(unpaywallResponse({
         is_oa: true,
         best_oa_location: {
@@ -168,7 +172,7 @@ describe('POST /api/find-sources — pipeline', () => {
     })
   })
 
-  it('uses Semantic Scholar before any model-backed web search', async () => {
+  it('merges Semantic Scholar with grounded web search', async () => {
     process.env.SEMANTIC_SCHOLAR_API_KEY = 'semantic-test-key'
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(openAlexResponse([]))
@@ -189,13 +193,14 @@ describe('POST /api/find-sources — pipeline', () => {
         },
         journal: { name: 'Journal of Evidence', volume: '9', pages: '30-42' },
       }]))
+      .mockResolvedValueOnce(geminiResponse('[]'))
 
     const res = await POST(req({ claim: 'a sufficiently long evidence-based claim' }))
     const body = await res.json()
 
     expect(res.status).toBe(200)
     expect(body.provider).toBe('semantic_scholar')
-    expect(body.providersTried).toEqual(['openalex', 'crossref', 'semantic_scholar'])
+    expect(body.providersTried).toEqual(['openalex', 'crossref', 'semantic_scholar', 'gemini'])
     expect(body.sources[0]).toMatchObject({
       title: 'Semantic Scholar indexed study',
       url: 'https://doi.org/10.1000/semantic',
@@ -215,7 +220,7 @@ describe('POST /api/find-sources — pipeline', () => {
     expect(semanticCall?.[1]).toMatchObject({
       headers: expect.objectContaining({ 'x-api-key': 'semantic-test-key' }),
     })
-    expect(fetchSpy).toHaveBeenCalledTimes(3)
+    expect(fetchSpy).toHaveBeenCalledTimes(4)
   })
 
   it('retries a transient Unpaywall failure and caches the DOI result', async () => {
@@ -227,6 +232,8 @@ describe('POST /api/find-sources — pipeline', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(openAlexResponse([]))
       .mockResolvedValueOnce(crossrefResponse([item]))
+      .mockResolvedValueOnce(semanticScholarResponse([]))
+      .mockResolvedValueOnce(geminiResponse('[]'))
       .mockResolvedValueOnce({ ok: false, status: 429 } as Response)
       .mockResolvedValueOnce(unpaywallResponse({
         is_oa: true,
@@ -234,12 +241,14 @@ describe('POST /api/find-sources — pipeline', () => {
       }))
       .mockResolvedValueOnce(openAlexResponse([]))
       .mockResolvedValueOnce(crossrefResponse([item]))
+      .mockResolvedValueOnce(semanticScholarResponse([]))
+      .mockResolvedValueOnce(geminiResponse('[]'))
 
     const first = await POST(req({ claim: 'a sufficiently long claim about cached access' }))
     const second = await POST(req({ claim: 'a sufficiently long claim about cached access' }))
     expect((await first.json()).sources[0].openAccessUrl).toBe('https://repository.example/cached-copy')
     expect((await second.json()).sources[0].openAccessUrl).toBe('https://repository.example/cached-copy')
-    expect(fetchSpy).toHaveBeenCalledTimes(6)
+    expect(fetchSpy).toHaveBeenCalledTimes(10)
   })
 
   it('uses the workspace citation style for CSL rendering', async () => {

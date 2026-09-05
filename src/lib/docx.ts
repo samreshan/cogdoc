@@ -68,7 +68,6 @@ export async function importDocx(buffer: Buffer): Promise<{
 
 const ACADEMIC_FONT = 'Times New Roman'
 const ACADEMIC_BODY_SIZE = 24
-const ONE_INCH_TWIPS = 1_440
 const ONE_AND_A_HALF_LINE_SPACING = 360
 
 function textRuns(node: ProseMirrorNode, forceBold = false): ParagraphChild[] {
@@ -181,8 +180,15 @@ function docxChildren(root: ProseMirrorNode): Array<Paragraph | Table> {
   return children
 }
 
-export async function exportAcademicDocx(title: string, content: string): Promise<Buffer> {
+export interface AcademicDocxProfile {
+  marginsMm?: { top?: number; right?: number; bottom?: number; left?: number }
+  spacing?: number
+}
+
+export async function exportAcademicDocx(title: string, content: string, profile?: AcademicDocxProfile): Promise<Buffer> {
   const parsed = parseDocumentContent(content)
+  const toTwips = (millimetres: number | undefined) => Math.round(Math.min(50, Math.max(10, millimetres ?? 25.4)) * 56.6929)
+  const lineSpacing = Math.round(Math.min(3, Math.max(1, profile?.spacing ?? 1.5)) * 240)
   const body = typeof parsed === 'string'
     ? documentToPlainText(parsed).split(/\n{2,}/).map((text) => new Paragraph(text))
     : docxChildren(parsed)
@@ -190,10 +196,10 @@ export async function exportAcademicDocx(title: string, content: string): Promis
     properties: {
       page: {
         margin: {
-          top: ONE_INCH_TWIPS,
-          right: ONE_INCH_TWIPS,
-          bottom: ONE_INCH_TWIPS,
-          left: ONE_INCH_TWIPS,
+          top: toTwips(profile?.marginsMm?.top),
+          right: toTwips(profile?.marginsMm?.right),
+          bottom: toTwips(profile?.marginsMm?.bottom),
+          left: toTwips(profile?.marginsMm?.left),
           header: 720,
           footer: 720,
         },
@@ -226,7 +232,7 @@ export async function exportAcademicDocx(title: string, content: string): Promis
           run: { font: ACADEMIC_FONT, size: ACADEMIC_BODY_SIZE, color: '1C1917' },
           paragraph: {
             spacing: {
-              line: ONE_AND_A_HALF_LINE_SPACING,
+              line: lineSpacing,
               lineRule: LineRuleType.AUTO,
               after: 120,
             },

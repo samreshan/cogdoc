@@ -21,9 +21,15 @@ export function idleThresholdForMode(mode: FrictionMode): number {
   return Math.max(1, Math.round(IDLE_THRESHOLD_BASE_MS * COOLDOWN_SCALE[mode]))
 }
 
-/** Which engines should fire for a completed sentence (delegates to the analyzer). */
+/**
+ * Choose one primary intervention engine for a completed phrase. Every engine
+ * still evaluates its cue class, but one phrase receives one actionable prompt.
+ */
 export function pickEnginesForSentence(sentence: string): EngineType[] {
-  return analyzeSentence(sentence).engines
+  const matches = analyzeSentence(sentence).engines
+  const primary = (['interceptor', 'citation', 'socratic', 'scaffold'] as EngineType[])
+    .find((engine) => matches.includes(engine))
+  return primary ? [primary] : []
 }
 
 /** Serialise a ProseMirror JSON doc to a string for Document.content storage. */

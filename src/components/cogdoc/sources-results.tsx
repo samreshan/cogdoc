@@ -142,7 +142,7 @@ export default function SourcesResults({ open, onOpenChange, claim }: Props) {
   async function copyCitation(text: string, label: string) {
     try {
       await navigator.clipboard.writeText(text)
-      toast.success(`${label} copied`, { description: 'Verify the metadata against the source before submitting.' })
+      toast.success(`${label} copied`, { description: 'Check the metadata against the original source before relying on it.' })
     } catch {
       toast.error('Could not access the clipboard')
     }

@@ -22,8 +22,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const userId = await requireUserId(req)
   const body = await req.json().catch(() => ({}))
-  const workspaceType = isWorkspaceType(body.workspaceType) ? body.workspaceType : 'assignment'
-  const title = String(body.title ?? '').trim() || (workspaceType === 'assignment' ? 'Untitled assignment' : 'Untitled research workspace')
+  // Research is the product default. Explicit legacy assignment values remain
+  // readable during migration, but new clients never need to choose a mode.
+  const workspaceType = isWorkspaceType(body.workspaceType) ? body.workspaceType : 'research'
+  const title = String(body.title ?? '').trim() || 'Untitled research project'
   const reviewPace = normalizeReviewPace(body.reviewPace)
   const citationStyle = isCitationStyle(body.citationStyle) ? body.citationStyle : 'harvard'
   const dueAt = body.dueAt ? new Date(body.dueAt) : null
@@ -56,4 +58,3 @@ export async function POST(req: NextRequest) {
   })
   return NextResponse.json({ workspace }, { status: 201 })
 }
-

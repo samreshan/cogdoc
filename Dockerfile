@@ -17,7 +17,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Stage 1: deps ────────────────────────────────────────────────────────────
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 RUN apk add --no-cache libc6-compat openssl python3 make g++
 WORKDIR /app
 
@@ -27,7 +27,7 @@ COPY package.json bun.lock* package-lock.json* ./
 RUN npm ci --include=dev || npm install --include=dev
 
 # ── Stage 2: builder ─────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 RUN apk add --no-cache libc6-compat openssl python3 make g++
 WORKDIR /app
 
@@ -42,7 +42,7 @@ RUN npx prisma generate --schema=prisma/schema.prisma
 RUN npm run build
 
 # ── Stage 3: runtime ─────────────────────────────────────────────────────────
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 RUN apk add --no-cache libc6-compat openssl bash dialog
 
 # Install both SQLite and Postgres Prisma engine binaries for multi-arch safety

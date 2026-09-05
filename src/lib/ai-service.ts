@@ -6,6 +6,9 @@
  * The engines call this layer; they never touch a provider directly.
  */
 import { db } from '@/lib/db'
+import type { EngineType, ResearchDialogueAnswers, ResearchDialogueDraft, ResearchKickoffDraft, ResearchKickoffOutlineItem, ResearchKickoffPlan, ResearchKickoffQuestion } from '@/lib/types'
+import { parseInterventionAnswerEvaluation, type InterventionAnswerEvaluation } from '@/lib/intervention-response'
+import { plainResearchQuestion } from '@/lib/intervention-language'
 
 export type BehaviourTag =
   | 'The Spark Gap'
@@ -41,12 +44,43 @@ export interface SuggestionResult {
   raw: string
 }
 
+export interface GroundedResearchAnswer {
+  answer: string
+  passageIds: string[]
+  confidence: 'high' | 'medium' | 'low'
+  followUpQuestion: string | null
+}
+
 export interface AIService {
   classifyPrompt(prompt: string, context: string): Promise<ClassifyResult>
   generateSocratic(tag: BehaviourTag, context: string, stub?: string, prompt?: string): Promise<SocraticResponse>
   verifyClaim(claim: string, evidence: { chunkId: string; content: string }[]): Promise<VerdictResult>
   generateScaffold(prompt: string, context: string): Promise<ScaffoldResult>
   generateSuggestion(draft: string): Promise<SuggestionResult>
+  answerFromEvidence(question: string, evidence: { chunkId: string; content: string }[]): Promise<GroundedResearchAnswer | null>
+  evaluateInterventionAnswer(input: {
+    engineType: EngineType
+    passage: string
+    intervention: string
+    answer: string
+    evidence: Array<{ chunkId: string; content: string }>
+  }): Promise<InterventionAnswerEvaluation>
+  draftFromResearchDialogue(
+    answers: ResearchDialogueAnswers,
+    documentContext: string,
+  ): Promise<ResearchDialogueDraft>
+  planResearchKickoff(topic: string, conversation?: Array<{ question: string; answer: string }>): Promise<ResearchKickoffPlan>
+  draftResearchKickoff(input: {
+    topic: string
+    outline: ResearchKickoffOutlineItem[]
+    responses: Array<{ question: string; answer: string }>
+  }): Promise<ResearchKickoffDraft>
+  restructureFromIntervention(input: {
+    passage: string
+    intervention: string
+    answer: string
+    rationale: string
+  }): Promise<string>
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -128,6 +162,91 @@ export function parseVerdictJSON(
   }
 }
 
+/** Parse the explicit Q&A drafting response while rejecting empty model output. */
+export function parseResearchDialogueDraft(raw: string): ResearchDialogueDraft {
+  const start = raw.indexOf('{')
+  const end = raw.lastIndexOf('}')
+  if (start === -1 || end <= start) throw new Error('The assistant returned an invalid research draft')
+  try {
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as Partial<ResearchDialogueDraft>
+    const draft = typeof parsed.draft === 'string' ? parsed.draft.trim() : ''
+    if (!draft) throw new Error('empty draft')
+    return {
+      draft,
+      reflection: typeof parsed.reflection === 'string' && parsed.reflection.trim()
+        ? parsed.reflection.trim()
+        : 'Review the draft against your evidence and revise anything that does not match your view.',
+      sourceNeeds: Array.isArray(parsed.sourceNeeds)
+        ? parsed.sourceNeeds.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map((item) => item.trim()).slice(0, 6)
+        : [],
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message === 'empty draft') {
+      throw new Error('The assistant returned an empty research draft')
+    }
+    throw new Error('The assistant returned an invalid research draft')
+  }
+}
+
+function jsonObject(raw: string): Record<string, unknown> {
+  const start = raw.indexOf('{')
+  const end = raw.lastIndexOf('}')
+  if (start < 0 || end <= start) throw new Error('The assistant returned invalid JSON')
+  return JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>
+}
+
+export function parseResearchKickoffPlan(raw: string): ResearchKickoffPlan {
+  try {
+    const parsed = jsonObject(raw)
+    const outline = Array.isArray(parsed.outline) ? parsed.outline.flatMap((item) => {
+      if (!item || typeof item !== 'object') return []
+      const row = item as Record<string, unknown>
+      const heading = typeof row.heading === 'string' ? row.heading.trim() : ''
+      const purpose = typeof row.purpose === 'string' ? row.purpose.trim() : ''
+      return heading && purpose ? [{ heading: heading.slice(0, 120), purpose: purpose.slice(0, 300) }] : []
+    }).slice(0, 7) : []
+    const questions = Array.isArray(parsed.questions) ? parsed.questions.flatMap((item, index) => {
+      if (!item || typeof item !== 'object') return []
+      const row = item as Record<string, unknown>
+      const rawQuestion = typeof row.question === 'string' ? row.question.trim() : ''
+      const why = typeof row.why === 'string' ? row.why.trim() : ''
+      const question = rawQuestion ? plainResearchQuestion(rawQuestion, 'socratic', `${index}:${rawQuestion}`) : ''
+      return question ? [{ id: `q${index + 1}`, question, why: (why || 'This helps shape the outline.').slice(0, 160) }] : []
+    }).slice(0, 4) : []
+    const title = typeof parsed.title === 'string' ? parsed.title.trim().slice(0, 160) : ''
+    const description = typeof parsed.description === 'string' ? parsed.description.trim().slice(0, 500) : ''
+    if (!title || outline.length < 3 || questions.length < 3) throw new Error('incomplete plan')
+    return { title, description, outline, questions }
+  } catch {
+    throw new Error('The assistant returned an invalid research plan')
+  }
+}
+
+export function parseResearchKickoffDraft(raw: string): ResearchKickoffDraft {
+  try {
+    const parsed = jsonObject(raw)
+    const sections = Array.isArray(parsed.sections) ? parsed.sections.flatMap((item) => {
+      if (!item || typeof item !== 'object') return []
+      const row = item as Record<string, unknown>
+      const heading = typeof row.heading === 'string' ? row.heading.trim() : ''
+      const content = typeof row.content === 'string' ? row.content.trim() : ''
+      return heading && content ? [{ heading: heading.slice(0, 160), content: content.slice(0, 5_000) }] : []
+    }).slice(0, 8) : []
+    if (sections.length < 2) throw new Error('incomplete draft')
+    return {
+      sections,
+      reflection: typeof parsed.reflection === 'string' && parsed.reflection.trim()
+        ? parsed.reflection.trim().slice(0, 500)
+        : 'Which sentence in this working draft least accurately represents your own view?',
+      sourceNeeds: Array.isArray(parsed.sourceNeeds)
+        ? parsed.sourceNeeds.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map((item) => item.trim()).slice(0, 6)
+        : [],
+    }
+  } catch {
+    throw new Error('The assistant returned an invalid kickoff draft')
+  }
+}
+
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 export type AIProvider = 'gemini' | 'ollama' | 'groq' | 'custom'
@@ -185,9 +304,10 @@ async function geminiGenerate(prompt: string): Promise<string> {
       generationConfig: {
         temperature: 0.4,
         maxOutputTokens: 1024,
-        // Engine outputs are short (a question, a verdict JSON, a scaffold);
-        // thinking only burns latency + quota here.
-        thinkingConfig: { thinkingBudget: 0 },
+        // Do not send model-specific thinking controls here. Gemini 2.5 uses
+        // thinkingBudget while Gemini 3.x uses thinkingLevel, and unsupported
+        // combinations make generateContent reject the entire request. These
+        // engines work with the provider default across both model families.
       },
     }),
   })
@@ -450,12 +570,9 @@ export class GeminiAdapter implements AIService {
       evidence: '',
       claim: '',
     })
-    const raw = await callLLM(filled)
-    // Extract the question (strip the "QUESTION:" prefix if present)
-    const question = raw
-      .replace(/^QUESTION:\s*/i, '')
-      .replace(/^"|"$/g, '')
-      .trim()
+    const raw = await callLLM(`${filled}\n\nUse everyday language. Ask one direct question of no more than 16 words. Do not use labels, academic jargon, or multiple clauses.`)
+    const engineType: EngineType = tag === 'The Spark Gap' ? 'interceptor' : 'socratic'
+    const question = plainResearchQuestion(raw, engineType, stub || prompt || context)
     return { question, raw }
   }
 
@@ -507,6 +624,120 @@ export class GeminiAdapter implements AIService {
       draft.slice(-400)
     const raw = await callLLM(systemPrompt)
     return { suggestion: raw.trim(), raw }
+  }
+
+  async answerFromEvidence(
+    question: string,
+    evidence: { chunkId: string; content: string }[],
+  ): Promise<GroundedResearchAnswer | null> {
+    if (evidence.length === 0) return null
+    const passages = evidence.map((item) => `[${item.chunkId}] ${item.content}`).join('\n\n')
+    const raw = await callLLM(
+      'You are Cogdoc Source Mapper. Answer a researcher\'s question only from the indexed passages below. ' +
+      'Do not draft submission prose, invent facts, or cite a passage that does not support the answer. ' +
+      'Return only JSON with keys: answer (a concise research note), passage_ids (supporting chunk IDs), ' +
+      'confidence (high, medium, or low), and follow_up_question (a useful question or null).\n\n' +
+      `QUESTION:\n${question}\n\nINDEXED PASSAGES:\n${passages}`,
+    )
+    const { parseGroundedAnswer } = await import('@/lib/source-mapper')
+    return parseGroundedAnswer(raw, evidence.map((item) => item.chunkId))
+  }
+
+  async evaluateInterventionAnswer(input: {
+    engineType: EngineType
+    passage: string
+    intervention: string
+    answer: string
+    evidence: Array<{ chunkId: string; content: string }>
+  }): Promise<InterventionAnswerEvaluation> {
+    const evidence = input.evidence.length
+      ? input.evidence.map((item) => `[${item.chunkId}] ${item.content}`).join('\n\n')
+      : '(no indexed passage attached)'
+    const raw = await callLLM(
+      'You are having a simple research conversation. Check whether the researcher answered the question in their own words. ' +
+      'Accept a short answer when it gives one clear reason, example, source, or honest uncertainty. Do not rewrite their work. ' +
+      'Return only JSON with keys satisfied (boolean), rationale (one friendly sentence under 12 words), and ' +
+      'follow_up_question (one everyday question under 12 words, or null). Never use labels or academic jargon.\n\n' +
+      `ENGINE: ${input.engineType}\nPASSAGE: ${input.passage}\nINTERVENTION: ${input.intervention}\nRESEARCHER ANSWER: ${input.answer}\nINDEXED EVIDENCE:\n${evidence}`,
+    )
+    const parsed = parseInterventionAnswerEvaluation(raw)
+    if (!parsed) throw new Error('The assistant returned an invalid intervention evaluation')
+    if (!parsed.satisfied && !parsed.followUpQuestion) {
+      return { ...parsed, followUpQuestion: plainResearchQuestion('', input.engineType, input.passage) }
+    }
+    return parsed.satisfied
+      ? parsed
+      : { ...parsed, followUpQuestion: plainResearchQuestion(parsed.followUpQuestion, input.engineType, input.passage) }
+  }
+
+  async draftFromResearchDialogue(
+    answers: ResearchDialogueAnswers,
+    documentContext: string,
+  ): Promise<ResearchDialogueDraft> {
+    const raw = await callLLM(
+      'You are Cogdoc, a learning and research assistant designed to prevent cognitive atrophy. ' +
+      'The researcher has earned drafting help by explaining their own reasoning through a structured dialogue. ' +
+      'Create a concise WORKING DRAFT from their ideas, not a finished authoritative answer. Preserve uncertainty, ' +
+      'represent the counter-position fairly, and never invent evidence or citations. Mark unsupported factual claims ' +
+      'with [source needed]. Return only JSON with keys: draft (2-4 coherent paragraphs), reflection (one question that ' +
+      'makes the researcher check whether the wording still represents their thinking), and sourceNeeds (an array of ' +
+      'specific evidence gaps).\n\n' +
+      `RESEARCH FOCUS:\n${answers.focus}\n\n` +
+      `RESEARCHER'S EVIDENCE OR REASONS:\n${answers.evidence}\n\n` +
+      `COUNTER-POSITION OR LIMITATION:\n${answers.tension}\n\n` +
+      `INTENDED CONTRIBUTION:\n${answers.contribution}\n\n` +
+      `NEARBY DOCUMENT CONTEXT (may be empty; do not treat it as verified evidence):\n${documentContext.slice(-4_000)}`,
+    )
+    return parseResearchDialogueDraft(raw)
+  }
+
+  async planResearchKickoff(topic: string, conversation: Array<{ question: string; answer: string }> = []): Promise<ResearchKickoffPlan> {
+    const conversationText = conversation.length
+      ? conversation.map((item) => `Cogdoc: ${item.question}\nResearcher: ${item.answer}`).join('\n\n')
+      : '(No conversation was supplied.)'
+    const raw = await callLLM(
+      'You are Cogdoc, a friendly research partner. Build a clear document structure from the researcher\'s own conversation. ' +
+      'Use plain language, short section titles, and one-sentence purposes. Do not sound like an examiner and do not add claims ' +
+      'the researcher did not make. Return only JSON with title, description, outline (3-6 objects with heading and purpose), ' +
+      'and questions (exactly 3 short, everyday follow-up questions with question and why). Each question must contain at most ' +
+      '12 words.\n\n' +
+      `TOPIC:\n${topic.slice(0, 2_000)}\n\nCONVERSATION:\n${conversationText.slice(0, 8_000)}`,
+    )
+    return parseResearchKickoffPlan(raw)
+  }
+
+  async draftResearchKickoff(input: {
+    topic: string
+    outline: ResearchKickoffOutlineItem[]
+    responses: Array<{ question: string; answer: string }>
+  }): Promise<ResearchKickoffDraft> {
+    const raw = await callLLM(
+      'You are Cogdoc, a research partner designed to resist cognitive atrophy. The researcher has reviewed an outline ' +
+      'and answered preliminary questions. Write an editable WORKING DRAFT that follows the outline and faithfully reflects ' +
+      'their demonstrated understanding. Include uncertainty and competing views. Never invent evidence, sources, quotations, ' +
+      'or citations; mark claims needing support with [source needed]. Return only JSON with sections (objects with heading and ' +
+      'content, one concise paragraph per outline section), reflection (one question that tests whether the draft still matches ' +
+      'the researcher\'s view), and sourceNeeds (specific evidence gaps).\n\n' +
+      `TOPIC:\n${input.topic}\n\nOUTLINE:\n${input.outline.map((item) => `${item.heading}: ${item.purpose}`).join('\n')}\n\n` +
+      `RESEARCHER RESPONSES:\n${input.responses.map((item) => `Q: ${item.question}\nA: ${item.answer}`).join('\n\n')}`,
+    )
+    return parseResearchKickoffDraft(raw)
+  }
+
+  async restructureFromIntervention(input: {
+    passage: string
+    intervention: string
+    answer: string
+    rationale: string
+  }): Promise<string> {
+    const raw = await callLLM(
+      'Restructure one research passage using the researcher\'s own satisfactory answer. Preserve their meaning and voice, ' +
+      'make the reasoning explicit, retain honest uncertainty, and do not add facts or citations. Return only the revised ' +
+      'passage at roughly the same scope—no preface, labels, or commentary.\n\n' +
+      `ORIGINAL PASSAGE:\n${input.passage}\n\nINTERVENTION:\n${input.intervention}\n\n` +
+      `RESEARCHER ANSWER:\n${input.answer}\n\nEVALUATION:\n${input.rationale}`,
+    )
+    return raw.replace(/^REVISED(?: PASSAGE)?:\s*/i, '').replace(/^"|"$/g, '').trim().slice(0, 5_000)
   }
 }
 

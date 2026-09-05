@@ -11,71 +11,80 @@ datasource db {
 }
 
 model User {
-  id              String   @id @default(cuid())
-  email           String   @unique
-  displayName     String?
-  dailyTokenBudget Int    @default(100000)
-  frictionMode    String   @default("socratic") // socratic | coach | assistant (PRODUCT.md §9)
-  createdAt       DateTime @default(now())
-  lastLogin       DateTime?
+  id                    String               @id @default(cuid())
+  email                 String               @unique
+  displayName           String?
+  dailyTokenBudget      Int                  @default(100000)
+  frictionMode          String               @default("socratic") // socratic | coach | assistant (PRODUCT.md §9)
+  createdAt             DateTime             @default(now())
+  lastLogin             DateTime?
   onboardingCompletedAt DateTime?
-  projects        Project[]
-  interventions   Intervention[]
-  pdfs            Pdf[]
-  reviewResponses ReviewResponse[]
-  auditEvents     AuditEvent[]
-  reports         VerificationReport[]
-  certificates    Certificate[]
+  projects              Project[]
+  interventions         Intervention[]
+  pdfs                  Pdf[]
+  reviewResponses       ReviewResponse[]
+  auditEvents           AuditEvent[]
+  reports               VerificationReport[]
+  certificates          Certificate[]
+  librarySources        LibrarySource[]
+  academicProfiles      AcademicProfile[]
 }
 
 model Project {
-  id          String   @id @default(cuid())
-  userId      String
-  title       String
-  description String?
-  archived    Boolean  @default(false)
-  workspaceType String @default("research") // assignment | research
-  dueAt       DateTime?
-  reviewPace  String   @default("deep") // rapid | guided | deep
-  citationStyle String @default("harvard") // harvard | apa
-  lifecycleState String @default("draft") // draft | reviewing | ready | certified
-  briefText   String?
-  deletedAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  document    Document?
-  pdfs        Pdf[]
-  interventions Intervention[]
-  requirements Requirement[]
-  documentVersions DocumentVersion[]
-  references Reference[]
-  citations Citation[]
-  claims Claim[]
-  reviewRuns ReviewRun[]
-  reviewItems ReviewItem[]
-  auditEvents AuditEvent[]
-  codeSnapshots CodeSnapshot[]
-  assets WorkspaceAsset[]
-  reports VerificationReport[]
-  certificates Certificate[]
+  id                String               @id @default(cuid())
+  userId            String
+  title             String
+  description       String?
+  archived          Boolean              @default(false)
+  workspaceType     String               @default("research") // assignment | research
+  dueAt             DateTime?
+  reviewPace        String               @default("deep") // rapid | guided | deep
+  citationStyle     String               @default("harvard") // harvard | apa
+  lifecycleState    String               @default("draft") // draft | reviewing | ready | certified
+  briefText         String?
+  deletedAt         DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document          Document?
+  pdfs              Pdf[]
+  interventions     Intervention[]
+  requirements      Requirement[]
+  documentVersions  DocumentVersion[]
+  references        Reference[]
+  citations         Citation[]
+  claims            Claim[]
+  reviewRuns        ReviewRun[]
+  reviewItems       ReviewItem[]
+  auditEvents       AuditEvent[]
+  codeSnapshots     CodeSnapshot[]
+  assets            WorkspaceAsset[]
+  reports           VerificationReport[]
+  certificates      Certificate[]
+  workspaceSources  WorkspaceSource[]
+  researchNotes     ResearchNote[]
+  sourceAnnotations SourceAnnotation[]
+  researchActions   ResearchAction[]
+  groundedSyntheses GroundedSynthesis[]
+  academicProfiles  AcademicProfile[]
+  researchJobs      ResearchJob[]
 
   @@index([userId])
 }
 
 model WorkspaceAsset {
-  id          String   @id @default(cuid())
-  projectId   String
-  kind        String   // original_docx | brief | source | code_archive | normalized_docx | report_pdf
-  filename    String
-  mimeType    String
-  sizeBytes   Int
-  contentHash String
-  storageProvider String @default("filesystem")
-  storageKey  String
-  warningsJson String @default("[]")
-  createdAt   DateTime @default(now())
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  projectId       String
+  kind            String // original_docx | brief | source | code_archive | normalized_docx | report_pdf
+  filename        String
+  mimeType        String
+  sizeBytes       Int
+  contentHash     String
+  storageProvider String   @default("filesystem")
+  storageKey      String
+  warningsJson    String   @default("[]")
+  createdAt       DateTime @default(now())
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt])
 }
@@ -91,32 +100,32 @@ model Document {
 }
 
 model Requirement {
-  id          String   @id @default(cuid())
-  projectId   String
-  text        String
-  source      String   @default("manual") // manual | brief | rubric
-  required    Boolean  @default(false)
-  confirmed   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  projectId String
+  text      String
+  source    String   @default("manual") // manual | brief | rubric
+  required  Boolean  @default(false)
+  confirmed Boolean  @default(false)
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
 }
 
 model DocumentVersion {
-  id          String   @id @default(cuid())
-  projectId   String
-  sequence    Int
-  content     String
-  plainText   String
-  contentHash String
-  reason      String   // import | scan | resolution | manual | certification
-  createdAt   DateTime @default(now())
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  reviewRuns  ReviewRun[]
-  claims      Claim[]
-  citations   Citation[]
-  reports     VerificationReport[]
+  id           String               @id @default(cuid())
+  projectId    String
+  sequence     Int
+  content      String
+  plainText    String
+  contentHash  String
+  reason       String // import | scan | resolution | manual | certification
+  createdAt    DateTime             @default(now())
+  project      Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reviewRuns   ReviewRun[]
+  claims       Claim[]
+  citations    Citation[]
+  reports      VerificationReport[]
   certificates Certificate[]
 
   @@unique([projectId, sequence])
@@ -124,300 +133,308 @@ model DocumentVersion {
 }
 
 model Pdf {
-  id           String   @id @default(cuid())
-  projectId    String
-  userId       String
-  filename     String
-  rawText      String   @default("") // extracted text content
-  sizeBytes    Int      @default(0)
-  parseStatus  String   @default("queued") // queued | ready | failed
-  uploadedAt   DateTime @default(now())
-  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  chunks       PdfChunk[]
-  references   Reference[]
+  id              String         @id @default(cuid())
+  projectId       String
+  userId          String
+  filename        String
+  rawText         String         @default("") // extracted text content
+  sizeBytes       Int            @default(0)
+  parseStatus     String         @default("queued") // queued | ready | failed
+  uploadedAt      DateTime       @default(now())
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chunks          PdfChunk[]
+  references      Reference[]
+  librarySourceId String?
+  librarySource   LibrarySource? @relation(fields: [librarySourceId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([userId])
+  @@index([librarySourceId])
 }
 
 model PdfChunk {
-  id           String   @id @default(cuid())
-  pdfId        String
-  chunkIndex   Int
-  content      String
-  charCount    Int
-  pageApprox   Int      @default(1) // simulated page number
-  createdAt    DateTime @default(now())
-  pdf          Pdf      @relation(fields: [pdfId], references: [id], onDelete: Cascade)
-  evidences    InterventionEvidence[]
-  evidenceLinks EvidenceLink[]
-
-  @@index([pdfId])
+  id                String                       @id @default(cuid())
+  pdfId             String
+  chunkIndex        Int
+  content           String
+  charCount         Int
+  pageApprox        Int                          @default(1) // simulated page number
+  createdAt         DateTime                     @default(now())
+  pdf               Pdf                          @relation(fields: [pdfId], references: [id], onDelete: Cascade)
+  evidences         InterventionEvidence[]
+  evidenceLinks     EvidenceLink[]
+  synthesisPassages SynthesisFindingPassage[]
+  researchNotes     ResearchNote[]
+  annotations       SourceAnnotation[]
   // pgvector column (ADR-0008). Declared Unsupported so `prisma db push`
   // preserves it; the Prisma client ignores it (reads/writes go through the
   // FastAPI PgvectorStore). Populated by fastapi/migrations/0001.
-  embedding    Unsupported("vector(3072)")?
+  embedding         Unsupported("vector(3072)")?
+
+  @@index([pdfId])
 }
 
 model Reference {
-  id            String   @id @default(cuid())
-  projectId     String
-  sourceId      String?
-  rawText       String
-  style         String
-  authorsJson   String   @default("[]")
-  year          String?
-  title         String?
-  doi           String?
-  url           String?
-  metadataStatus String  @default("unverified") // unverified | matched | confirmed | mismatch
-  metadataConfidence Float @default(0)
-  metadataJson  String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  source        Pdf?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  citations     Citation[]
+  id                 String           @id @default(cuid())
+  projectId          String
+  sourceId           String?
+  rawText            String
+  style              String
+  authorsJson        String           @default("[]")
+  year               String?
+  title              String?
+  doi                String?
+  url                String?
+  metadataStatus     String           @default("unverified") // unverified | matched | confirmed | mismatch
+  metadataConfidence Float            @default(0)
+  metadataJson       String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  source             Pdf?             @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  citations          Citation[]
+  workspaceSourceId  String?
+  workspaceSource    WorkspaceSource? @relation(fields: [workspaceSourceId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([doi])
 }
 
 model Citation {
-  id              String   @id @default(cuid())
-  projectId       String
+  id                String          @id @default(cuid())
+  projectId         String
   documentVersionId String
-  referenceId     String?
-  claimId         String?
-  rawText         String
-  authorsJson     String   @default("[]")
-  year            String?
-  locator         String?
-  anchorJson      String
-  matchConfidence Float    @default(0)
-  createdAt       DateTime @default(now())
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  documentVersion DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
-  reference       Reference? @relation(fields: [referenceId], references: [id], onDelete: SetNull)
-  claim           Claim?   @relation(fields: [claimId], references: [id], onDelete: SetNull)
+  referenceId       String?
+  claimId           String?
+  rawText           String
+  authorsJson       String          @default("[]")
+  year              String?
+  locator           String?
+  anchorJson        String
+  matchConfidence   Float           @default(0)
+  createdAt         DateTime        @default(now())
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documentVersion   DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  reference         Reference?      @relation(fields: [referenceId], references: [id], onDelete: SetNull)
+  claim             Claim?          @relation(fields: [claimId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([documentVersionId])
 }
 
 model Claim {
-  id              String   @id @default(cuid())
-  projectId       String
+  id                String          @id @default(cuid())
+  projectId         String
   documentVersionId String
-  text            String
-  riskCategory    String   @default("general")
-  anchorJson      String
-  central         Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  documentVersion DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
-  citations       Citation[]
-  evidenceLinks   EvidenceLink[]
-  reviewItems     ReviewItem[]
+  text              String
+  riskCategory      String          @default("general")
+  anchorJson        String
+  central           Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documentVersion   DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  citations         Citation[]
+  evidenceLinks     EvidenceLink[]
+  reviewItems       ReviewItem[]
 
   @@index([projectId])
   @@index([documentVersionId])
 }
 
 model EvidenceLink {
-  id          String   @id @default(cuid())
-  claimId     String
-  pdfChunkId  String?
-  codeFileId  String?
-  kind        String   // source_passage | code_range | student_test_artifact
-  startLine   Int?
-  endLine     Int?
-  excerpt     String?
-  confidence  Float    @default(0)
-  supportStatus String  @default("insufficient_evidence") // supported | partially_supported | contradicted | insufficient_evidence
-  idempotencyKey String?
-  confirmedByStudent Boolean @default(false)
-  createdAt   DateTime @default(now())
-  claim       Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  pdfChunk    PdfChunk? @relation(fields: [pdfChunkId], references: [id], onDelete: SetNull)
-  codeFile    CodeFile? @relation(fields: [codeFileId], references: [id], onDelete: SetNull)
+  id                 String    @id @default(cuid())
+  claimId            String
+  pdfChunkId         String?
+  codeFileId         String?
+  kind               String // source_passage | code_range | student_test_artifact
+  startLine          Int?
+  endLine            Int?
+  excerpt            String?
+  confidence         Float     @default(0)
+  supportStatus      String    @default("insufficient_evidence") // supported | partially_supported | contradicted | insufficient_evidence
+  idempotencyKey     String?
+  confirmedByStudent Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  claim              Claim     @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  pdfChunk           PdfChunk? @relation(fields: [pdfChunkId], references: [id], onDelete: SetNull)
+  codeFile           CodeFile? @relation(fields: [codeFileId], references: [id], onDelete: SetNull)
 
-  @@index([claimId])
   @@unique([claimId, idempotencyKey])
+  @@index([claimId])
 }
 
 model ReviewRun {
-  id              String   @id @default(cuid())
-  projectId       String
+  id                String          @id @default(cuid())
+  projectId         String
   documentVersionId String
-  scope           String   @default("full") // full | changed_blocks
-  status          String   @default("queued") // queued | scanning | ready | failed | cancelled
-  progress        Int      @default(0)
-  currentStage    String?
-  errorCode       String?
-  analyzerVersions String  @default("{}")
-  idempotencyKey  String?
-  createdAt       DateTime @default(now())
-  startedAt       DateTime?
-  completedAt     DateTime?
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  documentVersion DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
-  items           ReviewItem[]
+  scope             String          @default("full") // full | changed_blocks
+  status            String          @default("queued") // queued | scanning | ready | failed | cancelled
+  progress          Int             @default(0)
+  currentStage      String?
+  errorCode         String?
+  analyzerVersions  String          @default("{}")
+  idempotencyKey    String?
+  createdAt         DateTime        @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documentVersion   DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  items             ReviewItem[]
 
   @@unique([projectId, idempotencyKey])
   @@index([projectId, createdAt])
 }
 
 model ReviewItem {
-  id          String   @id @default(cuid())
-  projectId   String
-  reviewRunId String
-  claimId     String?
-  type        String
-  severity    String   // critical | advisory
-  title       String
-  detail      String
-  evidenceJson String  @default("{}")
-  anchorJson  String?
-  state       String   @default("open") // open | in_progress | submitted | rechecking | resolved | dismissed | unresolved
-  blocksCertification Boolean @default(false)
-  resolution  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  resolvedAt  DateTime?
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  reviewRun   ReviewRun @relation(fields: [reviewRunId], references: [id], onDelete: Cascade)
-  claim       Claim?   @relation(fields: [claimId], references: [id], onDelete: SetNull)
-  responses   ReviewResponse[]
+  id                  String           @id @default(cuid())
+  projectId           String
+  reviewRunId         String
+  claimId             String?
+  type                String
+  severity            String // critical | advisory
+  title               String
+  detail              String
+  evidenceJson        String           @default("{}")
+  anchorJson          String?
+  state               String           @default("open") // open | in_progress | submitted | rechecking | resolved | dismissed | unresolved
+  blocksCertification Boolean          @default(false)
+  resolution          String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  resolvedAt          DateTime?
+  project             Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reviewRun           ReviewRun        @relation(fields: [reviewRunId], references: [id], onDelete: Cascade)
+  claim               Claim?           @relation(fields: [claimId], references: [id], onDelete: SetNull)
+  responses           ReviewResponse[]
 
   @@index([projectId, state])
   @@index([reviewRunId])
 }
 
 model ReviewResponse {
-  id          String   @id @default(cuid())
+  id           String     @id @default(cuid())
   reviewItemId String
-  userId      String
+  userId       String
   responseText String?
-  beforeText  String?
-  afterText   String?
-  evidenceJson String  @default("{}")
-  createdAt   DateTime @default(now())
-  item        ReviewItem @relation(fields: [reviewItemId], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  beforeText   String?
+  afterText    String?
+  evidenceJson String     @default("{}")
+  createdAt    DateTime   @default(now())
+  item         ReviewItem @relation(fields: [reviewItemId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([reviewItemId])
 }
 
 model AuditEvent {
-  id          String   @id @default(cuid())
-  projectId   String
-  userId      String
-  type        String
-  actor       String   @default("student") // student | system
-  payloadJson String   @default("{}")
-  documentHash String?
-  modelVersion String?
+  id            String   @id @default(cuid())
+  projectId     String
+  userId        String
+  type          String
+  actor         String   @default("student") // student | system
+  payloadJson   String   @default("{}")
+  documentHash  String?
+  modelVersion  String?
   promptVersion String?
   previousHash  String?
   eventHash     String?  @unique
-  createdAt   DateTime @default(now())
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt])
 }
 
 model CodeSnapshot {
-  id          String   @id @default(cuid())
-  projectId   String
-  filename    String
-  sizeBytes   Int
-  extractedBytes Int   @default(0)
-  fileCount   Int      @default(0)
-  snapshotHash String
-  status      String   @default("ready") // queued | indexing | ready | failed
-  warningsJson String  @default("[]")
-  createdAt   DateTime @default(now())
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  files       CodeFile[]
+  id             String     @id @default(cuid())
+  projectId      String
+  filename       String
+  sizeBytes      Int
+  extractedBytes Int        @default(0)
+  fileCount      Int        @default(0)
+  snapshotHash   String
+  status         String     @default("ready") // queued | indexing | ready | failed
+  warningsJson   String     @default("[]")
+  createdAt      DateTime   @default(now())
+  project        Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  files          CodeFile[]
 
   @@index([projectId, createdAt])
 }
 
 model CodeFile {
-  id          String   @id @default(cuid())
+  id             String         @id @default(cuid())
   codeSnapshotId String
-  path        String
-  language    String?
-  content     String?
-  contentHash String
-  lineCount   Int      @default(0)
-  sizeBytes   Int
-  createdAt   DateTime @default(now())
-  snapshot    CodeSnapshot @relation(fields: [codeSnapshotId], references: [id], onDelete: Cascade)
-  evidenceLinks EvidenceLink[]
+  path           String
+  language       String?
+  content        String?
+  contentHash    String
+  lineCount      Int            @default(0)
+  sizeBytes      Int
+  createdAt      DateTime       @default(now())
+  snapshot       CodeSnapshot   @relation(fields: [codeSnapshotId], references: [id], onDelete: Cascade)
+  evidenceLinks  EvidenceLink[]
 
   @@unique([codeSnapshotId, path])
   @@index([codeSnapshotId])
 }
 
 model VerificationReport {
-  id              String   @id @default(cuid())
-  projectId       String
+  id                String          @id @default(cuid())
+  projectId         String
   documentVersionId String
-  createdById     String
-  level           String   @default("scan_report") // scan_report | reviewed_with_warnings | process_verified
-  reportJson      String
-  reportHash      String
-  coverageJson    String   @default("{}")
-  createdAt       DateTime @default(now())
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  documentVersion DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
-  createdBy       User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  certificates    Certificate[]
+  createdById       String
+  level             String          @default("scan_report") // scan_report | reviewed_with_warnings | process_verified
+  reportJson        String
+  reportHash        String
+  coverageJson      String          @default("{}")
+  createdAt         DateTime        @default(now())
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documentVersion   DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  createdBy         User            @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  certificates      Certificate[]
 
   @@index([projectId, createdAt])
 }
 
 model Certificate {
-  id              String   @id @default(cuid())
-  projectId       String
-  reportId        String   @unique
-  documentVersionId String
-  createdById     String
-  status          String   @default("valid") // valid | superseded | revoked
-  payloadJson     String
-  payloadHash     String
-  signature       String
-  publicKeyId     String
-  publicKeyPem    String
-  docxHash        String?
+  id                  String             @id @default(cuid())
+  projectId           String
+  reportId            String             @unique
+  documentVersionId   String
+  createdById         String
+  status              String             @default("valid") // valid | superseded | revoked
+  payloadJson         String
+  payloadHash         String
+  signature           String
+  publicKeyId         String
+  publicKeyPem        String
+  docxHash            String?
   docxStorageProvider String?
-  docxStorageKey  String?
-  pdfStorageProvider String?
-  pdfStorageKey   String?
-  createdAt       DateTime @default(now())
-  supersededAt    DateTime?
-  revokedAt       DateTime?
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  report          VerificationReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  documentVersion DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
-  createdBy       User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  shares          ShareGrant[]
+  docxStorageKey      String?
+  pdfStorageProvider  String?
+  pdfStorageKey       String?
+  createdAt           DateTime           @default(now())
+  supersededAt        DateTime?
+  revokedAt           DateTime?
+  project             Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  report              VerificationReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  documentVersion     DocumentVersion    @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  createdBy           User               @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  shares              ShareGrant[]
 
   @@index([projectId, createdAt])
 }
 
 model ShareGrant {
-  id          String   @id @default(cuid())
+  id            String      @id @default(cuid())
   certificateId String
-  tokenHash   String   @unique
-  expiresAt   DateTime?
-  revokedAt   DateTime?
-  createdAt   DateTime @default(now())
-  certificate Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+  tokenHash     String      @unique
+  expiresAt     DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime    @default(now())
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
 
   @@index([certificateId])
 }
@@ -435,22 +452,22 @@ model CertificateRevocationTombstone {
 }
 
 model Intervention {
-  id              String   @id @default(cuid())
-  userId          String
-  projectId       String
-  paragraphId     String?  // synthetic id from frontend (paragraph hash)
+  id                String                 @id @default(cuid())
+  userId            String
+  projectId         String
+  paragraphId       String? // synthetic id from frontend (paragraph hash)
   promptTemplateTag String? // [Provocation], [Lens], [Structural Scaffold], [The Spark Gap]
-  engineType      String   // interceptor | socratic | citation | scaffold
-  promptText      String?
-  responseText    String?
-  verdict         String?  // supported | partially_supported | unsupported | insufficient_evidence | null
-  status          String   @default("active") // active | faded | resolved
-  userAction      String?  // engaged | dismissed | ignored
-  createdAt       DateTime @default(now())
-  resolvedAt      DateTime?
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  evidences       InterventionEvidence[]
+  engineType        String // interceptor | socratic | citation | scaffold
+  promptText        String?
+  responseText      String?
+  verdict           String? // supported | partially_supported | unsupported | insufficient_evidence | null
+  status            String                 @default("active") // active | faded | resolved
+  userAction        String? // engaged | dismissed | ignored
+  createdAt         DateTime               @default(now())
+  resolvedAt        DateTime?
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project           Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  evidences         InterventionEvidence[]
 
   @@index([userId])
   @@index([projectId])
@@ -458,7 +475,7 @@ model Intervention {
 }
 
 model InterventionEvidence {
-  id              String   @id @default(cuid())
+  id              String       @id @default(cuid())
   interventionId  String
   chunkId         String
   similarityScore Float
@@ -471,12 +488,208 @@ model InterventionEvidence {
 }
 
 model PromptTemplate {
-  id            String   @id @default(cuid())
-  behaviorTag   String   @unique // Provocation | Lens | Structural Scaffold | The Spark Gap
-  name          String
-  template      String
-  modelId       String   @default("default")
-  version       Int      @default(1)
-  active        Boolean  @default(true)
-  createdAt     DateTime @default(now())
+  id          String   @id @default(cuid())
+  behaviorTag String   @unique // Provocation | Lens | Structural Scaffold | The Spark Gap
+  name        String
+  template    String
+  modelId     String   @default("default")
+  version     Int      @default(1)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model LibrarySource {
+  id                 String            @id @default(cuid())
+  userId             String
+  title              String
+  filename           String?
+  doi                String?
+  canonicalUrl       String?
+  contentHash        String?
+  mimeType           String?
+  sizeBytes          Int               @default(0)
+  parseStatus        String            @default("queued")
+  storageProvider    String?
+  storageKey         String?
+  metadataJson       String            @default("{}")
+  qualityScore       Float             @default(0)
+  qualityExplanation String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaces         WorkspaceSource[]
+  legacyPdfs         Pdf[]
+
+  @@unique([userId, doi])
+  @@unique([userId, canonicalUrl])
+  @@unique([userId, contentHash])
+  @@index([userId, updatedAt])
+}
+
+model WorkspaceSource {
+  id                 String             @id @default(cuid())
+  projectId          String
+  librarySourceId    String
+  relevance          Float              @default(0)
+  status             String             @default("saved")
+  notes              String?
+  citationUsageCount Int                @default(0)
+  lastOpenedAt       DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  source             LibrarySource      @relation(fields: [librarySourceId], references: [id], onDelete: Restrict)
+  notesEntries       ResearchNote[]
+  annotations        SourceAnnotation[]
+  references         Reference[]
+
+  @@unique([projectId, librarySourceId])
+  @@index([projectId, status])
+}
+
+model ResearchNote {
+  id                 String           @id @default(cuid())
+  projectId          String
+  workspaceSourceId  String?
+  passageId          String?
+  kind               String           @default("note")
+  title              String?
+  body               String
+  exactExcerpt       String?
+  sourceAnchorJson   String?
+  documentAnchorJson String?
+  stale              Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspaceSource    WorkspaceSource? @relation(fields: [workspaceSourceId], references: [id], onDelete: SetNull)
+  passage            PdfChunk?        @relation(fields: [passageId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, updatedAt])
+  @@index([workspaceSourceId])
+}
+
+model SourceAnnotation {
+  id                String          @id @default(cuid())
+  projectId         String
+  workspaceSourceId String
+  passageId         String?
+  color             String          @default("ochre")
+  comment           String?
+  anchorJson        String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspaceSource   WorkspaceSource @relation(fields: [workspaceSourceId], references: [id], onDelete: Cascade)
+  passage           PdfChunk?       @relation(fields: [passageId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, workspaceSourceId])
+}
+
+model ResearchAction {
+  id                  String    @id @default(cuid())
+  projectId           String
+  kind                String
+  title               String
+  detail              String
+  state               String    @default("open")
+  pinned              Boolean   @default(false)
+  snoozedUntil        DateTime?
+  dismissedAt         DateTime?
+  completedAt         DateTime?
+  priority            Int       @default(0)
+  priorityFactorsJson String    @default("{}")
+  targetKind          String?
+  targetId            String?
+  documentAnchorJson  String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  project             Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, state, priority])
+  @@index([projectId, snoozedUntil])
+}
+
+model GroundedSynthesis {
+  id        String             @id @default(cuid())
+  projectId String
+  kind      String
+  prompt    String
+  status    String             @default("queued")
+  error     String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  project   Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  findings  SynthesisFinding[]
+
+  @@index([projectId, createdAt])
+}
+
+model SynthesisFinding {
+  id          String                    @id @default(cuid())
+  synthesisId String
+  text        String
+  confidence  Float                     @default(0)
+  sortOrder   Int                       @default(0)
+  synthesis   GroundedSynthesis         @relation(fields: [synthesisId], references: [id], onDelete: Cascade)
+  passages    SynthesisFindingPassage[]
+
+  @@index([synthesisId, sortOrder])
+}
+
+model SynthesisFindingPassage {
+  findingId String
+  passageId String
+  finding   SynthesisFinding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  passage   PdfChunk         @relation(fields: [passageId], references: [id], onDelete: Restrict)
+
+  @@id([findingId, passageId])
+  @@index([passageId])
+}
+
+model AcademicProfile {
+  id               String   @id @default(cuid())
+  userId           String
+  projectId        String?
+  name             String
+  cslStyle         String   @default("harvard")
+  headingJson      String   @default("{}")
+  marginsJson      String   @default("{\"top\":25.4,\"right\":25.4,\"bottom\":25.4,\"left\":25.4}")
+  spacing          Float    @default(2)
+  titlePageJson    String   @default("{}")
+  captionJson      String   @default("{}")
+  tableJson        String   @default("{}")
+  bibliographyJson String   @default("{}")
+  isDefault        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project          Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId, projectId])
+}
+
+model ResearchJob {
+  id             String    @id @default(cuid())
+  projectId      String
+  kind           String
+  status         String    @default("queued")
+  payloadJson    String    @default("{}")
+  resultJson     String?
+  progress       Int       @default(0)
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(3)
+  availableAt    DateTime  @default(now())
+  leaseOwner     String?
+  leaseExpiresAt DateTime?
+  error          String?
+  idempotencyKey String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  completedAt    DateTime?
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, idempotencyKey])
+  @@index([status, availableAt])
+  @@index([projectId, createdAt])
 }
