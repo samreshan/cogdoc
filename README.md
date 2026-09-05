@@ -84,24 +84,32 @@ docker compose -f docker-compose.dev.yml exec -T postgres \
   psql -U cogdoc -d cogdoc -c 'CREATE EXTENSION IF NOT EXISTS vector;'
 ```
 
-### Optional vector retrieval service
+### Full local stack
 
-Start the FastAPI service alongside PostgreSQL:
+Start PostgreSQL, the Next.js frontend/API, the FastAPI retrieval service, and
+the worker together:
 
 ```bash
-docker compose -f docker-compose.dev.yml --profile full up -d postgres rag
+docker compose --env-file .env.local -f docker-compose.dev.yml --profile full up -d --build
 ```
 
-Then set these values in `.env.local` and restart the Next.js server:
+Set these values in `.env.local` before starting the stack:
 
 ```env
-FASTAPI_URL="http://localhost:8000"
+COGDOC_RESEARCH_COLLABORATOR="article"
 USE_VECTOR_RETRIEVAL="true"
+EMBEDDING_PROVIDER="gemini"
 ```
 
-Without FastAPI, Cogdoc keeps working with its PostgreSQL-backed exact and
-keyword retrieval path. See `fastapi/requirements.txt` and the development
-Compose file for embedding-provider options.
+The Compose project creates dedicated `cogdoc-full_*` volumes. On its first
+run, the app initializes the Prisma schema and `vector-init` applies the
+idempotent pgvector column migration before retrieval starts. Open
+<http://localhost:3000>; the RAG health endpoint is <http://localhost:8000/>.
+Stop the stack without deleting data with:
+
+```bash
+docker compose --env-file .env.local -f docker-compose.dev.yml --profile full down
+```
 
 ### AI provider examples
 

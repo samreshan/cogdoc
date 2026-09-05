@@ -8,15 +8,15 @@
 # workspace and pgvector store.
 #
 # Usage:
-#   docker compose -f docker-compose.dev.yml up         # all three services
-#   docker compose -f docker-compose.dev.yml up rag     # just the FastAPI service
-#   docker compose -f docker-compose.dev.yml down
+#   docker compose --env-file .env.local -f docker-compose.dev.yml --profile full up -d --build
+#   docker compose --env-file .env.local -f docker-compose.dev.yml --profile full down
 # ─────────────────────────────────────────────────────────────────────────────
+name: cogdoc-full
+
 services:
   # ── Canonical Postgres + pgvector store ─────────────────────────────────
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: cogdoc-postgres
     environment:
       POSTGRES_USER: cogdoc
       POSTGRES_PASSWORD: cogdoc_dev
@@ -37,7 +37,6 @@ services:
     build:
       context: ./fastapi
       dockerfile: Dockerfile
-    container_name: cogdoc-rag
     ports:
       - "8000:8000"
     environment:
@@ -50,18 +49,25 @@ services:
       EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-hashing}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-${AI_API_KEY:-}}"
     depends_on:
-      postgres:
-        condition: service_healthy
+      vector-init:
+        condition: service_completed_successfully
     profiles: ["full"]   # opt-in; run with --profile full
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
 
   # ── Next.js app (the BFF + frontend) ─────────────────────────────────────
-  # Built from the existing Dockerfile; configured via the setup wizard or env.
+  # The Next.js server provides both the browser frontend and the application
+  # API (BFF). Its entrypoint applies the Prisma schema and seeds a new local
+  # database before serving requests.
   app:
     build:
       context: .
       dockerfile: Dockerfile
     image: cogdoc:local
-    container_name: cogdoc-app
     ports:
       - "3000:3000"
     env_file:
@@ -79,8 +85,26 @@ services:
     volumes:
       - cogdoc_appdata:/data
     depends_on:
-      rag:
-        condition: service_started
+      postgres:
+        condition: service_healthy
+    profiles: ["full"]
+
+  # Prisma cannot create pgvector's Unsupported column. Apply the idempotent
+  # raw migration after the app has created the Prisma-owned tables, and before
+  # the RAG service receives requests.
+  vector-init:
+    image: pgvector/pgvector:pg16
+    environment:
+      PGPASSWORD: cogdoc_dev
+    volumes:
+      - ./fastapi/migrations/0001_pdfchunk_embedding_pgvector.sql:/migrations/0001_pdfchunk_embedding_pgvector.sql:ro
+    command:
+      - sh
+      - -ec
+      - psql -v ON_ERROR_STOP=1 -h postgres -U cogdoc -d cogdoc -f /migrations/0001_pdfchunk_embedding_pgvector.sql
+    depends_on:
+      app:
+        condition: service_healthy
     profiles: ["full"]
 
   # PostgreSQL-backed queue worker for reprioritization and synthesis jobs.
@@ -89,12 +113,11 @@ services:
       context: .
       dockerfile: Dockerfile
     image: cogdoc:local
-    container_name: cogdoc-worker
     entrypoint: ["node", "scripts/research-worker.mjs"]
     environment:
       DATABASE_URL: "postgresql://cogdoc:cogdoc_dev@postgres:5432/cogdoc"
     depends_on:
-      postgres:
+      app:
         condition: service_healthy
     restart: unless-stopped
     profiles: ["full"]
