@@ -43,7 +43,8 @@ RUN npm run build
 
 # ── Stage 3: runtime ─────────────────────────────────────────────────────────
 FROM node:22-alpine AS runtime
-RUN apk add --no-cache libc6-compat openssl bash dialog
+# `wget` is used by the image health check below.
+RUN apk add --no-cache libc6-compat openssl bash dialog wget
 
 # Install both SQLite and Postgres Prisma engine binaries for multi-arch safety
 # (Prisma 6 auto-detects, but we set BINARY_TARGETS to be explicit)
