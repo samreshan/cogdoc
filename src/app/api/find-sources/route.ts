@@ -119,8 +119,8 @@ export async function POST(req: NextRequest) {
       { name: 'semantic_scholar', search: semanticScholarFindSources },
     ]
 
-    // A source search is an explicit author action, so query all configured
-    // indexes and merge their evidence instead of stopping at the first hit.
+    // Confirmed topic/question transitions and explicit author searches both use
+    // the same bounded provider fan-out. Results remain uninspected source leads.
     const searches = [
       ...scholarlyProviders.map((item) => ({ name: item.name as RecordProvider, run: () => item.search(searchQuery) })),
       { name: 'gemini' as const, run: () => geminiFindSources(claim, searchQuery) },

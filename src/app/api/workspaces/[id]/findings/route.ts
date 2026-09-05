@@ -12,6 +12,7 @@ import {
 import { sha256 } from '@/lib/crypto'
 import { appendAuditEvent } from '@/lib/workspace-server'
 import { canonicalizeSourceUrl, normalizeDoi } from '@/lib/research-source'
+import { enqueueBackgroundEnginePrompt } from '@/lib/research-jobs'
 
 export const runtime = 'nodejs'
 
@@ -161,6 +162,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         await appendAuditEvent(tx, { projectId: id, userId, type: 'manual_excerpt_added', actor: 'student', payload: { questionId: question.id, workspaceSourceId: workspaceSource.id, locator: locator || null, locatorChecked: Boolean(body.locatorChecked) } })
         return { resource, workspaceSource: { ...workspaceSource, source } }
       })
+      void enqueueBackgroundEnginePrompt({ projectId: id, trigger: 'source_added', entityId: result.workspaceSource.id, questionId: question.id })
+        .catch((error) => console.warn('Background engine prompt could not be enqueued:', (error as Error).message))
       return NextResponse.json(result, { status: 201 })
     }
 
@@ -193,6 +196,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         await appendAuditEvent(tx, { projectId: id, userId, type: isVideo ? 'video_resource_saved' : 'discovery_source_saved', actor: 'student', payload: { questionId: question.id, workspaceSourceId: workspaceSource.id, librarySourceId: source.id, reused: Boolean(existing), accessState: metadata.accessState, timestampRange: timestamp } })
         return { resource, workspaceSource: { ...workspaceSource, source }, alreadySaved: Boolean(existing), transcriptAvailable: Boolean(body.transcriptAvailable), timestampRange: timestamp }
       })
+      void enqueueBackgroundEnginePrompt({ projectId: id, trigger: 'source_added', entityId: result.workspaceSource.id, questionId: question.id })
+        .catch((error) => console.warn('Background engine prompt could not be enqueued:', (error as Error).message))
       return NextResponse.json(result, { status: result.alreadySaved ? 200 : 201 })
     }
 
@@ -279,6 +284,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         await appendAuditEvent(tx, { projectId: id, userId, type: 'research_finding_saved', actor: 'student', payload: { findingId: finding.id, revision: savedRevision.revision, questionId: question.id, evidenceCount: evidence.length, disposition } })
         return { finding, revision: savedRevision, evidence }
       })
+      void enqueueBackgroundEnginePrompt({
+        projectId: id, trigger: 'finding_saved', entityId: `${result.finding.id}:${result.revision.revision}`,
+        questionId: question.id, findingRevisionId: result.revision.id,
+      }).catch((error) => console.warn('Background engine prompt could not be enqueued:', (error as Error).message))
       return NextResponse.json(result, { status: existing ? 200 : 201 })
     }
 

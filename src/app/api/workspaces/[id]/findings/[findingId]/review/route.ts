@@ -63,6 +63,17 @@ export async function POST(
     }
     assertCurrentFindingRevision(expectedRevision, revision.finding.currentRevision, revision.revision)
 
+    const pendingEnginePrompt = await db.researchExchange.findFirst({
+      where: { projectId, findingRevisionId: revision.id, operation: { startsWith: 'background_engine:pending:' } },
+      select: { id: true },
+    })
+    if (pendingEnginePrompt) {
+      return NextResponse.json({
+        error: 'Answer the pending collaborator engine question for this finding revision before recording its review. “I’m not sure—help me investigate” is a valid answer.',
+        code: 'engine_response_required', promptId: pendingEnginePrompt.id,
+      }, { status: 409 })
+    }
+
     const evidence = await db.findingEvidence.findMany({
       where: { findingRevisionId: revision.id, projectId },
       select: {

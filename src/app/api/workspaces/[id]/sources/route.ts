@@ -4,7 +4,7 @@ import { requireUserId } from '@/lib/auth-supabase'
 import { putPrivateAsset } from '@/lib/private-storage'
 import { chunkText } from '@/lib/retrieval'
 import { assessSourceQuality, canonicalizeSourceUrl, contentDigest, normalizeDoi } from '@/lib/research-source'
-import { enqueueClericalResearchJobs } from '@/lib/research-jobs'
+import { enqueueBackgroundEnginePrompt, enqueueClericalResearchJobs } from '@/lib/research-jobs'
 import { appendAuditEvent } from '@/lib/workspace-server'
 import { currentFindingIdsForWorkspaceSource, invalidateFindingReviews } from '@/lib/finding-review-invalidation'
 
@@ -101,6 +101,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   await db.$transaction((tx) => appendAuditEvent(tx, { projectId: id, userId, type: 'workspace_source_attached', actor: 'student', payload: { summary: `${existing ? 'Reused' : 'Added'} source: ${source.title}`, workspaceSourceId: workspaceSource.id, librarySourceId: source.id, reused: Boolean(existing), privateFile: Boolean(bytes) } }))
   void enqueueClericalResearchJobs(id, 'source_import', source.id).catch((error) => console.warn('Research jobs could not be enqueued:', (error as Error).message))
+  void enqueueBackgroundEnginePrompt({ projectId: id, trigger: 'source_added', entityId: workspaceSource.id })
+    .catch((error) => console.warn('Background engine prompt could not be enqueued:', (error as Error).message))
   return NextResponse.json({ workspaceSource, alreadySaved: Boolean(existing) }, { status: existing ? 200 : 201 })
 }
 

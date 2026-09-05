@@ -71,11 +71,13 @@ function toTurn(exchange: {
   modelVersion: string | null
   referencedIdsJson: string
   questionId: string | null
+  findingRevisionId?: string | null
   createdAt: Date
 }): CollaboratorTurn {
   const envelope = exchange.speaker === 'assistant' ? readEnvelope(exchange.body) : null
   let references: string[] = []
   try { references = JSON.parse(exchange.referencedIdsJson) as string[] } catch { /* empty legacy references */ }
+  const background = /^background_engine:(pending|answered|superseded):([^:]+)$/.exec(exchange.operation ?? '')
   return {
     id: exchange.id,
     role: exchange.speaker === 'assistant' ? 'assistant' : 'researcher',
@@ -92,6 +94,11 @@ function toTurn(exchange: {
     proposal: envelope?.proposal,
     nextStep: envelope?.nextStep,
     hypothetical: envelope?.hypothetical,
+    enginePrompt: background ? {
+      status: background[1] as 'pending' | 'answered' | 'superseded',
+      engine: background[2] as 'interceptor' | 'socratic' | 'citation' | 'scaffold',
+      findingRevisionId: exchange.findingRevisionId ?? undefined,
+    } : undefined,
   }
 }
 
@@ -123,7 +130,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const project = await db.project.findFirst({ where: { id, userId }, select: { id: true, userId: true, archived: true, deletedAt: true } })
     assertActiveOwnedWorkspace(project, userId)
     const exchanges = await db.researchExchange.findMany({
-      where: { projectId: id, operation: { startsWith: 'document_collaborator:' } },
+      where: { projectId: id, OR: [{ operation: { startsWith: 'document_collaborator:' } }, { operation: { startsWith: 'background_engine:' } }] },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: 120,
     })
@@ -146,6 +153,40 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const intent = intents.has(body.intent as CollaboratorIntent) ? body.intent as CollaboratorIntent : 'ask'
     const requestId = text(body.requestId, 200)
     if (!message) return NextResponse.json({ error: 'Write a request for the collaborator.' }, { status: 400 })
+    const answerToEnginePromptId = text(body.answerToEnginePromptId, 200)
+    if (answerToEnginePromptId) {
+      const prompt = await db.researchExchange.findFirst({
+        where: { id: answerToEnginePromptId, projectId: id, operation: { startsWith: 'background_engine:pending:' } },
+      })
+      if (!prompt) return NextResponse.json({ error: 'This engine question was answered or superseded. Refresh the conversation.', code: 'stale_engine_prompt' }, { status: 409 })
+      const engine = prompt.operation?.split(':')[2] || 'socratic'
+      const uncertain = /\b(i(?:'| a)?m not sure|not sure|unsure|help me investigate|do not know|don't know)\b/i.test(message)
+      const contextSnapshot: CollaboratorTurn['context'] = { questionId: prompt.questionId ?? undefined, sourceIds: [] }
+      const result = await db.$transaction(async (tx) => {
+        const researcher = await tx.researchExchange.create({ data: {
+          projectId: id, questionId: prompt.questionId, findingRevisionId: prompt.findingRevisionId,
+          speaker: 'researcher', origin: 'researcher', body: message, referencedIdsJson: JSON.stringify([prompt.id]),
+          operation: 'background_engine:answer', commandKey: requestId ? `background-engine-answer:${requestId}` : null,
+        } })
+        await tx.researchExchange.update({ where: { id: prompt.id }, data: { operation: `background_engine:answered:${engine}` } })
+        const envelope: StoredAssistantEnvelope = {
+          content: uncertain
+            ? 'Uncertainty recorded. You can keep investigating or explicitly retain this uncertainty when you review the finding; it is not treated as evidence.'
+            : 'Your response is recorded against this exact engine question and revision. Review the finding separately when you are ready.',
+          intent: 'challenge', providerStatus: 'deterministic_fallback', hypothetical: false, context: contextSnapshot,
+          nextStep: uncertain ? 'Open Findings and choose retain uncertainty if that accurately reflects your judgement.' : 'Open Findings to make the separate review decision.',
+        }
+        const assistant = await tx.researchExchange.create({ data: {
+          projectId: id, questionId: prompt.questionId, findingRevisionId: prompt.findingRevisionId,
+          speaker: 'assistant', origin: 'assistant', body: JSON.stringify(envelope), referencedIdsJson: JSON.stringify([prompt.id, researcher.id]),
+          operation: 'document_collaborator:assistant:challenge', modelVersion: 'deterministic-background-v1', promptVersion: `background-${engine}-answer-v1`,
+          commandKey: requestId ? `background-engine-answer:${requestId}:assistant` : null,
+        } })
+        await appendAuditEvent(tx, { projectId: id, userId, type: 'background_engine_answered', actor: 'student', payload: { promptId: prompt.id, answerId: researcher.id, engine, findingRevisionId: prompt.findingRevisionId, uncertaintyRecorded: uncertain } })
+        return { researcher, assistant }
+      })
+      return NextResponse.json({ researcherTurn: toTurn(result.researcher), assistantTurn: toTurn(result.assistant), assistant: publicAIConfiguration() })
+    }
     const contextInput = body.context && typeof body.context === 'object' ? body.context as Partial<DocumentCollaboratorContext> : {}
     const selection = contextInput.selection ?? null
     if (selection && (selection.projectId !== id || !selectionIsSelfConsistent(selection) || selection.textFingerprint !== sha256(selection.exactText))) {

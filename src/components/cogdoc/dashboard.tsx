@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, BookOpen, FileInput, Loader2, MessageSquareText, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { ArrowRight, BookOpen, FileInput, FlaskConical, Loader2, MessageSquareText, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCogdoc } from '@/lib/store'
 import { api } from '@/lib/api-client'
@@ -10,6 +10,7 @@ import type { OpenWorkspaceHandler } from '@/lib/document-workspace-contract'
 import { Button } from '@/components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import ResearchKickoff from '@/components/cogdoc/research-kickoff'
+import { createOrResumeGuidedDemo, isGuidedDemo } from '@/lib/guided-demo'
 
 function updatedLabel(value: string) {
   const date = new Date(value)
@@ -27,6 +28,7 @@ export default function Dashboard() {
   const [importing, setImporting] = useState(false)
   const [openingId, setOpeningId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [demoLoading, setDemoLoading] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
 
   const visibleProjects = useMemo(() => {
@@ -112,6 +114,20 @@ export default function Dashboard() {
     }
   }
 
+  async function openGuidedDemo(forceNew = false) {
+    setDemoLoading(true)
+    try {
+      const result = await createOrResumeGuidedDemo({ workspaces: projects, forceNew })
+      openWorkspace(result.workspace)
+      toast.success(result.resumed ? 'Guided demo resumed' : 'Guided demo created', {
+        description: 'Starter text and source records are demonstration material. You make every evidence and finding decision.',
+      })
+    } catch (error) {
+      toast.error('Could not prepare the guided demo', { description: `${(error as Error).message} Any created demo project was kept so you can retry safely.` })
+      void refresh()
+    } finally { setDemoLoading(false) }
+  }
+
   return (
     <main id="main-content" className="min-h-[100dvh] bg-[var(--cogdoc-canvas,#eef0f4)] text-[var(--cogdoc-ink,#27272f)]">
       <header className="bg-[var(--cogdoc-shell,#292930)] text-[#f4f4f6]">
@@ -138,6 +154,12 @@ export default function Dashboard() {
               <p className="flex items-center gap-3"><Search className="size-4 text-[#6858a8]" aria-hidden="true" />Sources retain access details and citation provenance.</p>
               <p className="flex items-center gap-3"><MessageSquareText className="size-4 text-[#6858a8]" aria-hidden="true" />The collaborator works from context you choose.</p>
             </div>
+            <Button type="button" variant="outline" onClick={() => void openGuidedDemo()} disabled={demoLoading || loading} className="mt-7 rounded-xl border-[#c9c5dc] bg-white text-[#55468c] hover:bg-[#f4f1fb]">
+              {demoLoading ? <Loader2 className="mr-2 size-4 animate-spin motion-reduce:animate-none" /> : <FlaskConical className="mr-2 size-4" />}
+              {projects.some(isGuidedDemo) ? 'Resume guided demo' : 'Open prefilled guided demo'}
+            </Button>
+            {projects.some(isGuidedDemo) ? <button type="button" disabled={demoLoading || loading} onClick={() => void openGuidedDemo(true)} className="ml-3 text-xs font-medium text-[#6858a8] underline underline-offset-4 disabled:opacity-50">Create another demo copy</button> : null}
+            <p className="mt-2 max-w-md text-xs leading-5 text-[#6c6e78]">Optional 5–10 minute walkthrough. It creates a separate demo project and never changes your other documents.</p>
           </div>
           <ResearchKickoff onOpenWorkspace={openWorkspace} />
         </div>

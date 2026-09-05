@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => {
   const models = {
     project: { findFirst: vi.fn() }, researchQuestion: { findFirst: vi.fn() },
     workspaceSource: { findMany: vi.fn() }, pdfChunk: { findFirst: vi.fn() },
-    researchExchange: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+    researchExchange: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
   }
   return { models, transaction: vi.fn(), collaborate: vi.fn(), appendAuditEvent: vi.fn() }
 })
@@ -76,6 +76,44 @@ describe('document collaborator route', () => {
     const payload = await response.json()
     expect(payload.turns.map((turn: { role: string }) => turn.role)).toEqual(['researcher', 'assistant'])
     expect(payload.turns[1].content).toBe('First answer')
+  })
+
+  it('exposes a durable pending engine question in the collaborator conversation', async () => {
+    mocks.models.researchExchange.findMany.mockResolvedValue([{
+      id: 'engine-1', speaker: 'assistant', body: JSON.stringify({
+        content: 'What locator will let another researcher verify this passage?', intent: 'challenge',
+        providerStatus: 'deterministic_fallback', nextStep: null, hypothetical: false,
+        context: { questionId: 'question-1', sourceIds: ['source-1'] },
+      }), operation: 'background_engine:pending:citation', modelVersion: 'deterministic-background-v1',
+      referencedIdsJson: '["source-1"]', questionId: 'question-1', findingRevisionId: 'revision-2',
+      createdAt: new Date('2026-09-05T00:00:00Z'),
+    }])
+    const response = await GET(new Request('http://localhost/api/workspaces/workspace-1/collaborator') as never, routeContext)
+    const payload = await response.json()
+    expect(payload.turns[0]).toMatchObject({
+      content: expect.stringContaining('locator'),
+      enginePrompt: { engine: 'citation', status: 'pending', findingRevisionId: 'revision-2' },
+    })
+  })
+
+  it('records uncertainty as a valid engine answer without reviewing the finding', async () => {
+    mocks.models.researchExchange.findFirst.mockResolvedValue({
+      id: 'engine-1', projectId: 'workspace-1', questionId: 'question-1', findingRevisionId: 'revision-2',
+      operation: 'background_engine:pending:citation',
+    })
+    const response = await POST(makeReq({
+      message: "I'm not sure—help me investigate", answerToEnginePromptId: 'engine-1', requestId: 'request-engine-1',
+    }), routeContext)
+    const payload = await response.json()
+    expect(response.status).toBe(200)
+    expect(mocks.models.researchExchange.update).toHaveBeenCalledWith({
+      where: { id: 'engine-1' }, data: { operation: 'background_engine:answered:citation' },
+    })
+    expect(mocks.models.researchExchange.create.mock.calls[0][0].data).toMatchObject({
+      speaker: 'researcher', findingRevisionId: 'revision-2', body: "I'm not sure—help me investigate",
+    })
+    expect(payload.assistantTurn.content).toContain('not treated as evidence')
+    expect(mocks.collaborate).not.toHaveBeenCalled()
   })
 
   it('rejects a selection whose text fingerprint does not match its exact text', async () => {

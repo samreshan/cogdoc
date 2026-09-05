@@ -11,12 +11,14 @@ const mocks = vi.hoisted(() => ({
   getWorkspace: vi.fn(),
   planResearchKickoff: vi.fn(),
   draftResearchKickoff: vi.fn(),
+  automaticallyDiscoverSources: vi.fn().mockResolvedValue({ status: 'saved', saved: 1 }),
 }))
 
 vi.mock('@/lib/api-client', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/api-client')>()
   return { ...original, api: { ...original.api, ...mocks } }
 })
+vi.mock('@/lib/automatic-source-discovery', () => ({ automaticallyDiscoverSources: mocks.automaticallyDiscoverSources }))
 
 import ResearchKickoff, { projectTitleFromTopic } from './research-kickoff'
 
@@ -63,6 +65,7 @@ describe('research kickoff', () => {
     })
     expect(mocks.planResearchKickoff).not.toHaveBeenCalled()
     expect(mocks.draftResearchKickoff).not.toHaveBeenCalled()
+    await waitFor(() => expect(mocks.automaticallyDiscoverSources).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'project-1', query: 'AI' })))
   })
 
   it('saves optional context including an explicit unknown without making it a gate', async () => {

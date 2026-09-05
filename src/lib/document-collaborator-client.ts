@@ -32,6 +32,7 @@ export async function sendDocumentCollaboratorMessage(projectId: string, input: 
   intent: CollaboratorIntent
   context: DocumentCollaboratorContext
   requestId: string
+  answerToEnginePromptId?: string
 }): Promise<{ researcherTurn: CollaboratorTurn; assistantTurn: CollaboratorTurn; assistant: PublicAssistantConfiguration }> {
   return json(await fetch(`/api/workspaces/${encodeURIComponent(projectId)}/collaborator`, {
     method: 'POST',

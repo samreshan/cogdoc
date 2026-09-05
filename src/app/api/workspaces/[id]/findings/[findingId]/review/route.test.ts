@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => {
     project: { findFirst: vi.fn() },
     findingRevision: { findFirst: vi.fn() },
     findingEvidence: { findMany: vi.fn() },
+    researchExchange: { findFirst: vi.fn() },
     researchFinding: { updateMany: vi.fn() },
     findingReview: { create: vi.fn() },
     auditEvent: { findFirst: vi.fn(), create: vi.fn() },
@@ -56,6 +57,7 @@ beforeEach(() => {
     id: 'evidence-1', workspaceSourceId: 'source-1', sourceFingerprint: 'source-hash',
     contentFingerprint: 'content-hash', locatorType: 'section', locatorValue: '§ 2', locatorPrecision: 'user_confirmed',
   }])
+  mocks.models.researchExchange.findFirst.mockResolvedValue(null)
   mocks.models.researchFinding.updateMany.mockResolvedValue({ count: 1 })
   mocks.models.findingReview.create.mockResolvedValue({ id: 'review-1', decision: 'accept' })
   mocks.models.auditEvent.findFirst.mockResolvedValue(null)
@@ -93,6 +95,15 @@ describe('finding review endpoint', () => {
     const response = await POST(makeReq({ findingRevisionId: 'revision-2', expectedRevision: 1, decision: 'accept' }), context)
     expect(response.status).toBe(409)
     expect((await response.json()).code).toBe('stale_revision')
+    expect(mocks.models.findingReview.create).not.toHaveBeenCalled()
+  })
+
+  it('gates only the affected revision while its engine question is unanswered', async () => {
+    mocks.models.researchExchange.findFirst.mockResolvedValue({ id: 'engine-1' })
+    const response = await POST(makeReq({ findingRevisionId: 'revision-2', expectedRevision: 2, decision: 'retain_uncertainty' }), context)
+    const payload = await response.json()
+    expect(response.status).toBe(409)
+    expect(payload).toMatchObject({ code: 'engine_response_required', promptId: 'engine-1' })
     expect(mocks.models.findingReview.create).not.toHaveBeenCalled()
   })
 

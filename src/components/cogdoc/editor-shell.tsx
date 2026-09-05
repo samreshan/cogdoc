@@ -16,6 +16,9 @@ import ResearchHistory from './research-history'
 import ResearchLibrary from './research-library'
 import ResearchNavigator, { type WorkspaceSection } from './research-navigator'
 import ResearchWorkPane from './research-work-pane'
+import { automaticallyDiscoverSources } from '@/lib/automatic-source-discovery'
+import { GuidedDemoGuide } from '@/components/cogdoc/guided-demo-guide'
+import { isGuidedDemo } from '@/lib/guided-demo'
 
 export default function EditorShell() {
   const project = useCogdoc((state) => state.activeProject)
@@ -24,6 +27,7 @@ export default function EditorShell() {
   const toggleFocusMode = useCogdoc((state) => state.toggleFocusMode)
   const setResearchActions = useCogdoc((state) => state.setResearchActions)
   const libraryVersion = useCogdoc((state) => state.libraryVersion)
+  const bumpLibrary = useCogdoc((state) => state.bumpLibrary)
   const editorRef = useRef<DocumentEditorHandle>(null)
   const [snapshot, setSnapshot] = useState<ResearchWorkspaceSnapshot | null>(null)
   const [context, setContext] = useState<ResearchContextSummary | null>(null)
@@ -36,6 +40,21 @@ export default function EditorShell() {
   const [loadError, setLoadError] = useState('')
   const [preview, setPreview] = useState<DocumentEditProposal | null>(null)
   const [secondary, setSecondary] = useState<'history' | 'references' | null>(null)
+  const [sourceDiscovery, setSourceDiscovery] = useState<{ status: 'idle' | 'searching' | 'saved' | 'empty' | 'partial' | 'unavailable' | 'skipped'; message: string }>({ status: 'idle', message: 'CogDoc searches once after a topic or question is confirmed.' })
+  const confirmedQuestion = questions.find((question) => question.id === context?.selectedQuestionId) ?? null
+
+  const runSourceDiscovery = useCallback(async (force = false) => {
+    if (!project || !context) return
+    const query = confirmedQuestion?.wording || context.topic
+    if (!query.trim()) return
+    setSourceDiscovery({ status: 'searching', message: `Searching scholarly records for ${confirmedQuestion ? 'the selected question' : 'the confirmed topic'}…` })
+    const result = await automaticallyDiscoverSources({
+      projectId: project.id, query, questionId: confirmedQuestion?.id,
+      purpose: context.purpose, storage: window.localStorage, force,
+    })
+    setSourceDiscovery({ status: result.status, message: result.message })
+    if (result.saved) bumpLibrary()
+  }, [bumpLibrary, confirmedQuestion, context, project])
 
   const refresh = useCallback(async () => {
     if (!project) return
@@ -78,10 +97,15 @@ export default function EditorShell() {
     if (!project) return
     window.localStorage.setItem(`cogdoc:document-workspace:${project.id}`, JSON.stringify({ dockSection, railVisible }))
   }, [dockSection, project?.id, railVisible])
+  useEffect(() => {
+    if (!context?.topic) return
+    const timer = window.setTimeout(() => { void runSourceDiscovery(false) }, 0)
+    return () => window.clearTimeout(timer)
+  }, [context?.topic, context?.selectedQuestionId, runSourceDiscovery])
 
   if (!project) return null
   const activeProject = project
-  const selectedQuestion = questions.find((question) => question.id === context?.selectedQuestionId) ?? null
+  const selectedQuestion = confirmedQuestion
   const documentSelection: DocumentSelectionContext | null = selection && project.document ? {
     projectId: project.id,
     documentId: project.document.id,
@@ -192,6 +216,9 @@ export default function EditorShell() {
             onClose={closeDock}
             onSectionChange={setDockSection}
             onRefresh={refresh}
+            sourceRefreshKey={libraryVersion}
+            sourceDiscovery={sourceDiscovery}
+            onRetrySourceDiscovery={() => runSourceDiscovery(true)}
           />
         </div>}
         {!focusMode && dockSection && <div className="absolute inset-0 z-30 bg-[var(--cog-paper)] xl:hidden">
@@ -212,6 +239,9 @@ export default function EditorShell() {
             onClose={closeDock}
             onSectionChange={setDockSection}
             onRefresh={refresh}
+            sourceRefreshKey={libraryVersion}
+            sourceDiscovery={sourceDiscovery}
+            onRetrySourceDiscovery={() => runSourceDiscovery(true)}
           />
         </div>}
       </div>
@@ -226,6 +256,7 @@ export default function EditorShell() {
     <Dialog open={Boolean(openSource)} onOpenChange={(open) => { if (!open) { setOpenSource(null); requestAnimationFrame(() => editorRef.current?.focus()) } }}><DialogContent className="h-[min(50rem,calc(100dvh-2rem))] max-w-4xl overflow-hidden p-0"><DialogHeader className="sr-only"><DialogTitle>{openSource?.title || 'Source reader'}</DialogTitle><DialogDescription>Inspect available source passages and return to the document.</DialogDescription></DialogHeader>{openSource && <SourceReader key={openSource.workspaceSourceId} projectId={project.id} source={openSource} onChoose={(source) => { setSelectedSources((current) => [...current.filter((item) => item.workspaceSourceId !== source.workspaceSourceId), source]); setOpenSource(null); setDockSection('collaborator') }} />}</DialogContent></Dialog>
 
     <Dialog open={Boolean(secondary)} onOpenChange={(open) => { if (!open) setSecondary(null) }}><DialogContent className="h-[min(48rem,calc(100dvh-2rem))] max-w-5xl overflow-hidden p-0"><DialogHeader className="sr-only"><DialogTitle>{secondary === 'history' ? 'Project history' : 'References'}</DialogTitle><DialogDescription>Secondary project tools</DialogDescription></DialogHeader>{secondary === 'history' ? <ResearchHistory projectId={project.id} initialFilter="decisions" /> : <ResearchLibrary />}</DialogContent></Dialog>
+    {isGuidedDemo(project) ? <GuidedDemoGuide key={project.id} projectId={project.id} onOpenSection={(section) => setDockSection(section)} onFocusDocument={() => { setDockSection(null); requestAnimationFrame(() => editorRef.current?.focus()) }} /> : null}
   </div>
 }
 

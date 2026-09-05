@@ -99,6 +99,11 @@ export interface CollaboratorTurn {
   proposal?: DockProposal
   nextStep?: string | null
   hypothetical?: boolean
+  enginePrompt?: {
+    engine: 'interceptor' | 'socratic' | 'citation' | 'scaffold'
+    status: 'pending' | 'answered' | 'superseded'
+    findingRevisionId?: string
+  }
 }
 
 export interface CollaboratorResponse {
@@ -131,6 +136,9 @@ export interface DocumentResearchDockProps {
   onSelectedSourcesChange?: (sources: DockSourceContext[]) => void
   onSectionChange?: (section: DocumentDockSection) => void
   onRefresh?: () => void
+  sourceRefreshKey?: number
+  sourceDiscovery?: { status: 'idle' | 'searching' | 'saved' | 'empty' | 'partial' | 'unavailable' | 'skipped'; message: string }
+  onRetrySourceDiscovery?: () => Promise<void>
 }
 
 export function createSelectionId(selection: Omit<DocumentSelectionContext, 'selectionId'>): string {

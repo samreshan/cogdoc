@@ -118,6 +118,15 @@ export const api = {
     passages: Array<{ id: string; chunkIndex: number; pageApprox: number; content: string }>
     hasPrivateFile: boolean
   }>(`/api/workspaces/${projectId}/sources/${sourceId}`),
+  saveWorkspaceSource: (projectId: string, input: {
+    title: string
+    url?: string
+    canonicalUrl?: string
+    doi?: string | null
+    metadata?: Record<string, unknown>
+  }) => jsonFetch<{ workspaceSource: { id: string }; alreadySaved: boolean }>(`/api/workspaces/${projectId}/sources`, {
+    method: 'POST', body: JSON.stringify(input),
+  }),
   createResearchNote: (projectId: string, input: Record<string, unknown>) =>
     jsonFetch<{ note: ResearchNote }>(`/api/workspaces/${projectId}/notebook`, { method: 'POST', body: JSON.stringify(input) }),
   updateResearchAction: (projectId: string, actionId: string, patch: Record<string, unknown>) =>

@@ -8,6 +8,7 @@ import type { Project } from '@/lib/types'
 import type { CitationStyle } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { automaticallyDiscoverSources } from '@/lib/automatic-source-discovery'
 
 interface Props {
   open?: boolean
@@ -63,6 +64,12 @@ export default function ResearchKickoff({ open = true, onOpenChange, onOpenWorks
           topic: cleanTopic,
           purpose: purpose.trim(),
           existingUnderstanding: existingUnderstanding.trim(),
+        })
+        void automaticallyDiscoverSources({
+          projectId: workspace.id,
+          query: cleanTopic,
+          purpose: purpose.trim(),
+          storage: window.localStorage,
         })
       } catch {
         toast.warning('Your document is ready', {
