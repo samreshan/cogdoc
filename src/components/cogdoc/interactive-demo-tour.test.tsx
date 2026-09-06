@@ -119,4 +119,22 @@ describe('InteractiveDemoTour', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resume demo' }))
     expect(screen.getByText('Plan shows the route through the topic')).toBeInTheDocument()
   })
+
+  it('blocks a queued advance synchronously when Escape arrives before effect cleanup', () => {
+    vi.useFakeTimers()
+    try {
+      const storageKey = `cogdoc:interactive-demo:${INTERACTIVE_DEMO_VERSION}:${INTERACTIVE_DEMO_PROJECT_ID}`
+      const planStep = INTERACTIVE_DEMO_STEPS.findIndex((step) => step.target === 'nav-plan')
+      storage.set(storageKey, String(planStep))
+      render(<><button data-demo-target="nav-plan" onClick={() => window.dispatchEvent(new CustomEvent('cogdoc:demo-action', { detail: { action: 'plan-opened' } }))}>Plan</button><InteractiveDemoTour projectId={INTERACTIVE_DEMO_PROJECT_ID} onCommand={vi.fn()} onRestore={vi.fn()} onExit={vi.fn()} /></>)
+
+      fireEvent.click(screen.getByRole('button', { name: /Show me/ }))
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      vi.runAllTimers()
+
+      expect(storage.get(storageKey)).toBe(String(planStep))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

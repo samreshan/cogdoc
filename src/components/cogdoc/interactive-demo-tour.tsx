@@ -81,8 +81,10 @@ export default function InteractiveDemoTour({ projectId, onCommand, onRestore, o
   const cardRef = useRef<HTMLElement>(null)
   const initializedRef = useRef(false)
   const lastAdvancedStepRef = useRef<number | null>(null)
+  const openRef = useRef(open)
   const onRestoreRef = useRef(onRestore)
   const stepRef = useRef(step)
+  openRef.current = open
   const current = INTERACTIVE_DEMO_STEPS[step]
   onRestoreRef.current = onRestore
   stepRef.current = step
@@ -107,12 +109,13 @@ export default function InteractiveDemoTour({ projectId, onCommand, onRestore, o
     if (!open) return
     const timers = new Set<number>()
     const handler = (event: Event) => {
+      if (!openRef.current) return
       const action = String((event as CustomEvent<{ action?: string }>).detail?.action ?? '')
       if (current?.expected !== action) return
       const expectedStep = stepRef.current
       const timer = window.setTimeout(() => {
         timers.delete(timer)
-        if (stepRef.current === expectedStep) advance()
+        if (openRef.current && stepRef.current === expectedStep) advance()
       }, 180)
       timers.add(timer)
     }
@@ -161,7 +164,7 @@ export default function InteractiveDemoTour({ projectId, onCommand, onRestore, o
 
   useEffect(() => {
     if (!open) return
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { abortRef.current?.abort(); setRunning(false); setOpen(false) } }
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { openRef.current = false; abortRef.current?.abort(); setRunning(false); setOpen(false) } }
     window.addEventListener('keydown', escape)
     cardRef.current?.focus()
     return () => window.removeEventListener('keydown', escape)
@@ -199,11 +202,11 @@ export default function InteractiveDemoTour({ projectId, onCommand, onRestore, o
   }
 
   function restart() {
-    abortRef.current?.abort(); setRunning(false); lastAdvancedStepRef.current = null; setStep(0); onRestore(0); setOpen(true)
+    abortRef.current?.abort(); setRunning(false); lastAdvancedStepRef.current = null; setStep(0); onRestore(0); openRef.current = true; setOpen(true)
     window.localStorage.setItem(storageKey, '0')
   }
 
-  if (!open) return <Button type="button" onClick={() => setOpen(true)} className="fixed bottom-4 right-4 z-[80] rounded-xl shadow-lg"><Play className="mr-2 h-4 w-4" />Resume demo</Button>
+  if (!open) return <Button type="button" onClick={() => { openRef.current = true; setOpen(true) }} className="fixed bottom-4 right-4 z-[80] rounded-xl shadow-lg"><Play className="mr-2 h-4 w-4" />Resume demo</Button>
   if (!current) return <aside ref={cardRef} tabIndex={-1} className="fixed bottom-5 right-5 z-[100] w-[min(25rem,calc(100vw-2.5rem))] rounded-2xl border border-violet-200 bg-[#fbfafc] p-5 shadow-[0_24px_80px_rgba(25,23,36,0.28)] outline-none"><p className="text-xs font-semibold text-violet-800">Interactive demo complete</p><h2 className="mt-2 text-xl font-semibold tracking-[-0.025em]">You completed the Java and Kubernetes journey</h2><p className="mt-2 text-sm leading-6 text-[#62616c]">The source passage, assistant responses, checks, finding, and article were visibly simulated. The official documentation links are real, no cluster was tested, and the Markdown file downloaded only after your click.</p><div className="mt-5 flex flex-wrap justify-between gap-2"><Button variant="ghost" onClick={restart}><RotateCcw className="mr-2 h-4 w-4" />Replay</Button><Button onClick={onExit}>Start my own research<ChevronRight className="ml-2 h-4 w-4" /></Button></div></aside>
 
   const viewportWidth = typeof window === 'undefined' ? 1024 : window.innerWidth
@@ -227,7 +230,7 @@ export default function InteractiveDemoTour({ projectId, onCommand, onRestore, o
   return <>
     {spotlight ? <div aria-hidden="true" className="pointer-events-none fixed z-[90] rounded-2xl border-2 border-[#8d7bd1] shadow-[0_0_0_9999px_rgba(29,29,35,0.62),0_0_0_5px_rgba(141,123,209,0.22)] transition-[transform,opacity] duration-300 motion-reduce:transition-none" style={spotlight} /> : <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[90] bg-[rgba(29,29,35,0.62)]" />}
     <aside ref={cardRef} tabIndex={-1} aria-live="polite" aria-label="Interactive demo coach" className="fixed z-[100] rounded-2xl border border-[#d8d2ee] bg-[#fbfafc] p-5 text-[#292831] shadow-[0_24px_80px_rgba(25,23,36,0.32)] outline-none" style={{ top: cardTop, left: cardLeft, width: cardWidth }}>
-      <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-[#66559f]">{step + 1} of {INTERACTIVE_DEMO_STEPS.length}</p><p className="mt-1 text-[11px] font-medium text-[#777382]">{current.icon} control</p></div><button type="button" onClick={() => { abortRef.current?.abort(); setRunning(false); setOpen(false) }} className="rounded-lg p-1.5 text-[#6c6875] hover:bg-[#efedf4]" aria-label="Exit interactive demo"><X className="h-4 w-4" /></button></div>
+      <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-[#66559f]">{step + 1} of {INTERACTIVE_DEMO_STEPS.length}</p><p className="mt-1 text-[11px] font-medium text-[#777382]">{current.icon} control</p></div><button type="button" onClick={() => { openRef.current = false; abortRef.current?.abort(); setRunning(false); setOpen(false) }} className="rounded-lg p-1.5 text-[#6c6875] hover:bg-[#efedf4]" aria-label="Exit interactive demo"><X className="h-4 w-4" /></button></div>
       <h2 className="mt-3 text-lg font-semibold tracking-[-0.02em]">{current.title}</h2>
       <p className="mt-2 text-sm leading-6 text-[#62616c]">{current.body}</p>
       {missing ? <p className="mt-3 rounded-lg bg-amber-50 p-2.5 text-xs leading-5 text-amber-900" role="status">This control is not visible yet. Use Show me to restore the required panel, or go Back.</p> : null}

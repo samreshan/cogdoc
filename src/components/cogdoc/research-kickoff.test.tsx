@@ -111,6 +111,19 @@ describe('research kickoff', () => {
     expect(topic).toHaveValue('My retained topic')
   })
 
+  it('exposes the Home topic field as the first interactive-demo spotlight target', () => {
+    render(<ResearchKickoff
+      onOpenWorkspace={vi.fn()}
+      interactiveDemo={{
+        topic: '', goal: '', showGoal: false,
+        onTopicChange: vi.fn(), onGoalChange: vi.fn(), onGoalOpen: vi.fn(),
+        onTopicReady: vi.fn(), onGoalReady: vi.fn(), onStart: vi.fn(),
+      }}
+    />)
+
+    expect(screen.getByLabelText('What are you working on?')).toHaveAttribute('data-demo-target', 'research-topic')
+  })
+
   it('derives a concise title without changing the full topic', () => {
     const longTopic = 'How should independent researchers compare several conflicting evidence sources while preserving uncertainty and provenance?'
     expect(projectTitleFromTopic(longTopic).length).toBeLessThanOrEqual(75)

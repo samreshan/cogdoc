@@ -110,6 +110,7 @@ export default function ResearchKickoff({ open = true, onOpenChange, onOpenWorks
         <p id="research-topic-help" className="mt-1 text-sm leading-6 text-[#666873]">A topic is enough. A blank working document opens immediately.</p>
         <Textarea
           id="research-topic"
+          data-demo-target={interactiveDemo ? 'research-topic' : undefined}
           autoFocus
           rows={4}
           value={interactiveDemo ? interactiveDemo.topic : topic}
