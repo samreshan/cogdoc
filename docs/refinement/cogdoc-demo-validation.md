@@ -72,3 +72,38 @@ The targeted fixture test separately verified that export creates a Markdown `Bl
 ## Result
 
 The complete 32-step simulated journey was traversable after the two scoped fixes above. The tested path remained isolated from real projects and external services. The only unverified acceptance detail is retrieval and byte-for-byte inspection of the in-app browser's downloaded file outside the page; the export handler and content are covered by the focused automated test.
+
+## Step 13 pointer-stall follow-up
+
+Follow-up date: 6 September 2026
+
+Follow-up base: `0711f69575157dda44b83e8e45609bbfa6daec6a`
+
+A user-reported stall at displayed step 13 was reproduced on the current-source preview with an ordinary pointer path. The source-reader uses a modal Radix dialog. While it is open, Radix sets `pointer-events: none` on the body and restores pointer events only for its dialog content. The coach is intentionally rendered above the dialog but outside that content. Before the fix, live computed styles at step 13 were:
+
+```text
+body pointer-events: none
+coach pointer-events: none
+Next pointer-events: none
+```
+
+The card and **Next** button therefore looked available while normal pointer clicks were swallowed. Accessibility activation could bypass the pointer restriction, which explains why the earlier walkthrough did not expose the user's pointer-path failure.
+
+The active coach, hidden-state Resume control, and completion coach are now explicit `pointer-events-auto` interaction layers. Live computed styles with the same modal open became `body: none`, `coach: auto`, and `Next: auto`. An ordinary browser pointer click advanced from step 13 to the separate step-14 evidence action.
+
+Passive explanatory steps no longer disable **Next** when their highlighted target disappears. Advancing still calls the deterministic snapshot restore for the following step: closing the source reader manually at step 13 and then choosing **Next** reopened the reader at step 14 with **Use this sample passage** available and without preselecting evidence. Missing actionable targets use **Show me** to restore their current snapshot before locating and clicking the control.
+
+The final browser checks covered:
+
+- a mixed manual and **Show me** route from Home to step 13;
+- ordinary pointer activation at step 13 on a desktop viewport;
+- reload/resume directly at step 13;
+- Back from 14 to 13 and forward to 14 again;
+- step 13 to 14 at `390 × 844`;
+- a manually closed reader followed by safe recovery to the unselected step-14 evidence action;
+- the revision-preview modal, where the coach's ordinary pointer action successfully applied the reviewed change;
+- the remaining journey through finding review, article composition, explicit Markdown export, and completion.
+
+The follow-up targeted command passed **4 files and 25 tests** in 5.53 seconds. TypeScript, focused tour ESLint, and `git diff --check` passed without diagnostics.
+
+Runtime distinction: `http://localhost:3001` is the live Next.js source checkout and contains this fix. `http://localhost:3000` is served by the `cogdoc-full-app-1` Docker container using `cogdoc:local`; its image predates this follow-up source change and must not be used to assess the fix unless it is rebuilt later.

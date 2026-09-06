@@ -71,6 +71,35 @@ describe('InteractiveDemoTour', () => {
     expect(await screen.findByText('Return support to the document')).toBeInTheDocument()
   })
 
+  it('keeps the coach pointer-enabled while a source modal locks outside content', () => {
+    const storageKey = `cogdoc:interactive-demo:${INTERACTIVE_DEMO_VERSION}:${INTERACTIVE_DEMO_PROJECT_ID}`
+    const readerStep = INTERACTIVE_DEMO_STEPS.findIndex((step) => step.target === 'demo-source-reader')
+    storage.set(storageKey, String(readerStep))
+    document.body.style.pointerEvents = 'none'
+    try {
+      render(<><div data-demo-target="demo-source-reader">Labelled demonstration paraphrase</div><InteractiveDemoTour projectId={INTERACTIVE_DEMO_PROJECT_ID} onCommand={vi.fn()} onRestore={vi.fn()} onExit={vi.fn()} /></>)
+      expect(screen.getByRole('complementary', { name: 'Interactive demo coach' })).toHaveClass('pointer-events-auto')
+    } finally {
+      document.body.style.pointerEvents = ''
+    }
+  })
+
+  it('lets a passive reader step recover to the evidence action when its target disappeared', async () => {
+    const storageKey = `cogdoc:interactive-demo:${INTERACTIVE_DEMO_VERSION}:${INTERACTIVE_DEMO_PROJECT_ID}`
+    const readerStep = INTERACTIVE_DEMO_STEPS.findIndex((step) => step.target === 'demo-source-reader')
+    storage.set(storageKey, String(readerStep))
+    const onRestore = vi.fn()
+    render(<><button data-demo-target="demo-use-evidence">Use passage</button><InteractiveDemoTour projectId={INTERACTIVE_DEMO_PROJECT_ID} onCommand={vi.fn()} onRestore={onRestore} onExit={vi.fn()} /></>)
+
+    expect(await screen.findByRole('status', {}, { timeout: 3_000 })).toHaveTextContent('Choose Next')
+    const next = screen.getByRole('button', { name: /Next/ })
+    expect(next).toBeEnabled()
+    fireEvent.click(next)
+
+    expect(await screen.findByText('Choose this passage on purpose')).toBeInTheDocument()
+    expect(onRestore).toHaveBeenLastCalledWith(readerStep + 1)
+  })
+
   it('resumes at the first editor step after the Home start action', () => {
     const storageKey = `cogdoc:interactive-demo:${INTERACTIVE_DEMO_VERSION}:${INTERACTIVE_DEMO_PROJECT_ID}`
     storage.set(storageKey, String(INTERACTIVE_DEMO_EDITOR_START_STEP - 1))
