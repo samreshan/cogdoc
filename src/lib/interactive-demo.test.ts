@@ -31,8 +31,9 @@ describe('interactive demo boundary', () => {
   it('evolves the real editor through distinct draft, citation, and revision states', () => {
     expect(interactiveDemoWritingFrame(4)).not.toBe(interactiveDemoWritingFrame(18))
     expect(INTERACTIVE_DEMO_DOCUMENTS.draft).toContain(DEMO_ORIGINAL_CLAIM)
-    expect(INTERACTIVE_DEMO_DOCUMENTS.cited).toContain('sample citation')
+    expect(INTERACTIVE_DEMO_DOCUMENTS.cited).toContain('demonstration paraphrase')
     expect(INTERACTIVE_DEMO_DOCUMENTS.revised).not.toContain(DEMO_ORIGINAL_CLAIM)
-    expect(INTERACTIVE_DEMO_DOCUMENTS.revised).toContain('reviews each conclusion')
+    expect(INTERACTIVE_DEMO_DOCUMENTS.revised).toContain('health checks')
+    expect(interactiveDemoMarkdown()).toContain('illustrative and was not run')
   })
 })

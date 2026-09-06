@@ -14,6 +14,17 @@ interface Props {
   open?: boolean
   onOpenChange?: (open: boolean) => void
   onOpenWorkspace: (project: Project) => void
+  interactiveDemo?: {
+    topic: string
+    goal: string
+    onTopicChange: (value: string) => void
+    onGoalChange: (value: string) => void
+    showGoal: boolean
+    onGoalOpen: () => void
+    onTopicReady: () => void
+    onGoalReady: () => void
+    onStart: (topic: string, goal: string) => void
+  }
 }
 
 export function projectTitleFromTopic(topic: string) {
@@ -23,7 +34,7 @@ export function projectTitleFromTopic(topic: string) {
   return `${shortened || compact.slice(0, 69).trim()}...`
 }
 
-export default function ResearchKickoff({ open = true, onOpenChange, onOpenWorkspace }: Props) {
+export default function ResearchKickoff({ open = true, onOpenChange, onOpenWorkspace, interactiveDemo }: Props) {
   const [topic, setTopic] = useState('')
   const [purpose, setPurpose] = useState('')
   const [existingUnderstanding, setExistingUnderstanding] = useState('')
@@ -37,9 +48,13 @@ export default function ResearchKickoff({ open = true, onOpenChange, onOpenWorks
 
   async function startWriting(event: React.FormEvent) {
     event.preventDefault()
-    const cleanTopic = topic.trim()
+    const cleanTopic = (interactiveDemo ? interactiveDemo.topic : topic).trim()
     if (!cleanTopic) {
       setFeedback('Add a topic to start your document.')
+      return
+    }
+    if (interactiveDemo) {
+      interactiveDemo.onStart(cleanTopic, interactiveDemo.goal.trim())
       return
     }
 
@@ -97,29 +112,32 @@ export default function ResearchKickoff({ open = true, onOpenChange, onOpenWorks
           id="research-topic"
           autoFocus
           rows={4}
-          value={topic}
-          onChange={(event) => { setTopic(event.target.value); setFeedback('') }}
+          value={interactiveDemo ? interactiveDemo.topic : topic}
+          onChange={(event) => { if (interactiveDemo) interactiveDemo.onTopicChange(event.target.value); else setTopic(event.target.value); setFeedback('') }}
           aria-describedby={`research-topic-help${feedback ? ' research-topic-error' : ''}`}
-          placeholder="For example: How does routine AI use affect independent evidence evaluation?"
+          placeholder={interactiveDemo ? 'For example: How can a simple Java application run on Kubernetes?' : 'For example: How does routine AI use affect independent evidence evaluation?'}
           className="mt-4 min-h-28 resize-y rounded-xl border-[#c9cbd3] bg-[#fbfbfc] px-4 py-3 text-base leading-6 text-[#27272f] placeholder:text-[#747681] focus-visible:border-[#7264a8] focus-visible:ring-[#7264a8]/20"
         />
+        {interactiveDemo ? <div className="mt-3 flex items-center justify-between gap-3"><p className="text-xs leading-5 text-[#666873]">Edit the question if you want. The sample research path stays focused on Java and Kubernetes.</p><Button type="button" size="sm" variant="outline" data-demo-target="demo-use-topic" onClick={interactiveDemo.onTopicReady}>Use this topic</Button></div> : null}
       </div>
 
       <button
         type="button"
-        onClick={() => setShowContext((current) => !current)}
-        aria-expanded={showContext}
+        data-demo-target={interactiveDemo ? 'demo-goal-toggle' : undefined}
+        onClick={() => interactiveDemo ? interactiveDemo.onGoalOpen() : setShowContext((current) => !current)}
+        aria-expanded={interactiveDemo ? interactiveDemo.showGoal : showContext}
         className="mt-4 flex min-h-10 w-full items-center justify-between rounded-lg px-1 text-left text-sm font-medium text-[#545661] outline-none transition-colors hover:text-[#27272f] focus-visible:ring-2 focus-visible:ring-[#7264a8] focus-visible:ring-offset-2"
       >
         <span>Add goal and starting point <span className="ml-1 font-normal text-[#777985]">Optional</span></span>
-        <ChevronDown className={`size-4 transition-transform motion-reduce:transition-none ${showContext ? 'rotate-180' : ''}`} aria-hidden="true" />
+        <ChevronDown className={`size-4 transition-transform motion-reduce:transition-none ${(interactiveDemo ? interactiveDemo.showGoal : showContext) ? 'rotate-180' : ''}`} aria-hidden="true" />
       </button>
 
-      {showContext && (
+      {(interactiveDemo ? interactiveDemo.showGoal : showContext) && (
         <div className="mt-3 space-y-4 border-l-2 border-[#ded9ef] pl-4">
           <div className="space-y-2">
             <label htmlFor="research-purpose" className="text-sm font-medium text-[#3d3f48]">Goal</label>
-            <Textarea id="research-purpose" rows={2} value={purpose} onChange={(event) => setPurpose(event.target.value)} disabled={loading} placeholder="What would make this research useful?" className="resize-y rounded-lg border-[#c9cbd3] bg-[#fbfbfc] text-sm placeholder:text-[#747681] focus-visible:border-[#7264a8] focus-visible:ring-[#7264a8]/20" />
+            <Textarea id="research-purpose" rows={2} value={interactiveDemo ? interactiveDemo.goal : purpose} onChange={(event) => interactiveDemo ? interactiveDemo.onGoalChange(event.target.value) : setPurpose(event.target.value)} disabled={loading} placeholder="What would make this research useful?" className="resize-y rounded-lg border-[#c9cbd3] bg-[#fbfbfc] text-sm placeholder:text-[#747681] focus-visible:border-[#7264a8] focus-visible:ring-[#7264a8]/20" />
+            {interactiveDemo ? <Button type="button" size="sm" variant="outline" data-demo-target="demo-use-goal" onClick={interactiveDemo.onGoalReady}>Use this goal</Button> : null}
           </div>
           <div className="space-y-2">
             <label htmlFor="research-understanding" className="text-sm font-medium text-[#3d3f48]">What you know so far</label>
@@ -139,7 +157,7 @@ export default function ResearchKickoff({ open = true, onOpenChange, onOpenWorks
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="max-w-sm text-xs leading-5 text-[#666873]">Ask for an editable plan later if you want one. It never blocks writing.</p>
-        <Button type="submit" disabled={loading} className="h-11 shrink-0 rounded-xl bg-[#6858a8] px-5 text-white hover:bg-[#594a93] active:translate-y-px">
+        <Button type="submit" data-demo-target={interactiveDemo ? 'demo-start-research' : undefined} disabled={loading} className="h-11 shrink-0 rounded-xl bg-[#6858a8] px-5 text-white hover:bg-[#594a93] active:translate-y-px">
           {loading ? <><Loader2 className="mr-2 size-4 animate-spin motion-reduce:animate-none" />Creating document</> : <>Start writing<ArrowRight className="ml-2 size-4" /></>}
         </Button>
       </div>

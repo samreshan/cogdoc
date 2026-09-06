@@ -10,8 +10,13 @@ import type { OpenWorkspaceHandler } from '@/lib/document-workspace-contract'
 import { Button } from '@/components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import ResearchKickoff from '@/components/cogdoc/research-kickoff'
+import InteractiveDemoTour, { type TourCommand } from '@/components/cogdoc/interactive-demo-tour'
 import { createOrResumeGuidedDemo, isGuidedDemo } from '@/lib/guided-demo'
-import { createInteractiveDemoProject } from '@/lib/interactive-demo'
+import {
+  INTERACTIVE_DEMO_EDITOR_START_STEP, INTERACTIVE_DEMO_GOAL, INTERACTIVE_DEMO_GOAL_KEY,
+  INTERACTIVE_DEMO_PROJECT_ID, INTERACTIVE_DEMO_SESSION_KEY, INTERACTIVE_DEMO_TOPIC,
+  INTERACTIVE_DEMO_TOPIC_KEY, INTERACTIVE_DEMO_TOUR_KEY, createInteractiveDemoProject,
+} from '@/lib/interactive-demo'
 
 function updatedLabel(value: string) {
   const date = new Date(value)
@@ -30,6 +35,10 @@ export default function Dashboard() {
   const [openingId, setOpeningId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [demoLoading, setDemoLoading] = useState(false)
+  const [interactiveDemoActive, setInteractiveDemoActive] = useState(false)
+  const [demoTopic, setDemoTopic] = useState('')
+  const [demoGoal, setDemoGoal] = useState('')
+  const [demoShowGoal, setDemoShowGoal] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
 
   const visibleProjects = useMemo(() => {
@@ -52,6 +61,13 @@ export default function Dashboard() {
   }
 
   useEffect(() => { void refresh() }, [])
+  useEffect(() => {
+    const storage = window.localStorage
+    if (!storage || storage.getItem(INTERACTIVE_DEMO_SESSION_KEY) !== 'true') return
+    setInteractiveDemoActive(true)
+    setDemoTopic(storage.getItem(INTERACTIVE_DEMO_TOPIC_KEY) ?? '')
+    setDemoGoal(storage.getItem(INTERACTIVE_DEMO_GOAL_KEY) ?? '')
+  }, [])
 
   const openWorkspace: OpenWorkspaceHandler = (project) => {
     setActiveProject(project)
@@ -130,7 +146,84 @@ export default function Dashboard() {
   }
 
   function startInteractiveDemo() {
-    openWorkspace(createInteractiveDemoProject())
+    window.localStorage.setItem(INTERACTIVE_DEMO_SESSION_KEY, 'true')
+    window.localStorage.setItem(INTERACTIVE_DEMO_TOUR_KEY, '0')
+    window.localStorage.removeItem(INTERACTIVE_DEMO_TOPIC_KEY)
+    window.localStorage.removeItem(INTERACTIVE_DEMO_GOAL_KEY)
+    setDemoTopic('')
+    setDemoGoal('')
+    setDemoShowGoal(false)
+    setInteractiveDemoActive(true)
+  }
+
+  async function fillDemoTopic(signal?: AbortSignal) {
+    const existing = demoTopic.trim()
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (!existing && !reduce) {
+      for (let index = 1; index <= INTERACTIVE_DEMO_TOPIC.length; index += 1) {
+        if (signal?.aborted) return
+        setDemoTopic(INTERACTIVE_DEMO_TOPIC.slice(0, index))
+        await new Promise((resolve) => window.setTimeout(resolve, 22))
+      }
+    }
+    if (signal?.aborted) return
+    const value = existing || INTERACTIVE_DEMO_TOPIC
+    setDemoTopic(value)
+    window.localStorage.setItem(INTERACTIVE_DEMO_TOPIC_KEY, value)
+    window.dispatchEvent(new CustomEvent('cogdoc:demo-action', { detail: { action: 'topic-ready' } }))
+  }
+
+  function openDemoGoal() {
+    setDemoShowGoal(true)
+    window.dispatchEvent(new CustomEvent('cogdoc:demo-action', { detail: { action: 'goal-opened' } }))
+  }
+
+  async function fillDemoGoal(signal?: AbortSignal) {
+    const existing = demoGoal.trim()
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (!existing && !reduce) {
+      const words = INTERACTIVE_DEMO_GOAL.split(' ')
+      for (let index = 1; index <= words.length; index += 1) {
+        if (signal?.aborted) return
+        setDemoGoal(words.slice(0, index).join(' '))
+        await new Promise((resolve) => window.setTimeout(resolve, 36))
+      }
+    }
+    if (signal?.aborted) return
+    const value = existing || INTERACTIVE_DEMO_GOAL
+    setDemoGoal(value)
+    window.localStorage.setItem(INTERACTIVE_DEMO_GOAL_KEY, value)
+    window.dispatchEvent(new CustomEvent('cogdoc:demo-action', { detail: { action: 'goal-ready' } }))
+  }
+
+  function enterInteractiveWorkspace(topic = demoTopic, goal = demoGoal, tourStep = INTERACTIVE_DEMO_EDITOR_START_STEP) {
+    const finalTopic = topic.trim() || INTERACTIVE_DEMO_TOPIC
+    const finalGoal = goal.trim() || INTERACTIVE_DEMO_GOAL
+    window.localStorage.setItem(INTERACTIVE_DEMO_TOPIC_KEY, finalTopic)
+    window.localStorage.setItem(INTERACTIVE_DEMO_GOAL_KEY, finalGoal)
+    window.localStorage.setItem(INTERACTIVE_DEMO_TOUR_KEY, String(tourStep))
+    openWorkspace(createInteractiveDemoProject(finalTopic, finalGoal))
+  }
+
+  function restoreHomeDemo(step: number) {
+    setInteractiveDemoActive(true)
+    setDemoShowGoal(step >= 3)
+    if (step >= INTERACTIVE_DEMO_EDITOR_START_STEP) enterInteractiveWorkspace(
+      window.localStorage.getItem(INTERACTIVE_DEMO_TOPIC_KEY) ?? INTERACTIVE_DEMO_TOPIC,
+      window.localStorage.getItem(INTERACTIVE_DEMO_GOAL_KEY) ?? INTERACTIVE_DEMO_GOAL,
+      step,
+    )
+  }
+
+  async function runHomeDemoCommand(command: TourCommand, target: HTMLElement | null, signal: AbortSignal) {
+    if (command === 'fill-topic') await fillDemoTopic(signal)
+    else if (command === 'fill-goal') await fillDemoGoal(signal)
+    else if (command === 'click-target') target?.click()
+  }
+
+  function exitInteractiveDemo() {
+    window.localStorage.removeItem(INTERACTIVE_DEMO_SESSION_KEY)
+    setInteractiveDemoActive(false)
   }
 
   return (
@@ -171,7 +264,12 @@ export default function Dashboard() {
             </div>
             <p className="mt-2 max-w-md text-xs leading-5 text-[#6c6e78]">The interactive demo simulates the complete journey without live AI or source calls. The saved demo uses a separate workspace.</p>
           </div>
-          <ResearchKickoff onOpenWorkspace={openWorkspace} />
+          <ResearchKickoff onOpenWorkspace={openWorkspace} interactiveDemo={interactiveDemoActive ? {
+            topic: demoTopic, goal: demoGoal, showGoal: demoShowGoal,
+            onTopicChange: setDemoTopic, onGoalChange: setDemoGoal,
+            onTopicReady: fillDemoTopic, onGoalOpen: openDemoGoal, onGoalReady: fillDemoGoal,
+            onStart: enterInteractiveWorkspace,
+          } : undefined} />
         </div>
       </section>
 
@@ -210,6 +308,7 @@ export default function Dashboard() {
       <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialogContent className="rounded-2xl border-[#d9dbe2] bg-[#f8f9fa]"><AlertDialogHeader><AlertDialogTitle>Move this project to recovery?</AlertDialogTitle><AlertDialogDescription>It will be hidden now and remain recoverable for 30 days.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep project</AlertDialogCancel><AlertDialogAction onClick={() => void deleteProject()} className="bg-[#a13b52] text-white hover:bg-[#8c3046]">Move to recovery</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
+      {interactiveDemoActive ? <InteractiveDemoTour key={INTERACTIVE_DEMO_PROJECT_ID} projectId={INTERACTIVE_DEMO_PROJECT_ID} onCommand={runHomeDemoCommand} onRestore={restoreHomeDemo} onExit={exitInteractiveDemo} /> : null}
     </main>
   )
 }

@@ -22,7 +22,7 @@ Restore automatic scholarly source suggestions inside the document-first workflo
 5. Restore deliberate access to the four existing intervention engines from selected document text: Interceptor, Socratic Spacer, Citation Sentinel, and Scaffold. Show their actual API result and persist normal intervention records, but do not restore idle or keystroke-triggered interruptions.
 6. Reuse `ResearchJob` and the existing worker for bounded background engine prompts after stable semantic events (source added, document revision saved, finding revision saved). Coalesce superseded document jobs, create at most one pending prompt, and persist it as a collaborator exchange with engine/context provenance. Only a pending prompt tied to the exact current finding revision blocks that finding's review; an answer—including an explicit uncertainty answer—releases the prompt but never auto-reviews the finding.
 7. Add an optional Home affordance to create or resume the marked guided demo. Creation uses existing workspace, investigation, question, and document APIs; it never deletes or overwrites another workspace. The scenario is prefilled from the existing verified CogDoc research fixture and all starter prose is labelled demonstration material.
-8. Extend the optional guide into a project-scoped, resumable sequence with one visible action per step. Progress is stored locally per demo project. Steps that cannot be observed safely use an explicit **Continue** action and say so.
+8. Extend the optional guide into a project-scoped, resumable sequence with one visible action per step. Progress is stored locally per demo project. Explanatory highlights use an explicit **Next** action and say so.
 9. Add a detailed supervisor walkthrough covering setup, a timed 5–10 minute presentation, click paths, narration, fallback paths, epistemic distinctions, intervention engines, limitations, and manual acceptance checks.
 
 ## Safety and acceptance
@@ -40,22 +40,22 @@ The basic floating checklist is replaced by a versioned, deterministic tour that
 
 ### Experience architecture
 
-1. A prominent **Try interactive demo** action on Home creates a client-only, tagged sample project. It does not call workspace, provider, AI, worker, or review APIs.
+1. A prominent **Try interactive demo** action begins a five-step Home introduction. It fills an editable Java and Kubernetes topic and goal in the normal research form before creating a client-only tagged sample project. It does not call workspace, provider, AI, worker, or review APIs.
 2. The existing Tiptap editor remains the writing surface. Demo-only imperative controls reveal text in paced chunks, select the exact passage, apply a reviewed replacement, and insert the sample citation.
 3. The existing navigator and dock remain mounted. A demo adapter supplies deterministic source, collaborator, engine, finding, article, and export states inside those surfaces.
 4. A target-aware overlay finds stable `data-demo-target` attributes, scrolls the real control into view, draws a click-through spotlight, and positions an accessible coach card within the viewport.
-5. Expected real clicks advance steps. **Show me** performs one bounded scripted action. Pause cancels typing, Back restores the deterministic snapshot for that stage, and Escape exits without changing normal projects.
+5. Expected real clicks advance steps. **Show me** performs one bounded scripted action, while explanatory highlights use **Next** so non-interactive content never looks clickable. Pause cancels typing, Back restores the deterministic snapshot for that stage, refresh resumes the saved step, and Escape exits without changing normal projects.
 
 ### Ordered action coverage
 
 | Moment | Real target | Observable state change | Test |
 | --- | --- | --- | --- |
-| Start | Home demo button | Isolated sample project opens | creation/isolation |
+| Start | Home demo button and research form | Topic and goal fill before the isolated sample project opens | creation/isolation |
 | Frame | document surface | Topic, goal, and question explained | target resolution |
 | Write | Tiptap editor | Draft visibly grows; pause/resume works | timer cleanup/content |
 | Plan | Plan control | Prefilled questions appear | expected click |
 | Discover | Sources control | queued, searching, then three fixture leads | deterministic transition |
-| Inspect | source card | Verified identity and labelled sample excerpt open | provenance boundary |
+| Inspect | official documentation card | Verified identity and labelled sample paraphrase open; Next reveals the separate evidence action | provenance/step-transition boundary |
 | Cite | evidence action | Sample citation appears in real document | editor content assertion |
 | Collaborate | Collaborator control | Sample request and response appear | no network assertion |
 | Intervene | four engine controls | Each role produces a labelled question/result | engine sequence |
@@ -68,6 +68,6 @@ The basic floating checklist is replaced by a versioned, deterministic tour that
 ### Safety boundary
 
 - Every simulated response, excerpt, engine result, finding, and article is visibly labelled sample material.
-- Publication titles, DOI values, and URLs come from the verified demo fixture. The excerpt is a labelled demonstration paraphrase, not a quotation.
+- Source titles and URLs point to official Dev.java and Kubernetes documentation. The passage is a labelled demonstration paraphrase, not a quotation or live cluster result.
 - Normal projects retain their existing live API behavior. The demo never creates jobs, attachments, findings, reviews, or exports in the database.
 - Autoplay never downloads. Export requires a direct researcher click.

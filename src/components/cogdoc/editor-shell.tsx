@@ -17,10 +17,11 @@ import ResearchLibrary from './research-library'
 import ResearchNavigator, { type WorkspaceSection } from './research-navigator'
 import ResearchWorkPane from './research-work-pane'
 import { automaticallyDiscoverSources } from '@/lib/automatic-source-discovery'
-import InteractiveDemoTour from '@/components/cogdoc/interactive-demo-tour'
+import InteractiveDemoTour, { type TourCommand } from '@/components/cogdoc/interactive-demo-tour'
 import {
   DEMO_ORIGINAL_CLAIM, DEMO_SAMPLE_PASSAGE, INITIAL_INTERACTIVE_DEMO_STATE, INTERACTIVE_DEMO_CONTEXT,
-  INTERACTIVE_DEMO_DOCUMENTS, INTERACTIVE_DEMO_QUESTIONS, INTERACTIVE_DEMO_SOURCES, INTERACTIVE_DEMO_WRITING_WORDS,
+  INTERACTIVE_DEMO_DOCUMENTS, INTERACTIVE_DEMO_EDITOR_START_STEP, INTERACTIVE_DEMO_PROJECT_ID,
+  INTERACTIVE_DEMO_QUESTIONS, INTERACTIVE_DEMO_SESSION_KEY, INTERACTIVE_DEMO_SOURCES, INTERACTIVE_DEMO_WRITING_WORDS,
   interactiveDemoWritingFrame, isInteractiveDemo, type InteractiveDemoState,
 } from '@/lib/interactive-demo'
 
@@ -69,7 +70,7 @@ export default function EditorShell() {
   const refresh = useCallback(async () => {
     if (!project) return
     if (isInteractiveDemo(project)) {
-      setContext(INTERACTIVE_DEMO_CONTEXT)
+      setContext({ ...INTERACTIVE_DEMO_CONTEXT, topic: project.title, purpose: project.briefText ?? INTERACTIVE_DEMO_CONTEXT.purpose })
       setQuestions(INTERACTIVE_DEMO_QUESTIONS)
       setLoadError('')
       return
@@ -209,7 +210,7 @@ export default function EditorShell() {
       return
     }
     setInteractiveDemoState((state) => {
-      if (action === 'source-opened') return { ...state, inspectedSourceId: 'demo-source-kasneci' }
+      if (action === 'source-opened') return { ...state, inspectedSourceId: 'demo-source-deployment' }
       if (action === 'evidence-chosen') return { ...state, evidenceChosen: true }
       if (action === 'citation-inserted') return { ...state, citationInserted: true }
       if (action === 'collaborator-asked') return { ...state, collaboratorAsked: true }
@@ -231,7 +232,7 @@ export default function EditorShell() {
     emitDemoAction(action)
   }
 
-  async function runDemoCommand(command: 'write' | 'select-claim' | 'click-target', target: HTMLElement | null, signal: AbortSignal) {
+  async function runDemoCommand(command: TourCommand, target: HTMLElement | null, signal: AbortSignal) {
     if (command === 'click-target') { target?.click(); return }
     if (command === 'select-claim') {
       editorRef.current?.setDemoContent(interactiveDemoState.citationInserted ? INTERACTIVE_DEMO_DOCUMENTS.cited : INTERACTIVE_DEMO_DOCUMENTS.draft)
@@ -241,6 +242,7 @@ export default function EditorShell() {
       if (!signal.aborted) target?.click()
       return
     }
+    if (command !== 'write') return
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     for (let index = 1; index <= INTERACTIVE_DEMO_WRITING_WORDS; index += 1) {
       if (signal.aborted) return
@@ -257,27 +259,33 @@ export default function EditorShell() {
     if (!interactiveDemo) return
     if (demoTimerRef.current) window.clearTimeout(demoTimerRef.current)
     if (demoPreviewTimerRef.current) window.clearTimeout(demoPreviewTimerRef.current)
+    if (step < INTERACTIVE_DEMO_EDITOR_START_STEP) {
+      setActiveProject(null)
+      setView('dashboard')
+      return
+    }
+    const editorStep = step - INTERACTIVE_DEMO_EDITOR_START_STEP
     const next: InteractiveDemoState = {
-      discovery: step >= 6 ? 'ready' : 'queued', inspectedSourceId: step >= 7 ? 'demo-source-kasneci' : null,
-      evidenceChosen: step >= 9, citationInserted: step >= 10, collaboratorAsked: step >= 12,
-      engines: step >= 17 ? ['interceptor', 'socratic', 'citation', 'scaffold'] : step >= 16 ? ['interceptor', 'socratic', 'citation'] : step >= 15 ? ['interceptor', 'socratic'] : step >= 14 ? ['interceptor'] : [],
-      engineAnswered: step >= 18, revisionPreviewed: step >= 19, revisionApplied: step >= 20,
-      findingFilled: step >= 22, findingReviewed: step >= 23, articleComposed: step >= 25, exported: step >= 27,
+      discovery: editorStep >= 6 ? 'ready' : 'queued', inspectedSourceId: editorStep >= 7 ? 'demo-source-deployment' : null,
+      evidenceChosen: editorStep >= 9, citationInserted: editorStep >= 10, collaboratorAsked: editorStep >= 12,
+      engines: editorStep >= 17 ? ['interceptor', 'socratic', 'citation', 'scaffold'] : editorStep >= 16 ? ['interceptor', 'socratic', 'citation'] : editorStep >= 15 ? ['interceptor', 'socratic'] : editorStep >= 14 ? ['interceptor'] : [],
+      engineAnswered: editorStep >= 18, revisionPreviewed: editorStep >= 19, revisionApplied: editorStep >= 20,
+      findingFilled: editorStep >= 22, findingReviewed: editorStep >= 23, articleComposed: editorStep >= 25, exported: editorStep >= 27,
     }
     setInteractiveDemoState(next)
-    editorRef.current?.setDemoContent(next.revisionApplied ? INTERACTIVE_DEMO_DOCUMENTS.revised : next.citationInserted ? INTERACTIVE_DEMO_DOCUMENTS.cited : step >= 2 ? INTERACTIVE_DEMO_DOCUMENTS.draft : INTERACTIVE_DEMO_DOCUMENTS.opening)
-    if (step <= 2) setDockSection('collaborator')
-    else if (step <= 4) setDockSection('plan')
-    else if (step <= 10) setDockSection('sources')
-    else if (step <= 20) setDockSection('collaborator')
-    else if (step <= 23) setDockSection('findings')
+    editorRef.current?.setDemoContent(next.revisionApplied ? INTERACTIVE_DEMO_DOCUMENTS.revised : next.citationInserted ? INTERACTIVE_DEMO_DOCUMENTS.cited : editorStep >= 2 ? INTERACTIVE_DEMO_DOCUMENTS.draft : INTERACTIVE_DEMO_DOCUMENTS.opening)
+    if (editorStep <= 2) setDockSection('collaborator')
+    else if (editorStep <= 4) setDockSection('plan')
+    else if (editorStep <= 10) setDockSection('sources')
+    else if (editorStep <= 20) setDockSection('collaborator')
+    else if (editorStep <= 23) setDockSection('findings')
     else setDockSection('share')
     setPreview(null)
-    if (step === 7 || step === 8) {
+    if (editorStep === 7 || editorStep === 8) {
       const source = INTERACTIVE_DEMO_SOURCES[1]
-      setOpenSource({ workspaceSourceId: source.id, title: source.title, accessBasis: 'abstract' })
+      setOpenSource({ workspaceSourceId: source.id, title: source.title, accessBasis: 'metadata' })
     } else setOpenSource(null)
-    if (step === 19) {
+    if (editorStep === 19) {
       demoPreviewTimerRef.current = window.setTimeout(() => {
         editorRef.current?.selectDemoText(DEMO_ORIGINAL_CLAIM)
         demoPreviewTimerRef.current = window.setTimeout(() => {
@@ -386,7 +394,7 @@ export default function EditorShell() {
     <Dialog open={Boolean(openSource)} onOpenChange={(open) => { if (!open) { setOpenSource(null); requestAnimationFrame(() => editorRef.current?.focus()) } }}><DialogContent onInteractOutside={(event) => { if (interactiveDemo) event.preventDefault() }} className="h-[min(50rem,calc(100dvh-2rem))] max-w-4xl overflow-hidden p-0"><DialogHeader className="sr-only"><DialogTitle>{openSource?.title || 'Source reader'}</DialogTitle><DialogDescription>Inspect available source passages and return to the document.</DialogDescription></DialogHeader>{openSource && <SourceReader key={openSource.workspaceSourceId} projectId={project.id} source={openSource} onChoose={(source) => { setSelectedSources((current) => [...current.filter((item) => item.workspaceSourceId !== source.workspaceSourceId), source]); setOpenSource(null); setDockSection(interactiveDemo ? 'sources' : 'collaborator'); if (interactiveDemo) demoAction('evidence-chosen') }} />}</DialogContent></Dialog>
 
     <Dialog open={Boolean(secondary)} onOpenChange={(open) => { if (!open) setSecondary(null) }}><DialogContent className="h-[min(48rem,calc(100dvh-2rem))] max-w-5xl overflow-hidden p-0"><DialogHeader className="sr-only"><DialogTitle>{secondary === 'history' ? 'Project history' : 'References'}</DialogTitle><DialogDescription>Secondary project tools</DialogDescription></DialogHeader>{secondary === 'history' ? <ResearchHistory projectId={project.id} initialFilter="decisions" /> : <ResearchLibrary />}</DialogContent></Dialog>
-    {interactiveDemo ? <InteractiveDemoTour key={project.id} projectId={project.id} onCommand={runDemoCommand} onRestore={restoreDemo} onExit={() => { setActiveProject(null); setView('dashboard') }} /> : null}
+    {interactiveDemo ? <InteractiveDemoTour key={project.id} projectId={project.id} onCommand={runDemoCommand} onRestore={restoreDemo} onExit={() => { window.localStorage.removeItem(INTERACTIVE_DEMO_SESSION_KEY); setActiveProject(null); setView('dashboard') }} /> : null}
   </div>
 }
 
@@ -394,9 +402,9 @@ function SourceReader({ projectId, source, onChoose }: { projectId: string; sour
   const [result, setResult] = useState<Awaited<ReturnType<typeof api.getResearchSource>> | null>(null)
   const [error, setError] = useState('')
   useEffect(() => {
-    if (projectId === 'cogdoc-interactive-demo-v3') return
+    if (projectId === INTERACTIVE_DEMO_PROJECT_ID) return
     void api.getResearchSource(projectId, source.workspaceSourceId).then(setResult).catch((reason) => setError((reason as Error).message))
   }, [projectId, source.workspaceSourceId])
-  if (projectId === 'cogdoc-interactive-demo-v3') return <article className="flex h-full min-h-0 flex-col bg-[var(--cog-workspace)]"><header className="border-b border-[var(--cog-border)] bg-[var(--cog-paper)] px-6 py-5"><p className="text-xs font-semibold text-violet-800">Simulated source inspection</p><h2 className="mt-1 text-lg font-semibold tracking-[-0.02em]">{source.title}</h2><p className="mt-1 text-sm text-[var(--cog-muted-foreground)]">Verified publication identity. The passage below is demonstration material.</p></header><div className="min-h-0 flex-1 overflow-y-auto p-6"><div data-demo-target="demo-source-reader" className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-semibold text-amber-900">Demonstration paraphrase, not a quotation</p><p className="mt-2 text-sm leading-7 text-amber-950">{DEMO_SAMPLE_PASSAGE}</p><p className="mt-3 text-xs leading-5 text-amber-800">Sample locator: abstract-level context. Inspect the original publication before using it in real research.</p></div><Button data-demo-target="demo-use-evidence" className="mt-5" onClick={() => onChoose({ ...source, excerpt: DEMO_SAMPLE_PASSAGE, locator: 'Sample abstract context', accessBasis: 'abstract' })}>Use this sample passage</Button></div></article>
+  if (projectId === INTERACTIVE_DEMO_PROJECT_ID) return <article className="flex h-full min-h-0 flex-col bg-[var(--cog-workspace)]"><header className="border-b border-[var(--cog-border)] bg-[var(--cog-paper)] px-6 py-5"><p className="text-xs font-semibold text-violet-800">Simulated source inspection</p><h2 className="mt-1 text-lg font-semibold tracking-[-0.02em]">{source.title}</h2><p className="mt-1 text-sm text-[var(--cog-muted-foreground)]">Verified official documentation identity. The passage below is demonstration material.</p></header><div className="min-h-0 flex-1 overflow-y-auto p-6"><div data-demo-target="demo-source-reader" className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-semibold text-amber-900">Demonstration paraphrase, not a quotation</p><p className="mt-2 text-sm leading-7 text-amber-950">{DEMO_SAMPLE_PASSAGE}</p><p className="mt-3 text-xs leading-5 text-amber-800">Sample locator: official Deployments and Service concept pages. Open the original documentation before using it in real research.</p></div><Button data-demo-target="demo-use-evidence" className="mt-5" onClick={() => onChoose({ ...source, excerpt: DEMO_SAMPLE_PASSAGE, locator: 'Official concept pages, demonstration paraphrase', accessBasis: 'manual_excerpt' })}>Use this sample passage</Button></div></article>
   return <article className="flex h-full min-h-0 flex-col bg-[var(--cog-workspace)]"><header className="border-b border-[var(--cog-border)] bg-[var(--cog-paper)] px-6 py-5"><p className="text-xs font-medium text-[var(--cog-accent-strong)]">{source.accessBasis.replace('_', ' ')}</p><h2 className="mt-1 text-lg font-semibold tracking-[-0.02em]">{source.title}</h2><p className="mt-1 text-sm text-[var(--cog-muted-foreground)]">Only available passages are shown. Approximate PDF pages remain labelled as approximate.</p></header><div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7">{error ? <p className="text-sm text-[var(--cog-danger)]" role="alert">{error}</p> : !result ? <p className="flex items-center gap-2 text-sm text-[var(--cog-muted-foreground)]" role="status"><Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />Loading available passages</p> : result.passages.length ? <div className="space-y-3">{result.passages.map((passage) => <button key={passage.id} type="button" onClick={() => onChoose({ ...source, passageId: passage.id, excerpt: passage.content, locator: `Approximate PDF page ${passage.pageApprox}`, accessBasis: 'extracted_text' })} className="block w-full rounded-xl border border-[var(--cog-border)] bg-[var(--cog-paper)] p-5 text-left outline-none transition hover:border-[var(--cog-accent)]/45 focus-visible:ring-2 focus-visible:ring-[var(--cog-accent)]"><span className="text-xs font-medium text-[var(--cog-accent-strong)]">Approximate PDF page {passage.pageApprox}</span><p className="mt-2 font-serif text-base leading-7">{passage.content}</p><span className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--cog-accent-strong)]"><BookOpen className="h-3.5 w-3.5" />Use this passage in collaborator context</span></button>)}</div> : <div><BookOpen className="h-5 w-5 text-[var(--cog-accent)]" /><p className="mt-3 text-sm font-medium">Full text is not available in CogDoc</p><p className="mt-1 text-sm leading-6 text-[var(--cog-muted-foreground)]">This record cannot be treated as an inspected passage. Add a lawful copy or researcher-supplied excerpt.</p></div>}</div></article>
 }

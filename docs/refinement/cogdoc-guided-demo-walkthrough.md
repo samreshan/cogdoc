@@ -4,115 +4,106 @@ Date: 6 September 2026
 
 Length: 8 to 12 minutes
 
-Scenario: researcher agency in AI-assisted writing
+Scenario: How can a simple Java application run on Kubernetes?
 
 ## What this demo proves
 
-The interactive demo is a deterministic, client-only replay of CogDoc's complete research-writing journey. It uses the real editor, navigation, dock layout, source reader, revision preview, and download interaction. Source discovery, collaborator responses, reasoning-engine results, and finding content are stable sample fixtures. They make the product easy to demonstrate without claiming that a live provider or background worker ran.
+The interactive demo is a deterministic, client-only replay of CogDoc's research-writing journey. It begins on Home, fills a focused topic and goal in the normal research form, then uses the real editor, navigation, dock, source reader, revision preview, finding review, article composer, and explicit download interaction.
 
-Every simulated surface says **Simulated** or **Demonstration**. The three displayed publication identities are real and link to their original records. The displayed source passage is explicitly a demonstration paraphrase, not a quotation or fabricated evidence.
+The displayed source identities link to official Dev.java and Kubernetes documentation. The inspected passage is clearly labelled as a demonstration paraphrase, not a quotation. Search states, assistant responses, checks, findings, and article content are simulated fixtures. No Java application is compiled, no image is built, and no Kubernetes cluster is contacted or measured.
 
-The demo never writes to the project API, database, source providers, AI provider, or background-job queue. It never publishes. The final Markdown download occurs only after the presenter or visitor clicks the highlighted export button.
+The demo does not write to project, source, AI, worker, or review APIs. It does not publish. The final Markdown download occurs only after the visitor clicks the highlighted export button.
 
-## Launch
+## Launch from Home
 
-Run the application by the project's usual development or Compose workflow, then open Home. No live AI, research provider, retrieval service, or worker is required for this interactive path.
+Run the application with the normal development or Compose workflow, then open Home. No live AI, research provider, retrieval service, or worker is required for this path.
 
-1. Click **Try interactive demo**, the primary action under the Home introduction.
-2. The app opens an isolated project named **Interactive demo: researcher agency**.
-3. A 27-step coach highlights one real control at a time. The page around that control is dimmed.
+1. Click **Try interactive demo** under the Home introduction.
+2. The coach first explains the normal topic field instead of moving away from Home.
+3. Choose **Show me** to fill **How can a simple Java application run on Kubernetes?**, or type your own wording.
+4. Reveal and fill the plain-language goal, then click **Start writing**.
+5. CogDoc opens the isolated client-only workspace and resumes at step 6 of 32.
 
-The separate **Resume guided demo** action still opens the older saved workspace. Use **Try interactive demo** for the deterministic presentation described here.
+The separate **Resume guided demo** action still opens the saved database-backed workspace. Use **Try interactive demo** for the deterministic Java and Kubernetes presentation described here.
 
 ## Coach controls
 
-- **Show me** performs the highlighted non-destructive action. The visitor can click the highlighted control directly instead.
-- **Pause** stops the paced writing playback. The editor remains usable, so the visitor can take over.
-- **Back** restores the exact document, dock, modal, and simulated state required by the previous step.
+- **Show me** performs the highlighted non-destructive action. The visitor may also click the highlighted control directly.
+- **Next** appears for explanatory highlights that are not themselves interactive. This distinction prevents the source-reader passage from looking clickable.
+- **Pause** stops paced writing playback. The editor remains available for manual takeover.
+- **Back** restores the exact Home form, document, dock, modal, and simulated state needed by the previous step.
 - **Escape** hides the coach without discarding progress. **Resume demo** brings it back.
-- **Exit interactive demo** returns to Home. Progress is versioned in local storage.
+- Refresh restores the saved step, including the source reader and the Home-to-editor boundary.
 - **Replay** resets the isolated sample after completion.
 - The answer and final export steps are manual-only. The coach cannot answer or download on the visitor's behalf.
 
 ## Presentation route
 
-### 1. Document and paced writing
+### 1. Topic and goal on Home
 
-Introduce the mounted document as the center of the workspace. Continue to **Watch the argument take shape**, then click **Show me**. Words appear at a readable pace in the real editor. Point out **Pause** and explain that a visitor can interrupt playback and type directly.
+Start with the visible topic field. The sample question is deliberately small and approachable. Reveal the goal and show that it names the Java artifact, container image, Deployment, Service, and limitations before a project is created. The visitor can edit either field. Starting the demo creates only a client-side sample project.
 
-The starter claim is intentionally too broad: writing speed alone does not establish researcher control.
+### 2. Document, plan, and paced writing
 
-### 2. Plan and stable questions
+Introduce the mounted document as the center of the workspace. Use **Show me** to write a short explanation at a readable pace. The starter claim is intentionally too broad: putting Java on Kubernetes does not by itself make the application reliable or easy to scale.
 
-Use the highlighted route icon to open **Plan**. Show the prefilled topic, goal, context, and three questions. The primary question asks what researcher control means in an AI-assisted writing workspace. Explain that this stable context would guide real discovery and collaboration.
+Open **Plan** to show three questions: what Java needs before containerization, how Deployment and Service differ, and which operational responsibilities Kubernetes does not remove.
 
-### 3. Simulated discovery and source inspection
+### 3. Official documentation leads and source inspection
 
-Open the highlighted **Sources** book icon, then run the deterministic discovery replay. It moves through queued, searching, and ready states before showing three verified publication identities:
+Open **Sources** and run the deterministic search replay. It moves through queued, searching, and ready states before showing these official documentation leads:
 
-- UNESCO, *Guidance for generative AI in education and research* (2023).
-- Kasneci et al., *ChatGPT for good?* (2023), DOI `10.1016/j.lindif.2023.102274`.
-- Bender et al., *On the dangers of stochastic parrots* (2021), DOI `10.1145/3442188.3445922`.
+- Dev.java, *Getting Started with Java*.
+- Kubernetes Documentation, *Deployments*.
+- Kubernetes Documentation, *Service*.
 
-Open the highlighted Kasneci record. The modal distinguishes the verified publication identity from the labelled sample paraphrase. Continue, then choose **Use this sample passage**. This changes the simulated evidence state but does not create or accept a finding.
+Inspect the Deployments record. The reader distinguishes the official page identity from a labelled sample paraphrase. This is an explanatory step, so its coach button says **Next**. The following step highlights **Use this sample passage**, making the evidence action unambiguous. Selecting it changes demo context but does not create or approve a finding.
 
-Click **Insert sample citation**. The real document changes visibly and retains the sample-citation label.
+Insert the labelled citation and watch the real editor change.
 
-### 4. Collaborator and four engines
+### 4. Collaborator and four checks
 
-Open **Collaborator**, ask the prepared research question, and show the deterministic answer plus a source lead. Explain that the source lead is a direction to investigate, not proof.
+Open **Collaborator** and ask the prepared question about which responsibility belongs to Java, the image, the Deployment, and the Service. The answer is deterministic and not evidence.
 
-Run each highlighted engine:
+Run the four highlighted checks:
 
-- **Interceptor** detects when fluent wording takes ownership of the conclusion.
-- **Socratic Spacer** asks for the researcher's own explanation.
-- **Citation Sentinel** distinguishes a publication record from inspected support with a locator.
-- **Scaffold** separates claim, evidence, limitation, and implication.
+- **Interceptor** catches the broad reliability claim.
+- **Socratic Spacer** asks the visitor to distinguish the four components.
+- **Citation Sentinel** limits documentation support to what the official pages actually establish.
+- **Scaffold** separates the claim, support, operational limitations, and next practical test.
 
-At **Uncertainty is a valid response**, click **Use sample answer**, then **Record response**. This releases the question; it does not create evidence or review a finding.
+At the response step, manually choose **Use sample answer** and **Record response**. A response neither creates evidence nor reviews a finding.
 
-### 5. Safe document revision
+### 5. Safe revision, finding, and article
 
-Click **Show me** at **Preview before changing prose**. CogDoc selects the broad claim in the real editor and opens the real revision preview. The current passage and narrower proposal are both visible.
+Preview the narrower claim before applying it. The replacement explains that a Deployment manages Pods and a Service supplies a stable endpoint, while reliability still depends on health checks, resource settings, image quality, and cluster operations.
 
-At **Apply remains explicit**, click **Show me** or **Apply change**. The editor changes only after that action. The revised claim now makes source visibility, inspection, uncertainty, and separate review explicit.
+Open **Findings**, fill the deterministic conclusion and limitation, then retain it with uncertainty as a separate review decision. Open **Share**, compose the article, and check that it preserves the simulation label, official links, and statement that no live deployment was measured.
 
-### 6. Finding and review
+### 6. Explicit export
 
-Open **Findings**. Fill the deterministic sample conclusion, explanation, uncertainty, and limitation. Then use **Retain with uncertainty** as a separate review decision. Emphasize that no engine answer performs this review automatically.
-
-### 7. Article and explicit export
-
-Open **Share**, compose the deterministic article, and inspect the result. It preserves both the simulation label and uncertainty. Continue to the last step, then personally click **Download sample Markdown**. The completion card appears only after that explicit download action.
-
-The Markdown contains a meaningful article, the reviewed sample finding, the verified source identities, the demonstration-paraphrase boundary, and a simulation disclosure.
-
-## Resize, accessibility, and recovery checks
-
-- The coach targets the visible desktop or mobile copy of a control rather than a hidden duplicate.
-- It scrolls a target into view and remeasures after resize or layout mutation.
-- The coach prefers a position beside the target and falls back above or below it to avoid covering the highlighted action.
-- Reduced-motion preference removes smooth scrolling and paced delay.
-- Coach progress and status updates are exposed to assistive technology; Escape always provides a quick exit.
-- If a target does not appear within a bounded interval, the coach explains how to restore the panel or go Back rather than waiting forever.
+Continue from the explanatory article step to the manual-only export step. Personally click **Download sample Markdown**. The completion card appears only after that click and reiterates the simulation and no-cluster-test boundary.
 
 ## Verification checklist
 
-- [ ] Home prominently offers **Try interactive demo**.
-- [ ] Starting the demo performs no project, source, AI, or job API request.
-- [ ] The real editor shows paced writing, pause, takeover, citation insertion, and applied revision.
-- [ ] Plan contains the prefilled topic, goal, context, and three questions.
-- [ ] Discovery visibly transitions and returns only the three stable publication fixtures.
-- [ ] Source identity and demonstration paraphrase are visibly distinguished.
-- [ ] Evidence selection does not auto-create a finding.
-- [ ] Collaborator and all four engines have distinct, deterministic outputs.
-- [ ] Answering an engine does not create evidence or review.
-- [ ] Revision preview shows before-and-after text; apply remains explicit.
-- [ ] Finding fill and finding review are separate actions.
-- [ ] Article composition follows the reviewed finding.
-- [ ] Export has no **Show me** control and occurs only on the visitor's click.
-- [ ] Back, replay, Escape/resume, resize, and missing-target recovery work.
+Verified on 6 September 2026 with headless Chrome against the development application, plus the automated test suite. The browser run visited all 32 coach steps and completed the manual export. It also reloaded and used Back at the source reader, emulated a 390 by 844 viewport, and enabled reduced motion. No browser console errors or failed requests were recorded. Automated verification passed 133 test files and 720 tests before the final replay assertion was added; the focused tour suite was rerun afterward.
+
+- [x] Home prominently offers **Try interactive demo**.
+- [x] Topic and goal are filled on Home before the editor opens.
+- [x] The tour contains 32 descriptive steps and distinguishes **Next** from **Show me**.
+- [x] Starting and completing the demo performs no project, source, AI, or job API write.
+- [x] Plan contains the Java and Kubernetes topic, goal, context, and three questions.
+- [x] Discovery shows only the three official documentation fixtures.
+- [x] Source identity and demonstration paraphrase are visibly distinct.
+- [x] The source-reader explanation advances to the separate evidence button without trapping the visitor.
+- [x] Back and refresh restore the source reader and its surrounding state.
+- [x] Collaborator and all four checks have distinct deterministic outputs.
+- [x] Revision preview and apply remain separate actions.
+- [x] Finding fill and review remain separate actions.
+- [x] Export has no **Show me** control and requires the visitor's click.
+- [x] Narrow viewport, reduced motion, Escape/resume, replay, and missing-target recovery work.
+- [x] Exiting returns to the normal Home form without leaving demo-only controls or state active.
 
 ## Known boundary
 
-This is a product-behavior demonstration, not evidence that CogDoc improves learning, cognition, or research quality. Real projects still depend on lawful source access, exact locators, comparison, uncertainty, and researcher judgement.
+This is a product-behavior demonstration, not evidence that the Java application works in a cluster or that CogDoc improves research quality. A real implementation must build and test an image, choose health and resource settings, configure and secure a cluster, inspect the exact official pages, and record actual observations separately from documentation claims.

@@ -75,7 +75,7 @@ describe('DocumentResearchDock', () => {
   it('uses deterministic demo content without loading the live collaborator', async () => {
     const user = userEvent.setup()
     const onAction = vi.fn()
-    render(<DocumentResearchDock projectId="cogdoc-interactive-demo-v3" activeSection="collaborator" onRequestPreview={vi.fn()} onApplyProposal={vi.fn()} onOpenSource={vi.fn()} onFocusDocument={vi.fn()} interactiveDemo={{ state: INITIAL_INTERACTIVE_DEMO_STATE, onAction }} />)
+    render(<DocumentResearchDock projectId="cogdoc-interactive-demo-v4" activeSection="collaborator" onRequestPreview={vi.fn()} onApplyProposal={vi.fn()} onOpenSource={vi.fn()} onFocusDocument={vi.fn()} interactiveDemo={{ state: INITIAL_INTERACTIVE_DEMO_STATE, onAction }} />)
     expect(screen.getByText('Every response below is deterministic sample material.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Ask sample question' }))
     expect(onAction).toHaveBeenCalledWith('collaborator-asked')
