@@ -17,12 +17,17 @@ import ResearchLibrary from './research-library'
 import ResearchNavigator, { type WorkspaceSection } from './research-navigator'
 import ResearchWorkPane from './research-work-pane'
 import { automaticallyDiscoverSources } from '@/lib/automatic-source-discovery'
-import { GuidedDemoGuide } from '@/components/cogdoc/guided-demo-guide'
-import { isGuidedDemo } from '@/lib/guided-demo'
+import InteractiveDemoTour from '@/components/cogdoc/interactive-demo-tour'
+import {
+  DEMO_ORIGINAL_CLAIM, DEMO_SAMPLE_PASSAGE, INITIAL_INTERACTIVE_DEMO_STATE, INTERACTIVE_DEMO_CONTEXT,
+  INTERACTIVE_DEMO_DOCUMENTS, INTERACTIVE_DEMO_QUESTIONS, INTERACTIVE_DEMO_SOURCES, INTERACTIVE_DEMO_WRITING_WORDS,
+  interactiveDemoWritingFrame, isInteractiveDemo, type InteractiveDemoState,
+} from '@/lib/interactive-demo'
 
 export default function EditorShell() {
   const project = useCogdoc((state) => state.activeProject)
   const setView = useCogdoc((state) => state.setView)
+  const setActiveProject = useCogdoc((state) => state.setActiveProject)
   const focusMode = useCogdoc((state) => state.focusMode)
   const toggleFocusMode = useCogdoc((state) => state.toggleFocusMode)
   const setResearchActions = useCogdoc((state) => state.setResearchActions)
@@ -41,10 +46,15 @@ export default function EditorShell() {
   const [preview, setPreview] = useState<DocumentEditProposal | null>(null)
   const [secondary, setSecondary] = useState<'history' | 'references' | null>(null)
   const [sourceDiscovery, setSourceDiscovery] = useState<{ status: 'idle' | 'searching' | 'saved' | 'empty' | 'partial' | 'unavailable' | 'skipped'; message: string }>({ status: 'idle', message: 'CogDoc searches once after a topic or question is confirmed.' })
+  const [interactiveDemoState, setInteractiveDemoState] = useState<InteractiveDemoState>(INITIAL_INTERACTIVE_DEMO_STATE)
+  const demoTimerRef = useRef<number | null>(null)
+  const demoPreviewTimerRef = useRef<number | null>(null)
+  const interactiveDemo = isInteractiveDemo(project)
   const confirmedQuestion = questions.find((question) => question.id === context?.selectedQuestionId) ?? null
 
   const runSourceDiscovery = useCallback(async (force = false) => {
     if (!project || !context) return
+    if (isInteractiveDemo(project)) return
     const query = confirmedQuestion?.wording || context.topic
     if (!query.trim()) return
     setSourceDiscovery({ status: 'searching', message: `Searching scholarly records for ${confirmedQuestion ? 'the selected question' : 'the confirmed topic'}…` })
@@ -58,6 +68,12 @@ export default function EditorShell() {
 
   const refresh = useCallback(async () => {
     if (!project) return
+    if (isInteractiveDemo(project)) {
+      setContext(INTERACTIVE_DEMO_CONTEXT)
+      setQuestions(INTERACTIVE_DEMO_QUESTIONS)
+      setLoadError('')
+      return
+    }
     const [workspaceResult, investigationResult] = await Promise.allSettled([
       api.getResearchWorkspace(project.id),
       api.getInvestigation(project.id),
@@ -98,10 +114,15 @@ export default function EditorShell() {
     window.localStorage.setItem(`cogdoc:document-workspace:${project.id}`, JSON.stringify({ dockSection, railVisible }))
   }, [dockSection, project?.id, railVisible])
   useEffect(() => {
-    if (!context?.topic) return
+    if (!context?.topic || interactiveDemo) return
     const timer = window.setTimeout(() => { void runSourceDiscovery(false) }, 0)
     return () => window.clearTimeout(timer)
-  }, [context?.topic, context?.selectedQuestionId, runSourceDiscovery])
+  }, [context?.topic, context?.selectedQuestionId, interactiveDemo, runSourceDiscovery])
+
+  useEffect(() => () => {
+    if (demoTimerRef.current) window.clearTimeout(demoTimerRef.current)
+    if (demoPreviewTimerRef.current) window.clearTimeout(demoPreviewTimerRef.current)
+  }, [])
 
   if (!project) return null
   const activeProject = project
@@ -119,10 +140,16 @@ export default function EditorShell() {
 
   function openDock(section: WorkspaceSection) {
     setDockSection((current) => current === section ? null : section)
+    if (interactiveDemo) emitDemoAction(`${section}-opened`)
   }
 
   async function selectQuestion(question: ResearchQuestionSummary) {
     if (!context || context.selectedQuestionId === question.id) return
+    if (interactiveDemo) {
+      setContext({ ...context, selectedQuestionId: question.id, revision: context.revision + 1 })
+      setDockSection('collaborator')
+      return
+    }
     try {
       const result = await api.saveInvestigation(activeProject.id, { selectedQuestionId: question.id, expectedRevision: context.revision })
       setContext(result.context)
@@ -140,6 +167,12 @@ export default function EditorShell() {
     const proposal = request.proposal
     if (proposal.kind === 'document_revision' && proposal.selection.projectId !== activeProject.id) return { applied: false as const, reason: 'rejected' as const }
     if (proposal.kind === 'document_insertion' && proposal.documentId !== activeProject.document?.id) return { applied: false as const, reason: 'rejected' as const }
+    if (interactiveDemo) {
+      editorRef.current?.setDemoContent(INTERACTIVE_DEMO_DOCUMENTS.revised)
+      demoAction('revision-applied')
+      setPreview(null)
+      return { applied: true as const }
+    }
     const result = editorRef.current?.applyDocumentRevision({
       replacement: proposal.kind === 'document_revision' ? proposal.replacement : proposal.content,
       expectedDocumentRevision: request.expectedDocumentRevision,
@@ -157,6 +190,101 @@ export default function EditorShell() {
   const closeDock = () => {
     setDockSection(null)
     requestAnimationFrame(() => editorRef.current?.focus())
+  }
+
+  function emitDemoAction(action: string) {
+    window.dispatchEvent(new CustomEvent('cogdoc:demo-action', { detail: { action } }))
+  }
+
+  function demoAction(action: string) {
+    if (!interactiveDemo) return
+    if (action === 'discovery-started') {
+      setInteractiveDemoState((state) => ({ ...state, discovery: 'searching' }))
+      emitDemoAction(action)
+      if (demoTimerRef.current) window.clearTimeout(demoTimerRef.current)
+      demoTimerRef.current = window.setTimeout(() => {
+        setInteractiveDemoState((state) => ({ ...state, discovery: 'ready' }))
+        emitDemoAction('discovery-ready')
+      }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 850)
+      return
+    }
+    setInteractiveDemoState((state) => {
+      if (action === 'source-opened') return { ...state, inspectedSourceId: 'demo-source-kasneci' }
+      if (action === 'evidence-chosen') return { ...state, evidenceChosen: true }
+      if (action === 'citation-inserted') return { ...state, citationInserted: true }
+      if (action === 'collaborator-asked') return { ...state, collaboratorAsked: true }
+      if (action.startsWith('engine-')) {
+        const engine = action.slice('engine-'.length) as InteractiveDemoState['engines'][number]
+        if (['interceptor', 'socratic', 'citation', 'scaffold'].includes(engine)) return { ...state, engines: [...new Set([...state.engines, engine])] }
+      }
+      if (action === 'engine-answered') return { ...state, engineAnswered: true }
+      if (action === 'revision-previewed') return { ...state, revisionPreviewed: true }
+      if (action === 'revision-applied') return { ...state, revisionApplied: true }
+      if (action === 'finding-filled') return { ...state, findingFilled: true }
+      if (action === 'finding-reviewed') return { ...state, findingReviewed: true }
+      if (action === 'article-composed') return { ...state, articleComposed: true }
+      if (action === 'exported') return { ...state, exported: true }
+      return state
+    })
+    if (action === 'citation-inserted') editorRef.current?.setDemoContent(INTERACTIVE_DEMO_DOCUMENTS.cited)
+    if (action === 'revision-applied') editorRef.current?.setDemoContent(INTERACTIVE_DEMO_DOCUMENTS.revised)
+    emitDemoAction(action)
+  }
+
+  async function runDemoCommand(command: 'write' | 'select-claim' | 'click-target', target: HTMLElement | null, signal: AbortSignal) {
+    if (command === 'click-target') { target?.click(); return }
+    if (command === 'select-claim') {
+      editorRef.current?.setDemoContent(interactiveDemoState.citationInserted ? INTERACTIVE_DEMO_DOCUMENTS.cited : INTERACTIVE_DEMO_DOCUMENTS.draft)
+      await new Promise((resolve) => window.setTimeout(resolve, 80))
+      editorRef.current?.selectDemoText(DEMO_ORIGINAL_CLAIM)
+      await new Promise((resolve) => window.setTimeout(resolve, 180))
+      if (!signal.aborted) target?.click()
+      return
+    }
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    for (let index = 1; index <= INTERACTIVE_DEMO_WRITING_WORDS; index += 1) {
+      if (signal.aborted) return
+      editorRef.current?.setDemoContent(interactiveDemoWritingFrame(index))
+      if (!reduce) await new Promise((resolve) => window.setTimeout(resolve, 42))
+    }
+    if (!signal.aborted) {
+      editorRef.current?.setDemoContent(INTERACTIVE_DEMO_DOCUMENTS.draft)
+      emitDemoAction('writing-complete')
+    }
+  }
+
+  function restoreDemo(step: number) {
+    if (!interactiveDemo) return
+    if (demoTimerRef.current) window.clearTimeout(demoTimerRef.current)
+    if (demoPreviewTimerRef.current) window.clearTimeout(demoPreviewTimerRef.current)
+    const next: InteractiveDemoState = {
+      discovery: step >= 6 ? 'ready' : 'queued', inspectedSourceId: step >= 7 ? 'demo-source-kasneci' : null,
+      evidenceChosen: step >= 9, citationInserted: step >= 10, collaboratorAsked: step >= 12,
+      engines: step >= 17 ? ['interceptor', 'socratic', 'citation', 'scaffold'] : step >= 16 ? ['interceptor', 'socratic', 'citation'] : step >= 15 ? ['interceptor', 'socratic'] : step >= 14 ? ['interceptor'] : [],
+      engineAnswered: step >= 18, revisionPreviewed: step >= 19, revisionApplied: step >= 20,
+      findingFilled: step >= 22, findingReviewed: step >= 23, articleComposed: step >= 25, exported: step >= 27,
+    }
+    setInteractiveDemoState(next)
+    editorRef.current?.setDemoContent(next.revisionApplied ? INTERACTIVE_DEMO_DOCUMENTS.revised : next.citationInserted ? INTERACTIVE_DEMO_DOCUMENTS.cited : step >= 2 ? INTERACTIVE_DEMO_DOCUMENTS.draft : INTERACTIVE_DEMO_DOCUMENTS.opening)
+    if (step <= 2) setDockSection('collaborator')
+    else if (step <= 4) setDockSection('plan')
+    else if (step <= 10) setDockSection('sources')
+    else if (step <= 20) setDockSection('collaborator')
+    else if (step <= 23) setDockSection('findings')
+    else setDockSection('share')
+    setPreview(null)
+    if (step === 7 || step === 8) {
+      const source = INTERACTIVE_DEMO_SOURCES[1]
+      setOpenSource({ workspaceSourceId: source.id, title: source.title, accessBasis: 'abstract' })
+    } else setOpenSource(null)
+    if (step === 19) {
+      demoPreviewTimerRef.current = window.setTimeout(() => {
+        editorRef.current?.selectDemoText(DEMO_ORIGINAL_CLAIM)
+        demoPreviewTimerRef.current = window.setTimeout(() => {
+          document.querySelector<HTMLElement>('[data-demo-target="demo-preview-revision"]')?.click()
+        }, 180)
+      }, 180)
+    }
   }
 
   return <div className="relative flex h-[100dvh] min-h-0 overflow-hidden bg-[var(--cog-workspace)] text-[var(--cog-foreground)]">
@@ -219,6 +347,7 @@ export default function EditorShell() {
             sourceRefreshKey={libraryVersion}
             sourceDiscovery={sourceDiscovery}
             onRetrySourceDiscovery={() => runSourceDiscovery(true)}
+            interactiveDemo={interactiveDemo ? { state: interactiveDemoState, onAction: demoAction } : undefined}
           />
         </div>}
         {!focusMode && dockSection && <div className="absolute inset-0 z-30 bg-[var(--cog-paper)] xl:hidden">
@@ -242,21 +371,22 @@ export default function EditorShell() {
             sourceRefreshKey={libraryVersion}
             sourceDiscovery={sourceDiscovery}
             onRetrySourceDiscovery={() => runSourceDiscovery(true)}
+            interactiveDemo={interactiveDemo ? { state: interactiveDemoState, onAction: demoAction } : undefined}
           />
         </div>}
       </div>
 
-      {!focusMode && <nav className="grid h-13 shrink-0 grid-cols-5 border-t border-[var(--cog-border)] bg-[var(--cog-paper)] xl:hidden" aria-label="Workspace tools">{(['collaborator', 'sources', 'findings', 'plan', 'share'] as const).map((section) => <button key={section} type="button" onClick={() => openDock(section)} aria-current={dockSection === section ? 'page' : undefined} className={`text-xs capitalize ${dockSection === section ? 'bg-[var(--cog-accent-soft)] font-medium text-[var(--cog-accent-strong)]' : 'text-[var(--cog-muted-foreground)]'}`}>{section}</button>)}</nav>}
+      {!focusMode && <nav className="grid h-13 shrink-0 grid-cols-5 border-t border-[var(--cog-border)] bg-[var(--cog-paper)] xl:hidden" aria-label="Workspace tools">{(['collaborator', 'sources', 'findings', 'plan', 'share'] as const).map((section) => <button key={section} type="button" data-demo-target={`nav-${section}`} onClick={() => openDock(section)} aria-current={dockSection === section ? 'page' : undefined} className={`text-xs capitalize ${dockSection === section ? 'bg-[var(--cog-accent-soft)] font-medium text-[var(--cog-accent-strong)]' : 'text-[var(--cog-muted-foreground)]'}`}>{section}</button>)}</nav>}
     </div>
 
     <Dialog open={Boolean(preview)} onOpenChange={(open) => { if (!open) setPreview(null) }}>
-      <DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>Preview document change</DialogTitle><DialogDescription>This change applies only to the current document revision. CogDoc rejects it if the document or selected passage changed.</DialogDescription></DialogHeader>{preview && <div className="grid gap-4"><div className="rounded-lg bg-[var(--cog-workspace)] p-4"><p className="text-xs font-medium text-[var(--cog-muted-foreground)]">{preview.kind === 'document_revision' ? 'Current passage' : 'Insertion'}</p><p className="mt-2 font-serif text-base leading-7">{preview.kind === 'document_revision' ? preview.selection.exactText : 'Insert at your current cursor'}</p></div><div className="rounded-lg border border-[var(--cog-accent)]/25 bg-[var(--cog-accent-soft)] p-4"><p className="text-xs font-medium text-[var(--cog-accent-strong)]">Proposed wording</p><p className="mt-2 whitespace-pre-wrap font-serif text-base leading-7">{preview.kind === 'document_revision' ? preview.replacement : preview.content}</p><p className="mt-3 text-xs text-[var(--cog-muted-foreground)]">{preview.reason}</p></div><div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setPreview(null)}>Keep original</Button><Button onClick={() => void applyProposal({ proposal: preview, expectedDocumentRevision: preview.kind === 'document_revision' ? preview.selection.documentRevision : preview.expectedDocumentRevision, expectedSelectionId: preview.kind === 'document_revision' ? preview.selection.selectionId : undefined }).then((result) => { if (!result.applied) toast.error('Document changed', { description: result.reason === 'stale_revision' || result.reason === 'stale_selection' ? 'Select the passage again, then review the proposal.' : 'The proposal was not applied.' }) })}>Apply change</Button></div></div>}</DialogContent>
+      <DialogContent onInteractOutside={(event) => { if (interactiveDemo) event.preventDefault() }} className="max-w-2xl"><DialogHeader><DialogTitle>Preview document change</DialogTitle><DialogDescription>This change applies only to the current document revision. CogDoc rejects it if the document or selected passage changed.</DialogDescription></DialogHeader>{preview && <div className="grid gap-4"><div className="rounded-lg bg-[var(--cog-workspace)] p-4"><p className="text-xs font-medium text-[var(--cog-muted-foreground)]">{preview.kind === 'document_revision' ? 'Current passage' : 'Insertion'}</p><p className="mt-2 font-serif text-base leading-7">{preview.kind === 'document_revision' ? preview.selection.exactText : 'Insert at your current cursor'}</p></div><div className="rounded-lg border border-[var(--cog-accent)]/25 bg-[var(--cog-accent-soft)] p-4"><p className="text-xs font-medium text-[var(--cog-accent-strong)]">Proposed wording</p><p className="mt-2 whitespace-pre-wrap font-serif text-base leading-7">{preview.kind === 'document_revision' ? preview.replacement : preview.content}</p><p className="mt-3 text-xs text-[var(--cog-muted-foreground)]">{preview.reason}</p></div><div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setPreview(null)}>Keep original</Button><Button data-demo-target={interactiveDemo ? 'demo-apply-revision' : undefined} onClick={() => void applyProposal({ proposal: preview, expectedDocumentRevision: preview.kind === 'document_revision' ? preview.selection.documentRevision : preview.expectedDocumentRevision, expectedSelectionId: preview.kind === 'document_revision' ? preview.selection.selectionId : undefined }).then((result) => { if (!result.applied) toast.error('Document changed', { description: result.reason === 'stale_revision' || result.reason === 'stale_selection' ? 'Select the passage again, then review the proposal.' : 'The proposal was not applied.' }) })}>Apply change</Button></div></div>}</DialogContent>
     </Dialog>
 
-    <Dialog open={Boolean(openSource)} onOpenChange={(open) => { if (!open) { setOpenSource(null); requestAnimationFrame(() => editorRef.current?.focus()) } }}><DialogContent className="h-[min(50rem,calc(100dvh-2rem))] max-w-4xl overflow-hidden p-0"><DialogHeader className="sr-only"><DialogTitle>{openSource?.title || 'Source reader'}</DialogTitle><DialogDescription>Inspect available source passages and return to the document.</DialogDescription></DialogHeader>{openSource && <SourceReader key={openSource.workspaceSourceId} projectId={project.id} source={openSource} onChoose={(source) => { setSelectedSources((current) => [...current.filter((item) => item.workspaceSourceId !== source.workspaceSourceId), source]); setOpenSource(null); setDockSection('collaborator') }} />}</DialogContent></Dialog>
+    <Dialog open={Boolean(openSource)} onOpenChange={(open) => { if (!open) { setOpenSource(null); requestAnimationFrame(() => editorRef.current?.focus()) } }}><DialogContent onInteractOutside={(event) => { if (interactiveDemo) event.preventDefault() }} className="h-[min(50rem,calc(100dvh-2rem))] max-w-4xl overflow-hidden p-0"><DialogHeader className="sr-only"><DialogTitle>{openSource?.title || 'Source reader'}</DialogTitle><DialogDescription>Inspect available source passages and return to the document.</DialogDescription></DialogHeader>{openSource && <SourceReader key={openSource.workspaceSourceId} projectId={project.id} source={openSource} onChoose={(source) => { setSelectedSources((current) => [...current.filter((item) => item.workspaceSourceId !== source.workspaceSourceId), source]); setOpenSource(null); setDockSection(interactiveDemo ? 'sources' : 'collaborator'); if (interactiveDemo) demoAction('evidence-chosen') }} />}</DialogContent></Dialog>
 
     <Dialog open={Boolean(secondary)} onOpenChange={(open) => { if (!open) setSecondary(null) }}><DialogContent className="h-[min(48rem,calc(100dvh-2rem))] max-w-5xl overflow-hidden p-0"><DialogHeader className="sr-only"><DialogTitle>{secondary === 'history' ? 'Project history' : 'References'}</DialogTitle><DialogDescription>Secondary project tools</DialogDescription></DialogHeader>{secondary === 'history' ? <ResearchHistory projectId={project.id} initialFilter="decisions" /> : <ResearchLibrary />}</DialogContent></Dialog>
-    {isGuidedDemo(project) ? <GuidedDemoGuide key={project.id} projectId={project.id} onOpenSection={(section) => setDockSection(section)} onFocusDocument={() => { setDockSection(null); requestAnimationFrame(() => editorRef.current?.focus()) }} /> : null}
+    {interactiveDemo ? <InteractiveDemoTour key={project.id} projectId={project.id} onCommand={runDemoCommand} onRestore={restoreDemo} onExit={() => { setActiveProject(null); setView('dashboard') }} /> : null}
   </div>
 }
 
@@ -264,7 +394,9 @@ function SourceReader({ projectId, source, onChoose }: { projectId: string; sour
   const [result, setResult] = useState<Awaited<ReturnType<typeof api.getResearchSource>> | null>(null)
   const [error, setError] = useState('')
   useEffect(() => {
+    if (projectId === 'cogdoc-interactive-demo-v3') return
     void api.getResearchSource(projectId, source.workspaceSourceId).then(setResult).catch((reason) => setError((reason as Error).message))
   }, [projectId, source.workspaceSourceId])
+  if (projectId === 'cogdoc-interactive-demo-v3') return <article className="flex h-full min-h-0 flex-col bg-[var(--cog-workspace)]"><header className="border-b border-[var(--cog-border)] bg-[var(--cog-paper)] px-6 py-5"><p className="text-xs font-semibold text-violet-800">Simulated source inspection</p><h2 className="mt-1 text-lg font-semibold tracking-[-0.02em]">{source.title}</h2><p className="mt-1 text-sm text-[var(--cog-muted-foreground)]">Verified publication identity. The passage below is demonstration material.</p></header><div className="min-h-0 flex-1 overflow-y-auto p-6"><div data-demo-target="demo-source-reader" className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-semibold text-amber-900">Demonstration paraphrase, not a quotation</p><p className="mt-2 text-sm leading-7 text-amber-950">{DEMO_SAMPLE_PASSAGE}</p><p className="mt-3 text-xs leading-5 text-amber-800">Sample locator: abstract-level context. Inspect the original publication before using it in real research.</p></div><Button data-demo-target="demo-use-evidence" className="mt-5" onClick={() => onChoose({ ...source, excerpt: DEMO_SAMPLE_PASSAGE, locator: 'Sample abstract context', accessBasis: 'abstract' })}>Use this sample passage</Button></div></article>
   return <article className="flex h-full min-h-0 flex-col bg-[var(--cog-workspace)]"><header className="border-b border-[var(--cog-border)] bg-[var(--cog-paper)] px-6 py-5"><p className="text-xs font-medium text-[var(--cog-accent-strong)]">{source.accessBasis.replace('_', ' ')}</p><h2 className="mt-1 text-lg font-semibold tracking-[-0.02em]">{source.title}</h2><p className="mt-1 text-sm text-[var(--cog-muted-foreground)]">Only available passages are shown. Approximate PDF pages remain labelled as approximate.</p></header><div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7">{error ? <p className="text-sm text-[var(--cog-danger)]" role="alert">{error}</p> : !result ? <p className="flex items-center gap-2 text-sm text-[var(--cog-muted-foreground)]" role="status"><Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />Loading available passages</p> : result.passages.length ? <div className="space-y-3">{result.passages.map((passage) => <button key={passage.id} type="button" onClick={() => onChoose({ ...source, passageId: passage.id, excerpt: passage.content, locator: `Approximate PDF page ${passage.pageApprox}`, accessBasis: 'extracted_text' })} className="block w-full rounded-xl border border-[var(--cog-border)] bg-[var(--cog-paper)] p-5 text-left outline-none transition hover:border-[var(--cog-accent)]/45 focus-visible:ring-2 focus-visible:ring-[var(--cog-accent)]"><span className="text-xs font-medium text-[var(--cog-accent-strong)]">Approximate PDF page {passage.pageApprox}</span><p className="mt-2 font-serif text-base leading-7">{passage.content}</p><span className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--cog-accent-strong)]"><BookOpen className="h-3.5 w-3.5" />Use this passage in collaborator context</span></button>)}</div> : <div><BookOpen className="h-5 w-5 text-[var(--cog-accent)]" /><p className="mt-3 text-sm font-medium">Full text is not available in CogDoc</p><p className="mt-1 text-sm leading-6 text-[var(--cog-muted-foreground)]">This record cannot be treated as an inspected passage. Add a lawful copy or researcher-supplied excerpt.</p></div>}</div></article>
 }

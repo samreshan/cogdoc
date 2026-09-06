@@ -33,3 +33,41 @@ Restore automatic scholarly source suggestions inside the document-first workflo
 - Demo initialization is idempotent by marker and resumes the existing demo. A new demo is created only when no marked workspace exists; reset is implemented as another demo, not deletion.
 - No schema change, credential exposure, database reset, Docker rebuild, or remote push.
 - Focused tests cover orchestration deduplication/failure, topic/question wiring, demo isolation/resume, and guide persistence. TypeScript and a production build verify integration when disk permits.
+
+## Interactive demo mode revision
+
+The basic floating checklist is replaced by a versioned, deterministic tour that operates on the real editor shell and research dock.
+
+### Experience architecture
+
+1. A prominent **Try interactive demo** action on Home creates a client-only, tagged sample project. It does not call workspace, provider, AI, worker, or review APIs.
+2. The existing Tiptap editor remains the writing surface. Demo-only imperative controls reveal text in paced chunks, select the exact passage, apply a reviewed replacement, and insert the sample citation.
+3. The existing navigator and dock remain mounted. A demo adapter supplies deterministic source, collaborator, engine, finding, article, and export states inside those surfaces.
+4. A target-aware overlay finds stable `data-demo-target` attributes, scrolls the real control into view, draws a click-through spotlight, and positions an accessible coach card within the viewport.
+5. Expected real clicks advance steps. **Show me** performs one bounded scripted action. Pause cancels typing, Back restores the deterministic snapshot for that stage, and Escape exits without changing normal projects.
+
+### Ordered action coverage
+
+| Moment | Real target | Observable state change | Test |
+| --- | --- | --- | --- |
+| Start | Home demo button | Isolated sample project opens | creation/isolation |
+| Frame | document surface | Topic, goal, and question explained | target resolution |
+| Write | Tiptap editor | Draft visibly grows; pause/resume works | timer cleanup/content |
+| Plan | Plan control | Prefilled questions appear | expected click |
+| Discover | Sources control | queued, searching, then three fixture leads | deterministic transition |
+| Inspect | source card | Verified identity and labelled sample excerpt open | provenance boundary |
+| Cite | evidence action | Sample citation appears in real document | editor content assertion |
+| Collaborate | Collaborator control | Sample request and response appear | no network assertion |
+| Intervene | four engine controls | Each role produces a labelled question/result | engine sequence |
+| Revise | preview/apply controls | Selected passage changes through existing preview | stale-safe apply |
+| Find | Findings control | Rationale, uncertainty, and limits fill; review remains explicit | review state |
+| Compose | Share control | Article outline and draft appear from sample finding | eligibility state |
+| Export | Markdown button | Explicit user click downloads meaningful sample file | Blob/download |
+| Finish | completion coach | Replay or return to own research | persistence/reset |
+
+### Safety boundary
+
+- Every simulated response, excerpt, engine result, finding, and article is visibly labelled sample material.
+- Publication titles, DOI values, and URLs come from the verified demo fixture. The excerpt is a labelled demonstration paraphrase, not a quotation.
+- Normal projects retain their existing live API behavior. The demo never creates jobs, attachments, findings, reviews, or exports in the database.
+- Autoplay never downloads. Export requires a direct researcher click.

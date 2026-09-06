@@ -25,6 +25,7 @@ import type {
 } from '@/lib/document-collaborator-contract'
 import { api } from '@/lib/api-client'
 import { discoverSourceCandidates, type SourceDiscoveryCandidate } from '@/lib/automatic-source-discovery'
+import InteractiveDemoDock from '@/components/cogdoc/interactive-demo-dock'
 
 const sections = [
   { id: 'collaborator', label: 'Collaborator', icon: MessageSquareText },
@@ -356,7 +357,7 @@ function SourcesPanel({ projectId, selected, onSelected, onOpenSource, refreshKe
   </div>
 }
 
-export default function DocumentResearchDock(props: DocumentResearchDockProps) {
+function NormalDocumentResearchDock(props: DocumentResearchDockProps) {
   const { onSectionChange, onRefresh } = props
   const [internalSection, setInternalSection] = useState(props.initialSection ?? 'collaborator')
   const section = props.activeSection ?? internalSection
@@ -378,6 +379,12 @@ export default function DocumentResearchDock(props: DocumentResearchDockProps) {
     <div role="tabpanel" hidden={section !== 'plan'} className="min-h-0 flex-1 overflow-y-auto"><InvestigationPlanPanel projectId={props.projectId} onReady={onPlanReady} initialProposal={planProposal ?? undefined} /></div>
     <div role="tabpanel" hidden={section !== 'share'} className="min-h-0 flex-1 overflow-y-auto p-4"><div className="mb-4"><h2 className="text-sm font-semibold">Share and compose</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Export the working document or compose a separate article artifact. Nothing publishes automatically.</p><div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="outline" asChild><a href={`/api/projects/${encodeURIComponent(props.projectId)}/export`}>Export document</a></Button>{props.onOpenShare ? <Button size="sm" variant="ghost" onClick={props.onOpenShare}>Open share view</Button> : null}</div></div><ArticleWorkspace projectId={props.projectId} /></div>
   </aside>
+}
+
+export default function DocumentResearchDock(props: DocumentResearchDockProps) {
+  return props.interactiveDemo
+    ? <InteractiveDemoDock props={props} state={props.interactiveDemo.state} onAction={props.interactiveDemo.onAction} />
+    : <NormalDocumentResearchDock {...props} />
 }
 
 export { DocumentResearchDock }

@@ -14,6 +14,7 @@ vi.mock('@/components/cogdoc/findings-workspace', () => ({ default: () => <div>F
 vi.mock('@/components/cogdoc/article-workspace', () => ({ ArticleWorkspace: () => <div>Article workspace</div> }))
 
 import { DocumentResearchDock } from '@/components/cogdoc/document-research-dock'
+import { INITIAL_INTERACTIVE_DEMO_STATE } from '@/lib/interactive-demo'
 
 const selection = {
   projectId: 'project-1', documentId: 'document-1', documentRevision: 2, from: 1, to: 12,
@@ -69,5 +70,15 @@ describe('DocumentResearchDock', () => {
     rerender(<DocumentResearchDock {...stableProps} activeSection="plan" />)
     expect(screen.getByText('Plan panel')).toBeInTheDocument()
     expect(mocks.load).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses deterministic demo content without loading the live collaborator', async () => {
+    const user = userEvent.setup()
+    const onAction = vi.fn()
+    render(<DocumentResearchDock projectId="cogdoc-interactive-demo-v3" activeSection="collaborator" onRequestPreview={vi.fn()} onApplyProposal={vi.fn()} onOpenSource={vi.fn()} onFocusDocument={vi.fn()} interactiveDemo={{ state: INITIAL_INTERACTIVE_DEMO_STATE, onAction }} />)
+    expect(screen.getByText('Every response below is deterministic sample material.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Ask sample question' }))
+    expect(onAction).toHaveBeenCalledWith('collaborator-asked')
+    expect(mocks.load).not.toHaveBeenCalled()
   })
 })

@@ -41,6 +41,7 @@ import EditorToolbar from './editor-toolbar'
 import { createEditorExtensions } from '@/lib/editor-extensions'
 import type { StructuredCitationAttrs } from '@/lib/extensions/citation-node'
 import { fingerprintDocumentText } from '@/lib/document-selection'
+import { isInteractiveDemo } from '@/lib/interactive-demo'
 
 export interface DocumentEditorSelection {
   text: string
@@ -60,6 +61,8 @@ export interface DocumentEditorApplyRequest {
 export interface DocumentEditorHandle {
   applyDocumentRevision: (request: DocumentEditorApplyRequest) => { applied: boolean; reason?: 'stale_selection' | 'stale_revision' | 'rejected' }
   focus: () => void
+  setDemoContent: (content: string) => void
+  selectDemoText: (text: string) => boolean
 }
 
 interface EditorTiptapProps {
@@ -163,6 +166,19 @@ const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(functio
       return { applied: true }
     },
     focus() { editor?.commands.focus() },
+    setDemoContent(content) {
+      if (!editor || !project || !isInteractiveDemo(project)) return
+      editor.commands.setContent(parseStoredContent(content))
+      updateActiveProjectContent(content, new Date().toISOString(), revisionRef.current, 'interactive-demo')
+    },
+    selectDemoText(text) {
+      if (!editor || !project || !isInteractiveDemo(project)) return false
+      const range = findEditorTextRange(editor.state.doc, text)
+      if (!range) return false
+      editor.chain().focus().setTextSelection(range).run()
+      void publishSelection()
+      return true
+    },
   }), [editor, project])
 
   useEffect(() => {
@@ -239,6 +255,13 @@ const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(functio
   const scheduleSave = useCallback(() => {
     if (!editor || !project) return
     const json = serializeForSave(editor.getJSON())
+    if (isInteractiveDemo(project)) {
+      updateActiveProjectContent(json, new Date().toISOString(), revisionRef.current, 'interactive-demo')
+      setSaveState('saved')
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = setTimeout(() => setSaveState('idle'), 650)
+      return
+    }
     void saveRecoveryDraft(project.id, { content: json, revision: revisionRef.current, updatedAt: Date.now() })
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(async () => {
@@ -301,6 +324,7 @@ const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(functio
   // Recover the latest unsent local draft after an offline close or failed save.
   useEffect(() => {
     if (!editor || !project) return
+    if (isInteractiveDemo(project)) return
     loadRecoveryDraft(project.id).then((draft) => {
       if (!draft || draft.content === serializeForSave(editor.getJSON())) return
       if (draft.revision >= (project.document?.revision ?? 0)) {
@@ -311,7 +335,7 @@ const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(functio
         setTimeout(() => scheduleSave(), 100)
       }
     }).catch(() => {})
-  }, [editor, project?.id])
+  }, [editor, project, scheduleSave])
 
   useEffect(() => {
     const online = () => { setSaveState('recovering'); scheduleSave() }
@@ -494,7 +518,7 @@ const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(functio
       }} onAskCollaborator={() => { void publishSelection().then(() => onOpenCollaborator?.(publishedSelectionRef.current)) }} />
 
       {/* Scrollable writing surface */}
-      <div className="document-scroll flex-1 overflow-y-auto overscroll-contain">
+      <div className="document-scroll flex-1 overflow-y-auto overscroll-contain" data-demo-target="document-surface">
         <div className="document-paper relative mx-auto min-h-full w-full max-w-[920px] bg-[var(--cog-paper)] px-7 py-12 sm:px-14 sm:py-16 lg:px-20">
           {/* Writing surface — focus mode dims all but the last paragraph */}
           <div

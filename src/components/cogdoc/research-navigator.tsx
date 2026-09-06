@@ -48,7 +48,7 @@ export default function ResearchNavigator({ project, questions, activeQuestionId
       </div>
 
       <div className="mt-4 space-y-1">
-        {sections.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => onSectionChange(id)} aria-current={activeSection === id ? 'page' : undefined} className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--cog-accent)] ${activeSection === id ? 'bg-white/10 text-white' : 'text-white/62 hover:bg-white/[0.06] hover:text-white'}`}>
+        {sections.map(({ id, label, icon: Icon }) => <button key={id} type="button" data-demo-target={`nav-${id}`} onClick={() => onSectionChange(id)} aria-current={activeSection === id ? 'page' : undefined} className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--cog-accent)] ${activeSection === id ? 'bg-white/10 text-white' : 'text-white/62 hover:bg-white/[0.06] hover:text-white'}`}>
           {activeSection === id && <span className="absolute -left-3 top-2 bottom-2 w-0.5 rounded-full bg-[var(--cog-accent)]" />}
           <Icon className="h-4 w-4" /><span>{label}</span>
         </button>)}

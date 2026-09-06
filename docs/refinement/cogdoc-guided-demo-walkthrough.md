@@ -1,117 +1,118 @@
-# CogDoc guided demo: supervisor walkthrough
+# CogDoc interactive demo walkthrough
 
-Date: 5 September 2026
+Date: 6 September 2026
 
-Length: 5–10 minutes
+Length: 8 to 12 minutes
+
 Scenario: researcher agency in AI-assisted writing
 
-## Purpose and boundary
+## What this demo proves
 
-This walkthrough demonstrates a document-first research workflow: a researcher frames a stable question, receives bounded source leads, inspects material, records a finding, responds to a reasoning intervention, and makes a separate review decision. It does **not** claim that CogDoc improves cognition, grades, or learning outcomes. The demo source records establish publication identity only. A title, DOI, URL, or abstract is a lead—not inspected evidence.
+The interactive demo is a deterministic, client-only replay of CogDoc's complete research-writing journey. It uses the real editor, navigation, dock layout, source reader, revision preview, and download interaction. Source discovery, collaborator responses, reasoning-engine results, and finding content are stable sample fixtures. They make the product easy to demonstrate without claiming that a live provider or background worker ran.
 
-The prefilled project is optional and isolated. Resuming it preserves edits. **Create another demo copy** makes a fresh workspace and does not delete or overwrite the old one. Restarting the floating guide resets guide progress only.
+Every simulated surface says **Simulated** or **Demonstration**. The three displayed publication identities are real and link to their original records. The displayed source passage is explicitly a demonstration paraphrase, not a quotation or fabricated evidence.
 
-## Prerequisites and launch
+The demo never writes to the project API, database, source providers, AI provider, or background-job queue. It never publishes. The final Markdown download occurs only after the presenter or visitor clicks the highlighted export button.
 
-From the saved local project:
+## Launch
 
-```bash
-cd /Users/samreshan/Programming/cogdoc-workspace
-docker compose --env-file .env.local -f docker-compose.dev.yml --profile full up -d --build
-```
+Run the application by the project's usual development or Compose workflow, then open Home. No live AI, research provider, retrieval service, or worker is required for this interactive path.
 
-Open `http://localhost:3000`. The full profile also starts PostgreSQL, the research background worker, and the retrieval service. The worker is required for automatic engine questions; if it is stopped, writing, source discovery, manual engine controls, and manual collaboration still work, but no background question will appear. Do not display `.env.local` during the presentation. Source providers and the optional Gemini collaborator use the existing local configuration; provider outages are handled as unavailable, not replaced with invented results.
+1. Click **Try interactive demo**, the primary action under the Home introduction.
+2. The app opens an isolated project named **Interactive demo: researcher agency**.
+3. A 27-step coach highlights one real control at a time. The page around that control is dimmed.
 
-Useful non-destructive checks:
+The separate **Resume guided demo** action still opens the older saved workspace. Use **Try interactive demo** for the deterministic presentation described here.
 
-```bash
-docker compose --env-file .env.local -f docker-compose.dev.yml --profile full ps
-docker compose --env-file .env.local -f docker-compose.dev.yml --profile full logs --tail=80 worker
-```
+## Coach controls
 
-## Timed presentation
+- **Show me** performs the highlighted non-destructive action. The visitor can click the highlighted control directly instead.
+- **Pause** stops the paced writing playback. The editor remains usable, so the visitor can take over.
+- **Back** restores the exact document, dock, modal, and simulated state required by the previous step.
+- **Escape** hides the coach without discarding progress. **Resume demo** brings it back.
+- **Exit interactive demo** returns to Home. Progress is versioned in local storage.
+- **Replay** resets the isolated sample after completion.
+- The answer and final export steps are manual-only. The coach cannot answer or download on the visitor's behalf.
 
-### 0:00–1:00 — Create or resume safely
+## Presentation route
 
-1. On Home, click **Open prefilled guided demo**. If it already exists, click **Resume guided demo**; use **Create another demo copy** for a clean run.
-2. Point out the prominent “DEMONSTRATION MATERIAL” notice in the starter document.
-3. Narrate: “This is an editable starting position, not an accepted finding. The real document stays central.”
+### 1. Document and paced writing
 
-The project includes three stable questions and three verified publication identities:
+Introduce the mounted document as the center of the workspace. Continue to **Watch the argument take shape**, then click **Show me**. Words appear at a readable pace in the real editor. Point out **Pause** and explain that a visitor can interrupt playback and type directly.
+
+The starter claim is intentionally too broad: writing speed alone does not establish researcher control.
+
+### 2. Plan and stable questions
+
+Use the highlighted route icon to open **Plan**. Show the prefilled topic, goal, context, and three questions. The primary question asks what researcher control means in an AI-assisted writing workspace. Explain that this stable context would guide real discovery and collaboration.
+
+### 3. Simulated discovery and source inspection
+
+Open the highlighted **Sources** book icon, then run the deterministic discovery replay. It moves through queued, searching, and ready states before showing three verified publication identities:
 
 - UNESCO, *Guidance for generative AI in education and research* (2023).
 - Kasneci et al., *ChatGPT for good?* (2023), DOI `10.1016/j.lindif.2023.102274`.
 - Bender et al., *On the dangers of stochastic parrots* (2021), DOI `10.1145/3442188.3445922`.
 
-These entries are explicitly marked metadata-only. Open the original before quoting or treating it as support.
+Open the highlighted Kasneci record. The modal distinguishes the verified publication identity from the labelled sample paraphrase. Continue, then choose **Use this sample passage**. This changes the simulated evidence state but does not create or accept a finding.
 
-### 1:00–2:30 — Stable question and automatic discovery
+Click **Insert sample citation**. The real document changes visibly and retains the sample-citation label.
 
-1. Open **Plan** in the left rail and select: “What does researcher control mean in an AI-assisted writing workspace?”
-2. Open **Sources**. A confirmed topic or selected question starts one bounded search across the existing scholarly providers. It does not fire on each keystroke.
-3. Show the status banner and any saved suggestions. Explain that results are cached and deduplicated by DOI/URL, at most three are saved for a context, and existing sources survive an empty result or provider failure.
-4. If discovery is unavailable, click **Retry discovery** once or use the manual URL/import path. Say plainly that no new lead was found; do not imply coverage.
+### 4. Collaborator and four engines
 
-### 2:30–4:00 — Collaborator and source leads
+Open **Collaborator**, ask the prepared research question, and show the deterministic answer plus a source lead. Explain that the source lead is a direction to investigate, not proof.
 
-1. Select the sentence beginning “My starting position…” in the document.
-2. Open **Collaborator** and ask: “What evidence would test this idea?”
-3. Show the context chips: only the active question, exact selected text, and explicitly chosen source context are sent.
-4. If the request asks for evidence, the collaborator can show real provider-backed **Source leads to explore** cards. **Save lead** persists the record; **Explore original** opens the DOI/URL. Neither action turns it into evidence.
-5. If AI is unavailable, the request is still saved and the interface says it could not answer reliably. Continue with Sources or the manual tools.
+Run each highlighted engine:
 
-### 4:00–5:30 — Background intervention and valid uncertainty
+- **Interceptor** detects when fluent wording takes ownership of the conclusion.
+- **Socratic Spacer** asks for the researcher's own explanation.
+- **Citation Sentinel** distinguishes a publication record from inspected support with a locator.
+- **Scaffold** separates claim, evidence, limitation, and implication.
 
-1. With the worker running, a durable save event—source added, meaningful document revision saved, or finding revision saved—can enqueue one engine question. The collaborator polls for the persisted question; it is not an idle timer or keystroke interruption.
-2. Show the engine label and answer field. For the citation prompt, answer: “I have the publication record, but I’m not sure which passage is relevant—help me investigate.”
-3. Narrate: “Uncertainty is a valid response. It releases this question but is not counted as evidence and does not review the finding.”
-4. If no background question is visible, verify the worker and save one meaningful document edit. Document prompts wait about 15 seconds so rapid saves can coalesce. Do not repeatedly edit just to manufacture prompts; use the manual controls for a deterministic demo fallback.
+At **Uncertainty is a valid response**, click **Use sample answer**, then **Record response**. This releases the question; it does not create evidence or review a finding.
 
-### 5:30–7:30 — Four intervention engines and a finding
+### 5. Safe document revision
 
-Select a meaningful passage and expand **Run a reasoning engine** in Collaborator. The controls call the existing engines directly and show their real output without editing the document:
+Click **Show me** at **Preview before changing prose**. CogDoc selects the broad claim in the real editor and opens the real revision preview. The current passage and narrower proposal are both visible.
 
-- **Interceptor** surfaces uncertainty or a point where fluent wording may outrun support.
-- **Socratic Spacer** asks the researcher to explain or test the reasoning.
-- **Citation Sentinel** asks for source-content and locator support.
-- **Scaffold** structures Claim — Evidence — Limitation — Implication.
+At **Apply remains explicit**, click **Show me** or **Apply change**. The editor changes only after that action. The revised claim now makes source visibility, inspection, uncertainty, and separate review explicit.
 
-Open **Findings**. Record a bounded conclusion in your own words, include uncertainty and limitations, and attach only content you actually inspected with a usable locator. Saving a source is not the same as attaching evidence. If a pending background prompt is tied to this exact finding revision, CogDoc asks for its response before review. Other editing remains available, and newer/unrelated findings are not globally blocked.
+### 6. Finding and review
 
-Then make the separate review choice: accept, retain uncertainty, request more evidence, or withdraw acceptance. CogDoc never auto-reviews a finding after an engine answer.
+Open **Findings**. Fill the deterministic sample conclusion, explanation, uncertainty, and limitation. Then use **Retain with uncertainty** as a separate review decision. Emphasize that no engine answer performs this review automatically.
 
-### 7:30–9:00 — Optional article and close
+### 7. Article and explicit export
 
-1. Open **Share**.
-2. If current reviewed findings exist, optionally generate an outline or article draft. Article composition uses reviewed current revisions; it stays separate from the working document.
-3. If nothing is eligible, leave the article step undone. That is an honest outcome, not a demo failure.
-4. Close with: “Discovery suggests records. Inspection establishes what content was available. A finding connects reasoning to inspected evidence. The researcher makes the review decision.”
+Open **Share**, compose the deterministic article, and inspect the result. It preserves both the simulation label and uncertainty. Continue to the last step, then personally click **Download sample Markdown**. The completion card appears only after that explicit download action.
 
-## Event and failure model
+The Markdown contains a meaningful article, the reviewed sample finding, the verified source identities, the demonstration-paraphrase boundary, and a simulation disclosure.
 
-The automatic path is:
+## Resize, accessibility, and recovery checks
 
-`stable saved event → idempotent ResearchJob → worker selects a bounded gap → persisted collaborator question → researcher response → separate manual finding review`
+- The coach targets the visible desktop or mobile copy of a control rather than a hidden duplicate.
+- It scrolls a target into view and remeasures after resize or layout mutation.
+- The coach prefers a position beside the target and falls back above or below it to avoid covering the highlighted action.
+- Reduced-motion preference removes smooth scrolling and paced delay.
+- Coach progress and status updates are exposed to assistive technology; Escape always provides a quick exit.
+- If a target does not appear within a bounded interval, the coach explains how to restore the panel or go Back rather than waiting forever.
 
-- Rapid document saves supersede older queued document prompts.
-- The worker allows at most one pending engine question per project and discards stale document/finding revisions.
-- Source and question identity are stored with the exchange; a finding review gate applies only to the exact affected current revision.
-- Provider failure produces an unavailable state. Worker absence produces no background question. Neither condition fabricates evidence, answers, or review state.
-- The manual engine controls remain available for a presentation even when the background worker is unavailable.
+## Verification checklist
 
-## Acceptance checklist
+- [ ] Home prominently offers **Try interactive demo**.
+- [ ] Starting the demo performs no project, source, AI, or job API request.
+- [ ] The real editor shows paced writing, pause, takeover, citation insertion, and applied revision.
+- [ ] Plan contains the prefilled topic, goal, context, and three questions.
+- [ ] Discovery visibly transitions and returns only the three stable publication fixtures.
+- [ ] Source identity and demonstration paraphrase are visibly distinguished.
+- [ ] Evidence selection does not auto-create a finding.
+- [ ] Collaborator and all four engines have distinct, deterministic outputs.
+- [ ] Answering an engine does not create evidence or review.
+- [ ] Revision preview shows before-and-after text; apply remains explicit.
+- [ ] Finding fill and finding review are separate actions.
+- [ ] Article composition follows the reviewed finding.
+- [ ] Export has no **Show me** control and occurs only on the visitor's click.
+- [ ] Back, replay, Escape/resume, resize, and missing-target recovery work.
 
-- [ ] Home creates/resumes a separate marked demo and can create another copy without deletion.
-- [ ] Starter content says demonstration material and no finding is pre-accepted.
-- [ ] Selecting a stable question triggers at most one cached discovery cycle; typing does not.
-- [ ] Sources show provenance/access state and provider errors honestly.
-- [ ] Collaborator evidence requests show actionable real source leads when providers return them.
-- [ ] All four manual engine buttons return visible results for selected text.
-- [ ] A stable saved event creates at most one durable background question when the worker is running.
-- [ ] “I’m not sure—help me investigate” records uncertainty without creating evidence or a review.
-- [ ] Only the affected finding revision is gated until that question is answered.
-- [ ] Review remains an explicit researcher action; article composition uses reviewed current revisions only.
+## Known boundary
 
-## Known limitations
-
-Live source results vary by provider availability and ranking. Metadata and abstracts can be incomplete; full text may require lawful access outside CogDoc. The deterministic background policy identifies missing workflow fields, not truth or cognitive quality. The demo is an interaction walkthrough, not an evaluation of educational effectiveness.
+This is a product-behavior demonstration, not evidence that CogDoc improves learning, cognition, or research quality. Real projects still depend on lawful source access, exact locators, comparison, uncertainty, and researcher judgement.

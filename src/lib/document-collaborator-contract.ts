@@ -139,6 +139,10 @@ export interface DocumentResearchDockProps {
   sourceRefreshKey?: number
   sourceDiscovery?: { status: 'idle' | 'searching' | 'saved' | 'empty' | 'partial' | 'unavailable' | 'skipped'; message: string }
   onRetrySourceDiscovery?: () => Promise<void>
+  interactiveDemo?: {
+    state: import('@/lib/interactive-demo').InteractiveDemoState
+    onAction: (action: string) => void
+  }
 }
 
 export function createSelectionId(selection: Omit<DocumentSelectionContext, 'selectionId'>): string {
