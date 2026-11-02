@@ -1,5 +1,10 @@
 'use client'
 
+import RetrievalPanel from './retrieval-panel'
+import { mergeCollaboratorTurns } from '@/lib/collaborator-turns'
+
+import { completeGuideAction } from '@/lib/live-research-guide'
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BookOpen, Check, ChevronLeft, ExternalLink, FileOutput, Lightbulb, ListChecks,
@@ -101,6 +106,7 @@ function ConversationPanel({ props, onOpenSection, onFindingProposal, onPlanProp
   const [engineAnswers, setEngineAnswers] = useState<Record<string, string>>({})
   const [answeringEnginePrompt, setAnsweringEnginePrompt] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
+  const conversationVersion = useRef(0)
   const upstreamSourceIds = (props.selectedSources ?? []).map((source) => source.workspaceSourceId).join(':')
 
   useEffect(() => {
@@ -115,12 +121,30 @@ function ConversationPanel({ props, onOpenSection, onFindingProposal, onPlanProp
       if (props.selectedSources?.length) setChosenSources(props.selectedSources)
       else if (Array.isArray(storedSources)) setChosenSources(storedSources.filter((source) => source && typeof source.workspaceSourceId === 'string' && typeof source.title === 'string'))
     } catch { /* ignore an invalid local draft cache */ }
-    const sync = () => loadDocumentCollaborator(props.projectId)
-      .then((result) => { setTurns(result.turns); setAssistant(result.assistant) })
-      .catch((requestError) => setError(requestError instanceof Error ? requestError.message : 'Could not load the conversation.'))
-    void sync().finally(() => setLoading(false))
+    let active = true
+    let refreshing = false
+    setTurns([])
+    setLoading(true)
+    const sync = async () => {
+      if (refreshing) return
+      refreshing = true
+      const version = conversationVersion.current
+      try {
+        const result = await loadDocumentCollaborator(props.projectId)
+        if (active && version === conversationVersion.current) {
+          setTurns((current) => mergeCollaboratorTurns(current, result.turns))
+          setAssistant(result.assistant)
+        }
+      } catch (requestError) {
+        if (active) setError(requestError instanceof Error ? requestError.message : 'Could not load the conversation.')
+      } finally {
+        refreshing = false
+        if (active) setLoading(false)
+      }
+    }
+    void sync()
     const timer = window.setInterval(() => { void sync() }, 8_000)
-    return () => window.clearInterval(timer)
+    return () => { active = false; window.clearInterval(timer) }
   }, [draftKey, props.projectId, sourcesKey])
   useEffect(() => { if (props.selectedSources?.length) setChosenSources(props.selectedSources) }, [upstreamSourceIds])
   useEffect(() => { window.localStorage.setItem(draftKey, draft) }, [draft, draftKey])
@@ -175,7 +199,7 @@ function ConversationPanel({ props, onOpenSection, onFindingProposal, onPlanProp
     try {
       if (engine === 'interceptor') {
         const result = await api.interceptor(props.projectId, selectedText, props.projectTitle ?? '')
-        setEngineResult({ engine, title: 'Interceptor · delegation and ownership', body: result.action === 'pass' ? 'No delegative handoff was detected in this selection. No intervention was added.' : result.socraticQuestion || result.intervention?.responseText || 'CogDoc reframed the selection as a question for the researcher.' })
+        setEngineResult({ engine, title: 'Interceptor · delegation and ownership', body: result.action === 'pass' ? 'No delegative handoff was detected in this selection. No intervention was added.' : result.socraticQuestion || result.intervention?.responseText || 'Cogdoc reframed the selection as a question for the researcher.' })
       } else if (engine === 'socratic') {
         const result = await api.socraticSpacer(props.projectId, selectedText, selectedText)
         setEngineResult({ engine, title: 'Socratic Spacer · probe reasoning', body: result.ghostQuestion || result.intervention.responseText || 'A reasoning question was added.' })
@@ -200,7 +224,8 @@ function ConversationPanel({ props, onOpenSection, onFindingProposal, onPlanProp
         message: answer, intent: 'challenge', requestId: uid(), answerToEnginePromptId: turn.id,
         context: { topic: props.projectTitle, activeQuestion: props.selectedQuestion ?? null, selection: null, sources: [] },
       })
-      setTurns((current) => [...current.map((item) => item.id === turn.id && item.enginePrompt ? { ...item, enginePrompt: { ...item.enginePrompt, status: 'answered' as const } } : item), result.researcherTurn, result.assistantTurn])
+      conversationVersion.current += 1
+      setTurns((current) => mergeCollaboratorTurns(current.map((item) => item.id === turn.id && item.enginePrompt ? { ...item, enginePrompt: { ...item.enginePrompt, status: 'answered' as const } } : item), [result.researcherTurn, result.assistantTurn]))
       setEngineAnswers((current) => ({ ...current, [turn.id]: '' }))
       props.onRefresh?.()
     } catch (requestError) { setError(`${requestError instanceof Error ? requestError.message : 'Could not record the response.'} Your answer is still here.`) }
@@ -222,7 +247,8 @@ function ConversationPanel({ props, onOpenSection, onFindingProposal, onPlanProp
           sources: chosenSources,
         },
       })
-      setTurns((current) => [...current, result.researcherTurn, result.assistantTurn])
+      conversationVersion.current += 1
+      setTurns((current) => mergeCollaboratorTurns(current, [result.researcherTurn, result.assistantTurn]))
       setAssistant(result.assistant); setDraft(''); setIntent('ask')
       window.localStorage.removeItem(draftKey)
       if (result.assistantTurn.proposal?.kind === 'finding_draft') onFindingProposal(result.assistantTurn.proposal)
@@ -268,7 +294,7 @@ function ConversationPanel({ props, onOpenSection, onFindingProposal, onPlanProp
         {turn.enginePrompt?.status === 'pending' ? <div className="mt-3 space-y-2"><label className="grid gap-1 text-xs font-medium">Your response<Input value={engineAnswers[turn.id] ?? ''} onChange={(event) => setEngineAnswers((current) => ({ ...current, [turn.id]: event.target.value }))} placeholder="Answer, or: I’m not sure—help me investigate" /></label><Button size="sm" disabled={!engineAnswers[turn.id]?.trim() || answeringEnginePrompt === turn.id} onClick={() => void answerEnginePrompt(turn)}>{answeringEnginePrompt === turn.id ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}Record response</Button><p className="text-[11px] leading-4 text-muted-foreground">This answer is tied to the exact question and revision. It does not review the finding for you.</p></div> : null}
       </article>)}
       {sourceSearching ? <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status"><Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />Searching scholarly records for source leads…</p> : null}
-      {sourceLeads.length ? <section className="space-y-2" aria-label="Source leads suggested by collaborator"><div><h3 className="text-sm font-semibold">Source leads to explore</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Suggested from metadata or abstracts. CogDoc has not read these records as evidence.</p></div>{sourceLeads.map((source) => <article key={source.url} className="rounded-xl border border-border bg-card p-3"><h4 className="text-sm font-medium leading-5">{source.title}</h4><p className="mt-1 text-xs leading-5 text-muted-foreground">{source.relevanceExplanation ?? source.snippet}</p><p className="mt-2 text-[11px] text-muted-foreground">{source.citation?.doi ? `DOI ${source.citation.doi.replace(/^https?:\/\/doi\.org\//, '')}` : source.url} · {(source.accessState ?? 'metadata_only').replaceAll('_', ' ')}</p><div className="mt-3 flex flex-wrap gap-2">{source.workspaceSourceId ? <Button size="sm" variant="outline" onClick={() => props.onOpenSource({ workspaceSourceId: source.workspaceSourceId!, title: source.title, accessBasis: source.accessState === 'abstract_only' ? 'abstract' : 'metadata' })}>Open saved lead</Button> : <Button size="sm" variant="outline" disabled={savingLead === source.url} onClick={() => void saveLead(source)}>{savingLead === source.url ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}Save lead</Button>}<Button size="sm" variant="ghost" asChild><a href={source.openAccessUrl || source.url} target="_blank" rel="noreferrer">Explore original<ExternalLink className="ml-1.5 h-3.5 w-3.5" /></a></Button></div></article>)}</section> : null}
+      {sourceLeads.length ? <section className="space-y-2" aria-label="Source leads suggested by collaborator"><div><h3 className="text-sm font-semibold">Source leads to explore</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Suggested from metadata or abstracts. Cogdoc has not read these records as evidence.</p></div>{sourceLeads.map((source) => <article key={source.url} className="rounded-xl border border-border bg-card p-3"><h4 className="text-sm font-medium leading-5">{source.title}</h4><p className="mt-1 text-xs leading-5 text-muted-foreground">{source.relevanceExplanation ?? source.snippet}</p><p className="mt-2 text-[11px] text-muted-foreground">{source.citation?.doi ? `DOI ${source.citation.doi.replace(/^https?:\/\/doi\.org\//, '')}` : source.url} · {(source.accessState ?? 'metadata_only').replaceAll('_', ' ')}</p><div className="mt-3 flex flex-wrap gap-2">{source.workspaceSourceId ? <Button size="sm" variant="outline" onClick={() => props.onOpenSource({ workspaceSourceId: source.workspaceSourceId!, title: source.title, accessBasis: source.accessState === 'abstract_only' ? 'abstract' : 'metadata' })}>Open saved lead</Button> : <Button size="sm" variant="outline" disabled={savingLead === source.url} onClick={() => void saveLead(source)}>{savingLead === source.url ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}Save lead</Button>}<Button size="sm" variant="ghost" asChild><a href={source.openAccessUrl || source.url} target="_blank" rel="noreferrer">Explore original<ExternalLink className="ml-1.5 h-3.5 w-3.5" /></a></Button></div></article>)}</section> : null}
       {sourceSearchError ? <p className="text-xs leading-5 text-amber-800" role="status">{sourceSearchError}</p> : null}
       {engineResult ? <section className="rounded-xl border border-border bg-muted/35 p-3" aria-label="Intervention engine result"><p className="text-xs font-semibold">{engineResult.title}</p><p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{engineResult.body}</p></section> : null}
       <div ref={endRef} />
@@ -337,21 +363,24 @@ function SourcesPanel({ projectId, selected, onSelected, onOpenSource, refreshKe
       const response = await fetch(`/api/workspaces/${encodeURIComponent(projectId)}/sources`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title, canonicalUrl: url, metadata: { accessState: 'metadata_only', inspectedContent: false } }) })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Could not save the source.')
+      completeGuideAction(projectId, 'source')
       setTitle(''); setUrl(''); setShowAdd(false); await load()
     } catch (requestError) { setError((requestError as Error).message) }
     finally { setSaving(false) }
   }
   return <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-    <div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-semibold">Sources</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Choose only material you want in collaborator context. Access labels describe what CogDoc can inspect.</p></div><Button size="sm" variant="outline" onClick={() => setShowAdd((value) => !value)}><Plus className="mr-1.5 h-3.5 w-3.5" />Add</Button></div>
-    {discovery ? <div className={`mt-4 rounded-xl border p-3 ${discovery.status === 'unavailable' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-border bg-muted/35'}`} role="status"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-medium">{discovery.status === 'searching' ? 'Searching automatically' : 'Automatic source suggestions'}</p><p className="mt-1 text-xs leading-5 opacity-80">{discovery.message}</p></div>{onRetryDiscovery ? <Button type="button" size="sm" variant="ghost" disabled={discovery.status === 'searching'} onClick={() => void onRetryDiscovery()}><RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${discovery.status === 'searching' ? 'animate-spin motion-reduce:animate-none' : ''}`} />Retry</Button> : null}</div><p className="mt-2 text-[11px] leading-4 opacity-70">Suggestions are search leads. CogDoc has not read or verified that they support your question.</p></div> : null}
+    <div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-semibold">Sources</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Choose only material you want in collaborator context. Access labels describe what Cogdoc can inspect.</p></div><Button size="sm" variant="outline" onClick={() => setShowAdd((value) => !value)}><Plus className="mr-1.5 h-3.5 w-3.5" />Add</Button></div>
+    <RetrievalPanel projectId={projectId} onChoose={(source) => onSelected([...selected.filter((item) => item.workspaceSourceId !== source.workspaceSourceId), source])} />
+    {discovery ? <div className={`mt-4 rounded-xl border p-3 ${discovery.status === 'unavailable' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-border bg-muted/35'}`} role="status"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-medium">{discovery.status === 'searching' ? 'Searching automatically' : 'Automatic source suggestions'}</p><p className="mt-1 text-xs leading-5 opacity-80">{discovery.message}</p></div>{onRetryDiscovery ? <Button type="button" size="sm" variant="ghost" disabled={discovery.status === 'searching'} onClick={() => void onRetryDiscovery()}><RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${discovery.status === 'searching' ? 'animate-spin motion-reduce:animate-none' : ''}`} />Retry</Button> : null}</div><p className="mt-2 text-[11px] leading-4 opacity-70">Suggestions are search leads. Cogdoc has not read or verified that they support your question.</p></div> : null}
     {showAdd ? <div className="mt-4 space-y-2 rounded-xl border border-border bg-muted/30 p-3"><label className="grid gap-1 text-xs font-medium">Source title<Input value={title} onChange={(event) => setTitle(event.target.value)} /></label><label className="grid gap-1 text-xs font-medium">URL<Input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://" /></label><Button size="sm" disabled={saving || !title.trim() || !url.trim()} onClick={() => void addUrl()}>{saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}Save metadata</Button></div> : null}
+    {!loading && !sources.length ? <p className="mt-4 text-sm text-muted-foreground">No sources saved yet. Retry automatic search, load the demo reading material above, or add a source URL.</p> : null}
     {loading ? <p className="mt-6 text-sm text-muted-foreground" role="status">Loading sources…</p> : null}
     {!loading && sources.length === 0 ? <div className="mt-8"><BookOpen className="h-5 w-5 text-primary" /><p className="mt-3 text-sm font-medium">No sources yet</p><p className="mt-1 text-sm leading-6 text-muted-foreground">Add a URL record here, or import a document from the project tools.</p></div> : null}
     <div className="mt-4 space-y-3">{sources.map((row) => {
       const basis = sourceBasis(row.source)
       const context: DockSourceContext = { workspaceSourceId: row.id, title: row.source.title, accessBasis: basis }
       const isSelected = selected.some((source) => source.workspaceSourceId === row.id)
-      return <article key={row.id} className="rounded-xl border border-border bg-card p-3"><div className="flex items-start justify-between gap-2"><div><h3 className="text-sm font-medium leading-5">{row.source.title}</h3><p className="mt-1 text-xs text-muted-foreground">{basis === 'extracted_text' ? 'Extracted text available' : basis === 'manual_excerpt' ? 'Researcher-supplied excerpt' : basis === 'abstract' ? 'Abstract available' : basis === 'transcript' ? 'Transcript available' : 'Metadata only, not read by CogDoc'}</p></div><Button size="sm" variant={isSelected ? 'secondary' : 'outline'} onClick={() => onSelected(isSelected ? selected.filter((source) => source.workspaceSourceId !== row.id) : [...selected, context])}>{isSelected ? 'Chosen' : 'Use'}</Button></div><div className="mt-3 flex gap-3"><button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => onOpenSource(context)}>Open source</button>{row.source.canonicalUrl ? <a className="text-xs text-muted-foreground hover:text-foreground" href={row.source.canonicalUrl} target="_blank" rel="noreferrer">Open record</a> : null}</div></article>
+      return <article key={row.id} className="rounded-xl border border-border bg-card p-3"><div className="flex items-start justify-between gap-2"><div><h3 className="text-sm font-medium leading-5">{row.source.title}</h3><p className="mt-1 text-xs text-muted-foreground">{basis === 'extracted_text' ? 'Extracted text available' : basis === 'manual_excerpt' ? 'Researcher-supplied excerpt' : basis === 'abstract' ? 'Abstract available' : basis === 'transcript' ? 'Transcript available' : 'Metadata only, not read by Cogdoc'}</p></div><Button size="sm" variant={isSelected ? 'secondary' : 'outline'} onClick={() => onSelected(isSelected ? selected.filter((source) => source.workspaceSourceId !== row.id) : [...selected, context])}>{isSelected ? 'Chosen' : 'Use'}</Button></div><div className="mt-3 flex gap-3"><button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => onOpenSource(context)}>Open source</button>{row.source.canonicalUrl ? <a className="text-xs text-muted-foreground hover:text-foreground" href={row.source.canonicalUrl} target="_blank" rel="noreferrer">Open record</a> : null}</div></article>
     })}</div>
     {error ? <p className="mt-3 text-sm text-destructive" role="alert">{error}</p> : null}
   </div>

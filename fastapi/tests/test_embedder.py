@@ -87,7 +87,8 @@ class TestGeminiEmbedder:
         # the request hit the gemini-embedding model with the key
         call_url = str(m.call_args[0][0])
         assert "gemini-embedding" in call_url
-        assert "fake-key" in call_url
+        assert "fake-key" not in call_url
+        assert m.call_args[1]["headers"]["x-goog-api-key"] == "fake-key"
 
     def test_same_text_produces_same_vector_when_api_is_deterministic(self):
         emb = GeminiEmbedder(api_key="k", dim=8)

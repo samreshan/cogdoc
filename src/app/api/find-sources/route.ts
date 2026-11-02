@@ -171,12 +171,12 @@ export async function POST(req: NextRequest) {
         role: hasAbstract ? 'evidence_candidate' as const : 'orientation' as const,
         relevanceExplanation: hasAbstract
           ? 'Its record includes an abstract or summary that may help investigate this question; inspect the original before treating it as evidence.'
-          : 'Its metadata appears related to this question; no abstract or full text was inspected by CogDoc.',
+          : 'Its metadata appears related to this question; no abstract or full text was inspected by Cogdoc.',
         rationaleBasis: hasAbstract ? 'abstract' as const : 'metadata' as const,
         accessState,
         authoritySignals,
         authorityLimitations: authoritySignals.length
-          ? 'These are metadata signals only. CogDoc has not assessed the method, author authority, or whether this source supports a conclusion.'
+          ? 'These are metadata signals only. Cogdoc has not assessed the method, author authority, or whether this source supports a conclusion.'
           : 'Authority, method, and claim support have not been assessed from this record.',
         relevanceBasis: source.openAccessUrl
           ? 'metadata and access record; full text has not been inspected'

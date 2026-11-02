@@ -1,65 +1,88 @@
 # Cogdoc
 
-Cogdoc is a research-first writing workspace that helps people explore evidence,
-test their reasoning, and draft without handing their understanding over to AI.
-It combines a notebook editor, source management, grounded research tools, and
-four intervention engines that surface vague claims, missing evidence, weak
-reasoning, and structural gaps.
+Cogdoc is a research and writing workspace for developing an answer from
+traceable evidence. A researcher can begin with a topic, discover or upload
+sources, search indexed passages, record reviewed findings, write with
+citations, and export the finished work from one application.
 
-This project was built as a BSc (Hons) IT Final Year Project at Asia Pacific
+The system was developed as a BSc (Hons) IT Final Year Project at Asia Pacific
 University in 2026.
 
-## What Cogdoc does
+## Main workflow
 
-- Starts a research workspace from a topic or an existing document.
-- Uses a three-pane Research IDE with a project navigator, tabbed work area,
-  and contextual evidence inspector.
-- Imports DOCX files, PDFs, pasted text, code archives, and research notes.
-- Searches scholarly metadata through OpenAlex, Crossref, and Semantic Scholar.
-- Maps questions and claims to indexed source passages.
-- Inserts verified citation nodes and derives bibliographies from citations
-  actually used in the document.
-- Records research decisions and intervention outcomes in an append-only,
-  tamper-evident history.
-- Exports Markdown, plain text, HTML, DOCX, and printable PDF output.
+1. Create a research workspace from a topic, goal, and optional starting notes.
+2. Build an editable investigation plan and discover or upload source material.
+3. Extract and index source passages, then retrieve evidence relevant to a
+   research question.
+4. Record findings with evidence, limitations, uncertainty, and conflicting
+   information before marking them as reviewed.
+5. Develop an article manually or from selected reviewed findings, revise it,
+   insert citations, and export the result.
 
-The four intervention engines are:
-
-| Engine | Purpose |
-| --- | --- |
-| Interceptor | Challenges vague, absolute, or delegative writing. |
-| Socratic Spacer | Prompts deeper thinking after a pause or question. |
-| Citation Sentinel | Checks factual claims against indexed evidence. |
-| Scaffold | Offers an empty claim/evidence/limitation/implication structure. |
-
-Cogdoc selects one relevant intervention for a phrase, lets the researcher
-answer it inline, and keeps accepted reasoning as structured notes. Generated
-material remains editable and is never presented as proof of authorship,
-correctness, originality, or institutional approval.
+Cogdoc also includes writing interventions for vague language, unsupported
+claims, shallow reasoning, and incomplete paragraph structure. The application
+keeps the researcher in control: retrieved passages are evidence candidates,
+and generated suggestions still require review.
 
 ## Technology
 
-- Next.js 16, React 19, and TypeScript
-- Tailwind CSS 4 and shadcn/ui primitives
-- Tiptap/ProseMirror editor
-- Prisma with PostgreSQL or Supabase
-- Optional FastAPI retrieval service with pgvector
-- Supabase authentication and private object storage for shared deployments
-- Vitest, Testing Library, and ESLint
+- Next.js 16, React 19, TypeScript, Tailwind CSS, and Tiptap
+- Prisma with PostgreSQL and pgvector
+- Optional FastAPI retrieval and embedding service
+- Optional Supabase authentication and private object storage
+- Vitest, Testing Library, ESLint, and Pytest
 
-## Prerequisites
+## Quick start (recommended)
 
-For local development you need:
+You need Docker Desktop (or Docker Engine with Compose). From the extracted
+`Cogdoc-System` folder, create the local environment file.
 
-- Node.js 22 or newer and npm
-- Docker with Docker Compose, or a PostgreSQL 16+ server
-- An optional Gemini, Groq, Ollama, or OpenAI-compatible model endpoint for
-  model-backed features
+On macOS, Linux, Git Bash, or WSL:
 
-## Local setup
+```bash
+cp .env.example .env.local
+```
 
-The development Compose file provides PostgreSQL with pgvector. The Next.js app
-runs locally so it can hot-reload.
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+Then run this command on any platform:
+
+```bash
+docker compose --env-file .env.local -f docker-compose.dev.yml --profile full up -d --build
+```
+
+Open <http://localhost:3000>. The first build may take several minutes. The
+database, application, retrieval service, and background worker are started
+together. The default configuration runs without a paid API key; add a key to
+`.env.local` only when model-backed features or real Gemini embeddings are
+needed.
+
+Check the services:
+
+```bash
+docker compose --env-file .env.local -f docker-compose.dev.yml --profile full ps
+```
+
+Stop Cogdoc without deleting its database:
+
+```bash
+docker compose --env-file .env.local -f docker-compose.dev.yml --profile full down
+```
+
+To remove the local Docker data as well, append `--volumes` to the final
+command. This permanently removes the local Cogdoc database.
+
+## Local development
+
+Requirements: Node.js 22 or newer, npm, Docker, and optionally Python 3.11 or
+newer for the standalone retrieval service.
+
+Start PostgreSQL, install dependencies, prepare the database, and run the web
+application:
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d postgres
@@ -71,58 +94,55 @@ npm run seed
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
-The default `DATABASE_URL` in `.env.example` matches the development Postgres
-container. Edit `.env.local` before starting the app if you use another
-database or want to enable an AI provider. Never commit `.env.local`.
-
-If an older Docker volume does not contain pgvector, enable it once:
+Open <http://localhost:3000>. This mode uses the built-in retrieval fallback by
+default. To run the Python retrieval service separately:
 
 ```bash
-docker compose -f docker-compose.dev.yml exec -T postgres \
-  psql -U cogdoc -d cogdoc -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+npm run rag:setup
+npm run rag:dev
 ```
 
-### Full local stack
+Then set `FASTAPI_URL="http://localhost:8001"` and
+`USE_VECTOR_RETRIEVAL="true"` in `.env.local`, and restart the web application.
+`npm run rag:dev` uses Gemini embeddings and therefore requires
+`GEMINI_API_KEY` or `AI_API_KEY`.
 
-Start PostgreSQL, the Next.js frontend/API, the FastAPI retrieval service, and
-the worker together:
+## Configuration
 
-```bash
-docker compose --env-file .env.local -f docker-compose.dev.yml --profile full up -d --build
-```
+`.env.example` documents every supported setting needed by the main system.
+Copy it to `.env.local`; never place real credentials in `.env.example` or
+commit `.env.local`.
 
-Set these values in `.env.local` before starting the stack:
+The most useful settings are:
 
-```env
-COGDOC_RESEARCH_COLLABORATOR="article"
-USE_VECTOR_RETRIEVAL="true"
-EMBEDDING_PROVIDER="gemini"
-```
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL connection used by Prisma. |
+| `COGDOC_RESEARCH_COLLABORATOR` | `investigation` for research findings, or `article` for the complete workflow. |
+| `AI_PROVIDER` | `gemini`, `ollama`, `groq`, or `custom`. |
+| `AI_BASE_URL` | OpenAI-compatible endpoint for the selected provider. |
+| `AI_API_KEY` | Provider credential; may be empty for an offline/local provider. |
+| `AI_MODEL` | Model identifier sent to the provider. |
+| `FASTAPI_URL` | Address of the optional retrieval service. |
+| `USE_VECTOR_RETRIEVAL` | Enables the FastAPI/pgvector path when `true`. |
+| `EMBEDDING_PROVIDER` | `hashing` for offline development or `gemini` for real embeddings. |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL for shared deployments. |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser-safe Supabase key. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only credential for private storage. |
+| `COGDOC_SINGLE_USER_MODE` | Explicit private, one-user production mode. |
 
-The Compose project creates dedicated `cogdoc-full_*` volumes. On its first
-run, the app initializes the Prisma schema and `vector-init` applies the
-idempotent pgvector column migration before retrieval starts. Open
-<http://localhost:3000>; the RAG health endpoint is <http://localhost:8000/>.
-Stop the stack without deleting data with:
-
-```bash
-docker compose --env-file .env.local -f docker-compose.dev.yml --profile full down
-```
-
-### AI provider examples
-
-Gemini through its OpenAI-compatible endpoint:
+Example Gemini configuration:
 
 ```env
 AI_PROVIDER="gemini"
 AI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai"
-AI_API_KEY="your-key"
+AI_API_KEY="replace-with-your-key"
 AI_MODEL="gemini-3.5-flash-lite"
+EMBEDDING_PROVIDER="gemini"
+GEMINI_API_KEY="replace-with-your-key"
 ```
 
-Local Ollama:
+Example local Ollama configuration:
 
 ```env
 AI_PROVIDER="ollama"
@@ -131,113 +151,33 @@ AI_API_KEY=""
 AI_MODEL="qwen3:8b"
 ```
 
-## Docker deployment
+## Project structure
 
-Build the production image:
-
-```bash
-docker build -t cogdoc:latest .
+```text
+src/                       Next.js interface, API routes, and domain logic
+prisma/                    PostgreSQL schema and migrations
+fastapi/                   Retrieval, embedding, and vector-search service
+docker/postgres-init/      PostgreSQL and pgvector initialization
+scripts/                   Seed, worker, migration, and verification tools
+public/                    Static browser assets
 ```
 
-For an interactive first run, supply a reachable PostgreSQL database when the
-wizard asks for configuration:
-
-```bash
-docker run -it -p 3000:3000 -v cogdoc_data:/data cogdoc:latest
-```
-
-Configuration is persisted in the `cogdoc_data` volume. Subsequent runs can be
-detached:
-
-```bash
-docker run -d -p 3000:3000 -v cogdoc_data:/data cogdoc:latest
-```
-
-See [README-DOCKER.md](./README-DOCKER.md) for environment-based deployment,
-multi-architecture builds, health checks, and troubleshooting.
-
-## Configuration
-
-Copy `.env.example` and configure only the services you use. Important values
-include:
-
-| Variable | Purpose |
-| --- | --- |
-| `DATABASE_URL` | Required PostgreSQL or Supabase connection URL. |
-| `AI_PROVIDER` | `gemini`, `ollama`, `groq`, or `custom`. |
-| `AI_BASE_URL` | Base URL for the selected model endpoint. |
-| `AI_API_KEY` | Provider API key; may be empty for a local endpoint. |
-| `AI_MODEL` | Model identifier sent to the provider. |
-| `FASTAPI_URL` | Optional retrieval-service URL. |
-| `USE_VECTOR_RETRIEVAL` | Enables the FastAPI vector path when `true`. |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL for shared deployments. |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser-safe Supabase key. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-only private-storage credential. |
-| `COGDOC_STORAGE_DIR` | Local private-file fallback directory. |
-| `COGDOC_CERTIFICATE_PRIVATE_KEY` | Ed25519 key used for product attestations. |
-| `COGDOC_SINGLE_USER_MODE` | Explicit opt-in for a private, one-user production install. |
-
-Shared or public deployments must configure authentication, Row Level Security,
-and private storage. Follow [docs/deployment/security.md](./docs/deployment/security.md)
-before exposing the application.
-
-## Commands
+## Useful commands
 
 | Command | Description |
 | --- | --- |
 | `npm run dev` | Start the development server on port 3000. |
-| `npm run build` | Create the standalone production build. |
-| `npm start` | Run the standalone production server. |
-| `npm run lint` | Run ESLint. |
+| `npm run build` | Create the production build. |
+| `npm run lint` | Run the TypeScript/React lint checks. |
 | `npm test` | Run the Vitest suite once. |
-| `npm run test:coverage` | Run tests with coverage thresholds. |
-| `npm run gate` | Run the repository quality gate. |
 | `npm run db:generate` | Generate the Prisma client. |
-| `npm run db:push` | Apply the Prisma schema to the configured database. |
-| `npm run db:migrate` | Create and apply a development migration. |
-| `npm run seed` | Seed the default user and intervention templates. |
+| `npm run db:push` | Apply the current Prisma schema. |
+| `npm run seed` | Create the initial local records. |
 | `npm run research:worker` | Process queued research jobs. |
-| `npm run demo:research` | Create and verify the persisted demo workspace. |
-| `npm run demo:research:embed` | Seed the demo and ingest it into FastAPI. |
-| `npm run security:verify` | Verify configured security policies. |
+| `npm run rag:setup` | Create the Python environment and install RAG dependencies. |
+| `npm run rag:dev` | Start the optional local RAG service on port 8001. |
 
-## Architecture
-
-```text
-Browser
-  └─ Next.js application and API routes
-       ├─ Tiptap research editor and intervention UI
-       ├─ AI provider abstraction
-       ├─ Prisma ── PostgreSQL / Supabase
-       ├─ Supabase Auth and private storage (optional locally)
-       └─ FastAPI ── embeddings and pgvector retrieval (optional)
-```
-
-Next.js is the authenticated backend-for-frontend and owns workspace state,
-authorization, audit records, source metadata, and model requests. PostgreSQL is
-the canonical database. FastAPI is an optional retrieval boundary; its absence
-does not prevent the core editor and keyword retrieval from running.
-
-## Project structure
-
-```text
-src/
-├─ app/                    Next.js pages and API routes
-├─ components/cogdoc/      Product UI and Research IDE
-├─ components/ui/          Shared UI primitives
-├─ hooks/                  React hooks
-├─ lib/                    Domain, editor, AI, auth, retrieval, and export logic
-└─ test/                   Shared Vitest setup
-prisma/                    Canonical schema and migrations
-fastapi/                   Optional retrieval and embedding service
-scripts/                   Seed, worker, migration, and verification tools
-docs/                      ADRs, implementation notes, deployment guidance
-public/                    Static browser assets
-```
-
-## Tests and validation
-
-Run the main checks before submitting changes:
+Run the standard checks before submission or deployment:
 
 ```bash
 npm run lint
@@ -245,45 +185,21 @@ npm test
 npm run build
 ```
 
-The full gate also runs coverage and the FastAPI test suite when its Python
-environment is available:
+FastAPI tests can be run after `npm run rag:setup`:
 
 ```bash
-npm run gate
+cd fastapi
+../.venv-rag/bin/python -m pytest -q
 ```
 
-## Demo workspace
+## Submission package
 
-Create a repeatable research demonstration containing private sample PDFs,
-indexed passages, notebook material, citations, a grounded comparison, a
-ranked action queue, and examples from all four intervention engines:
+The source submission contains the application code, database schema,
+retrieval service, tests, required scripts, lockfile, configuration templates,
+and Docker files. It intentionally excludes credentials, installed
+dependencies, build output, local databases, caches, logs, Git history, report
+documents, generated diagrams, and other working files.
 
-```bash
-npm run demo:research
-```
-
-The command replaces only the workspace carrying Cogdoc's explicit demo marker.
-For a walkthrough and verification details, see
-[docs/implementation/research-demo.md](./docs/implementation/research-demo.md).
-
-## Documentation
-
-- [USER_GUIDE.md](./USER_GUIDE.md) — product guide for writers and examiners
-- [DEVELOPER.md](./DEVELOPER.md) — implementation and extension guide
-- [README-DOCKER.md](./README-DOCKER.md) — Docker deployment guide
-- [Production security](./docs/deployment/security.md) — auth, RLS, and storage
-- [Release readiness](./docs/deployment/release-readiness.md) — deployment and acceptance gates
-- [Production-readiness audit](./docs/implementation/production-readiness-audit.md) — requirement evidence
-- [Research demo](./docs/implementation/research-demo.md) — reproducible demo instructions
-- [Local full-stack walkthrough](./walkthrough.md) — Docker env, startup, and feature tour
-
-## Uploading this source package
-
-The distributable ZIP intentionally excludes installed dependencies, build and
-test output, caches, logs, local databases, Git metadata, and secret environment
-files. After extracting it on another machine, restore dependencies with
-`npm ci` and create `.env.local` from `.env.example`.
-
-## License
+## Licence
 
 Final Year Project — BSc (Hons) IT, Asia Pacific University, 2026.

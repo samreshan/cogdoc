@@ -20,7 +20,7 @@ describe('interactive demo boundary', () => {
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:demo')
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    expect(interactiveDemoMarkdown()).toContain('Simulated CogDoc demo output')
+    expect(interactiveDemoMarkdown()).toContain('Simulated Cogdoc demo output')
     expect(click).not.toHaveBeenCalled()
     downloadInteractiveDemoMarkdown()
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))

@@ -118,7 +118,7 @@ export default function EditorToolbar({ editor, selectedText, onFindSources, onA
           onClick={() => onAskCollaborator?.()}
           className="h-8 shrink-0 rounded-md px-3 text-xs text-[var(--cog-accent-strong)] hover:bg-[var(--cog-accent-soft)]"
         >
-          Ask CogDoc
+          Ask Cogdoc
         </Button>
         <Button
           type="button"

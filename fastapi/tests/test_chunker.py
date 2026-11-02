@@ -51,3 +51,12 @@ class TestChunkText:
         assert hasattr(c, "char_count")
         assert hasattr(c, "page_approx")
         assert hasattr(c, "chunk_index")
+
+
+def test_long_paragraph_is_bounded_and_overlap_preserves_boundary():
+    text = 'abcdefghij' * 900
+    chunks = chunk_text(text)
+    assert len(chunks) > 1
+    assert all(0 < len(c.content) <= 2500 for c in chunks)
+    assert chunks[0].content[-250:] == chunks[1].content[:250]
+    assert chunks[-1].content.endswith(text[-100:])

@@ -1,3 +1,4 @@
+import { observeGuideSuccess } from '@/lib/live-research-guide'
 /**
  * Typed API client for the Cogdoc frontend.
  */
@@ -33,7 +34,9 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
     const err = await res.json().catch(() => ({ error: res.statusText }))
     throw new ApiError(res.status, err)
   }
-  return res.json()
+  const data = await res.json()
+  observeGuideSuccess(url, init, data)
+  return data
 }
 
 export const api = {

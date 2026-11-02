@@ -1,3 +1,4 @@
+import { completeGuideAction } from '@/lib/live-research-guide'
 import type {
   CollaboratorIntent,
   CollaboratorTurn,
@@ -34,9 +35,11 @@ export async function sendDocumentCollaboratorMessage(projectId: string, input: 
   requestId: string
   answerToEnginePromptId?: string
 }): Promise<{ researcherTurn: CollaboratorTurn; assistantTurn: CollaboratorTurn; assistant: PublicAssistantConfiguration }> {
-  return json(await fetch(`/api/workspaces/${encodeURIComponent(projectId)}/collaborator`, {
+  const result = await json<{ researcherTurn: CollaboratorTurn; assistantTurn: CollaboratorTurn; assistant: PublicAssistantConfiguration }>(await fetch(`/api/workspaces/${encodeURIComponent(projectId)}/collaborator`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(input),
   }))
+  completeGuideAction(projectId, 'collaborate')
+  return result
 }

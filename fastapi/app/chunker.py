@@ -24,44 +24,28 @@ class Chunk:
 
 
 def chunk_text(text: str) -> list[Chunk]:
-    """Split text into ~CHUNK_SIZE chunks on paragraph boundaries.
+    """Bounded character chunks, paragraph/word boundaries, 250-char overlap.
 
-    Buffers paragraphs until adding the next would exceed CHUNK_SIZE, then
-    flushes. Each chunk gets an approximate page number based on its offset.
-    Returns [] for empty/whitespace-only input.
+    Page labels are approximate character offsets, not PDF page citations.
+    Long paragraphs are split too; every loop makes forward progress.
     """
     chunks: list[Chunk] = []
-    paragraphs = _PARAGRAPH_SPLIT.split(text)
-    buffer = ""
-    idx = 0
-
-    for para in paragraphs:
-        candidate = f"{buffer}\n\n{para}" if buffer else para
-        if len(candidate) > CHUNK_SIZE and buffer:
-            page_approx = idx * CHUNK_SIZE // PAGE_SIZE + 1
-            trimmed = buffer.strip()
-            chunks.append(
-                Chunk(
-                    content=trimmed,
-                    char_count=len(trimmed),
-                    page_approx=page_approx,
-                    chunk_index=idx,
-                )
-            )
-            idx += 1
-            buffer = para
-        else:
-            buffer = candidate
-
-    if buffer.strip():
-        page_approx = idx * CHUNK_SIZE // PAGE_SIZE + 1
-        trimmed = buffer.strip()
-        chunks.append(
-            Chunk(
-                content=trimmed,
-                char_count=len(trimmed),
-                page_approx=page_approx,
-                chunk_index=idx,
-            )
-        )
+    start = 0
+    while start < len(text):
+        end = min(start + CHUNK_SIZE, len(text))
+        if end < len(text):
+            window = text[start:end]
+            paragraph = window.rfind("\n\n")
+            boundary = paragraph if paragraph >= CHUNK_SIZE // 2 else window.rfind(" ")
+            if boundary >= CHUNK_SIZE // 2:
+                end = start + boundary
+        content = text[start:end].strip()
+        if content:
+            chunks.append(Chunk(content, len(content), start // PAGE_SIZE + 1, len(chunks)))
+        if end == len(text):
+            break
+        start = max(start + 1, end - 250)
+        boundary = re.search(r"\s", text[start:start + 40])
+        if boundary and boundary.start() > 0:
+            start += boundary.start() + 1
     return chunks

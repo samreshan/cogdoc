@@ -21,7 +21,7 @@ const newsreader = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: "CogDoc | Write while you research",
+  title: "Cogdoc | Write while you research",
   description: "A document-first research workspace for developing explanations, inspecting sources, and working with a contextual AI collaborator.",
   keywords: ["Cogdoc", "research assistant", "research workspace", "source mapping", "productive friction", "citation verification"],
   authors: [{ name: "Samreshan Sahani" }],

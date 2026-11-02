@@ -43,3 +43,11 @@ describe('automatic source discovery', () => {
     expect(apiClient.saveWorkspaceSource).not.toHaveBeenCalled()
   })
 })
+
+it('does not permanently cache an empty result', async () => {
+  const findSources = vi.fn().mockResolvedValueOnce({ sources: [] }).mockResolvedValueOnce({ sources: [candidate('Source', 'https://example.test/source')] })
+  const apiClient = { findSources, saveWorkspaceSource: vi.fn().mockResolvedValue({}), researchFindingAction: vi.fn() }
+  const input = { projectId: 'empty-retry', query: 'A topic with temporarily missing results', storage: storage(), apiClient: apiClient as never }
+  expect((await automaticallyDiscoverSources(input)).status).toBe('empty')
+  expect((await automaticallyDiscoverSources(input)).saved).toBe(1)
+})

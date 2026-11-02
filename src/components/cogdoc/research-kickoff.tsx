@@ -8,9 +8,14 @@ import type { Project } from '@/lib/types'
 import type { CitationStyle } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { LIVE_GUIDE_MARKER, registerLiveGuide } from '@/lib/live-research-guide'
+import { INTERACTIVE_DEMO_TOPIC, INTERACTIVE_DEMO_GOAL } from '@/lib/interactive-demo'
+import { DEMO_TOPICS, demoStarterContent } from '@/lib/demo-topics'
+import { useCogdoc } from '@/lib/store'
 import { automaticallyDiscoverSources } from '@/lib/automatic-source-discovery'
 
 interface Props {
+  guidedResearch?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
   onOpenWorkspace: (project: Project) => void
@@ -34,15 +39,18 @@ export function projectTitleFromTopic(topic: string) {
   return `${shortened || compact.slice(0, 69).trim()}...`
 }
 
-export default function ResearchKickoff({ open = true, onOpenChange, onOpenWorkspace, interactiveDemo }: Props) {
-  const [topic, setTopic] = useState('')
-  const [purpose, setPurpose] = useState('')
+export default function ResearchKickoff({ open = true, onOpenChange, onOpenWorkspace, interactiveDemo, guidedResearch = false }: Props) {
+  const [demoTopicId, setDemoTopicId] = useState<string>(DEMO_TOPICS[0].id)
+  const bumpLibrary = useCogdoc((state) => state.bumpLibrary)
+  const [topic, setTopic] = useState(guidedResearch ? INTERACTIVE_DEMO_TOPIC : '')
+  const [purpose, setPurpose] = useState(guidedResearch ? INTERACTIVE_DEMO_GOAL : '')
   const [existingUnderstanding, setExistingUnderstanding] = useState('')
   const [citationStyle, setCitationStyle] = useState<CitationStyle>('harvard')
   const [showContext, setShowContext] = useState(false)
   const [loading, setLoading] = useState(false)
   const [feedback, setFeedback] = useState('')
   const createdWorkspaceRef = useRef<Project | null>(null)
+  const demoPreparedRef = useRef(false)
 
   if (!open) return null
 
@@ -65,7 +73,7 @@ export default function ResearchKickoff({ open = true, onOpenChange, onOpenWorks
       if (!workspace) {
         const result = await api.createWorkspace({
           title: projectTitleFromTopic(cleanTopic),
-          description: purpose.trim() || cleanTopic,
+          description: guidedResearch ? `${LIVE_GUIDE_MARKER} [demo-topic:${demoTopicId}] ${purpose.trim() || cleanTopic}` : purpose.trim() || cleanTopic,
           workspaceType: 'research',
           reviewPace: 'deep',
           citationStyle,
@@ -73,6 +81,16 @@ export default function ResearchKickoff({ open = true, onOpenChange, onOpenWorks
         workspace = result.workspace
         createdWorkspaceRef.current = workspace
       }
+        if (guidedResearch && !demoPreparedRef.current) {
+          const preset = DEMO_TOPICS.find((item) => item.id === demoTopicId) ?? DEMO_TOPICS[0]
+          const saved = await fetch(`/api/workspaces/${workspace.id}/document`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: demoStarterContent(preset), baseRevision: workspace.document?.revision ?? 0 }) })
+          if (!saved.ok) throw new Error('The workspace was created but starter writing could not save. Open it from Home or retry.')
+          demoPreparedRef.current = true
+          registerLiveGuide(workspace.id)
+          void fetch(`/api/workspaces/${workspace.id}/demo-setup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topicId: preset.id }) })
+            .then(async (response) => { const result = await response.json(); bumpLibrary(); if (!response.ok || !result.ready) toast.warning('Demo reading material needs attention', { description: 'Open Sources to check the saved text and retry indexing or loading.' }) })
+            .catch(() => toast.warning('Demo sources could not load', { description: 'Your writing is saved. Retry loading the official reading material in Sources.' }))
+        }
 
       try {
         await api.saveInvestigation(workspace.id, {
@@ -94,6 +112,7 @@ export default function ResearchKickoff({ open = true, onOpenChange, onOpenWorks
 
       const hydrated = await api.getWorkspace(workspace.id).then(({ workspace: current }) => current).catch(() => workspace)
       createdWorkspaceRef.current = null
+      demoPreparedRef.current = false
       onOpenChange?.(false)
       onOpenWorkspace(hydrated)
     } catch (error) {
@@ -105,12 +124,13 @@ export default function ResearchKickoff({ open = true, onOpenChange, onOpenWorks
 
   return (
     <form onSubmit={startWriting} className="rounded-2xl border border-[#d9dbe2] bg-white p-5 shadow-[0_18px_60px_rgba(38,38,46,0.08)] sm:p-6" aria-label="Start research">
+      {guidedResearch ? <label className="mb-4 grid gap-2 text-sm font-medium">Choose a demo topic<select aria-label="Demo topic" value={demoTopicId} onChange={(event) => { const preset = DEMO_TOPICS.find((item) => item.id === event.target.value)!; setDemoTopicId(preset.id); setTopic(preset.topic); setPurpose(preset.goal) }} className="rounded-lg border p-2">{DEMO_TOPICS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span className="text-xs font-normal text-muted-foreground">Includes editable starter writing and official documentation excerpts. Sources and AI run live.</span></label> : null}
       <div>
         <label htmlFor="research-topic" className="text-sm font-semibold text-[#27272f]">What are you working on?</label>
-        <p id="research-topic-help" className="mt-1 text-sm leading-6 text-[#666873]">A topic is enough. A blank working document opens immediately.</p>
+        <p id="research-topic-help" className="mt-1 text-sm leading-6 text-[#666873]">{guidedResearch ? 'Your starter document opens immediately while official sources load in the background.' : 'A topic is enough. A blank working document opens immediately.'}</p>
         <Textarea
           id="research-topic"
-          data-demo-target={interactiveDemo ? 'research-topic' : undefined}
+          data-demo-target="research-topic"
           autoFocus
           rows={4}
           value={interactiveDemo ? interactiveDemo.topic : topic}

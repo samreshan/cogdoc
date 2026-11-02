@@ -184,7 +184,7 @@ def create_app(
 
     @app.get("/")
     def root():
-        return {"service": "cogdoc-rag", "version": "0.1.0"}
+        return {"service": "cogdoc-rag", "version": "0.1.0", "embedder": type(embedder).__name__, "storage": type(store).__name__, "dimensions": getattr(embedder, "dim", None)}
 
     @app.post("/api/rag/ingest", response_model=IngestResponse)
     def rag_ingest(req: IngestRequest):
@@ -364,7 +364,7 @@ def create_app_from_env() -> FastAPI:
 
     provider = os.environ.get("EMBEDDING_PROVIDER", "hashing").lower()
     embedder: Embedder
-    if provider == "gemini" and os.environ.get("GEMINI_API_KEY"):
+    if provider == "gemini":
         from app.embedder import GeminiEmbedder
 
         embedder = GeminiEmbedder()

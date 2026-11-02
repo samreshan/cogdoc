@@ -2,7 +2,7 @@ import type { Project, ResearchQuestionSummary } from '@/lib/types'
 import { api } from '@/lib/api-client'
 
 export const GUIDED_DEMO_MARKER = '[COGDOC_GUIDED_DEMO_V2]'
-export const GUIDED_DEMO_TITLE = 'CogDoc Guided Demo — Researcher agency'
+export const GUIDED_DEMO_TITLE = 'Cogdoc Guided Demo — Researcher agency'
 export const GUIDED_DEMO_TOPIC = 'How can a research writing assistant help students use AI without surrendering their reasoning?'
 
 export const GUIDED_DEMO_QUESTIONS = [

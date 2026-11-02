@@ -162,7 +162,7 @@ class PgvectorStore:
             db_url = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
             if not db_url:
                 raise ValueError("PgvectorStore needs SUPABASE_DB_URL or DATABASE_URL")
-            connection = psycopg.connect(db_url, autocommit=autocommit)
+            connection = psycopg.connect(db_url, autocommit=autocommit, prepare_threshold=None)
         self._connection = connection
 
     def ingest(

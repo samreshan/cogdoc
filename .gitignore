@@ -149,11 +149,33 @@ Desktop.ini
 .gemini/
 /skills/
 local-*
-prompt
-test
+/prompt
+/test
 
+# Local retrieval-service Python environment
+.venv-rag/
 
-# Docs
-docs/*
+# =============================================================================
+# Reports, Generated Documentation & Submission Packages
+# =============================================================================
+/docs/fyp/
+/docs/refinement/
+/scripts/cogdoc/
+/upload/
+/download/
+/submission/
+/tool-results/
+*.zip
+*.docx
+*.pptx
+/system-visualizer.html
+/walkthrough.md
+/worklog.md
+/sprints.md
 
-# Demo
+# =============================================================================
+# Local Experiments & Extracted Working Material
+# =============================================================================
+/examples/
+/mini-services/
+/scripts/extracted_content.txt

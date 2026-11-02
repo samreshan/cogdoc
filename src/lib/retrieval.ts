@@ -1,8 +1,8 @@
 /**
- * Keyword-overlap retrieval — simulates the pgvector cosine similarity
+ * Explicit keyword fallback alongside the FastAPI pgvector cosine similarity
  * retrieval used by the Citation Sentinel in the architecture doc.
  *
- * The MVP uses SQLite (no pgvector), so we approximate semantic similarity
+ * The canonical database is PostgreSQL. This fallback approximates relevance
  * with TF-IDF-style keyword overlap. For an FYP prototype this is sufficient
  * to demonstrate the RAG pattern; the architecture is vector-DB-ready.
  */
@@ -110,38 +110,25 @@ export async function retrieveTopK(
  * Tag each chunk with an approximate page number (~3000 chars per page).
  */
 export function chunkText(text: string): { content: string; charCount: number; pageApprox: number; chunkIndex: number }[] {
-  const CHUNK_SIZE = 2500 // ~500 tokens
-  const PAGE_SIZE = 3000
+  const size = 2500
+  const overlap = 250
   const chunks: { content: string; charCount: number; pageApprox: number; chunkIndex: number }[] = []
-
-  // Split on paragraph boundaries when possible
-  const paragraphs = text.split(/\n\s*\n/)
-  let buffer = ''
-  let idx = 0
-
-  for (const para of paragraphs) {
-    if ((buffer + '\n\n' + para).length > CHUNK_SIZE && buffer) {
-      const pageApprox = Math.floor(idx * CHUNK_SIZE / PAGE_SIZE) + 1
-      chunks.push({
-        content: buffer.trim(),
-        charCount: buffer.trim().length,
-        pageApprox,
-        chunkIndex: idx,
-      })
-      idx++
-      buffer = para
-    } else {
-      buffer = buffer ? `${buffer}\n\n${para}` : para
+  let start = 0
+  while (start < text.length) {
+    let end = Math.min(start + size, text.length)
+    if (end < text.length) {
+      const window = text.slice(start, end)
+      const paragraph = window.lastIndexOf('\n\n')
+      const space = window.lastIndexOf(' ')
+      const boundary = paragraph >= size / 2 ? paragraph : space
+      if (boundary >= size / 2) end = start + boundary
     }
-  }
-  if (buffer.trim()) {
-    const pageApprox = Math.floor(idx * CHUNK_SIZE / PAGE_SIZE) + 1
-    chunks.push({
-      content: buffer.trim(),
-      charCount: buffer.trim().length,
-      pageApprox,
-      chunkIndex: idx,
-    })
+    const content = text.slice(start, end).trim()
+    if (content) chunks.push({ content, charCount: content.length, pageApprox: Math.floor(start / 3000) + 1, chunkIndex: chunks.length })
+    if (end === text.length) break
+    start = Math.max(start + 1, end - overlap)
+    const wordBoundary = text.slice(start, start + 40).search(/\s/)
+    if (wordBoundary > 0) start += wordBoundary + 1
   }
   return chunks
 }

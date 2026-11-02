@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import ResearchKickoff from '@/components/cogdoc/research-kickoff'
 import InteractiveDemoTour, { type TourCommand } from '@/components/cogdoc/interactive-demo-tour'
-import { createOrResumeGuidedDemo, isGuidedDemo } from '@/lib/guided-demo'
+import LiveResearchGuide from './live-research-guide'
+import { isLiveGuidedProject, LIVE_GUIDE_MARKER } from '@/lib/live-research-guide'
 import {
   INTERACTIVE_DEMO_EDITOR_START_STEP, INTERACTIVE_DEMO_GOAL, INTERACTIVE_DEMO_GOAL_KEY,
   INTERACTIVE_DEMO_PROJECT_ID, INTERACTIVE_DEMO_SESSION_KEY, INTERACTIVE_DEMO_TOPIC,
@@ -34,7 +35,7 @@ export default function Dashboard() {
   const [importing, setImporting] = useState(false)
   const [openingId, setOpeningId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [demoLoading, setDemoLoading] = useState(false)
+  const [liveGuideActive, setLiveGuideActive] = useState(false)
   const [interactiveDemoActive, setInteractiveDemoActive] = useState(false)
   const [demoTopic, setDemoTopic] = useState('')
   const [demoGoal, setDemoGoal] = useState('')
@@ -70,6 +71,7 @@ export default function Dashboard() {
   }, [])
 
   const openWorkspace: OpenWorkspaceHandler = (project) => {
+    setLiveGuideActive(false)
     setActiveProject(project)
     setView('editor')
   }
@@ -129,20 +131,6 @@ export default function Dashboard() {
     } catch (error) {
       toast.error('Could not move the project', { description: (error as Error).message })
     }
-  }
-
-  async function openGuidedDemo(forceNew = false) {
-    setDemoLoading(true)
-    try {
-      const result = await createOrResumeGuidedDemo({ workspaces: projects, forceNew })
-      openWorkspace(result.workspace)
-      toast.success(result.resumed ? 'Guided demo resumed' : 'Guided demo created', {
-        description: 'Starter text and source records are demonstration material. You make every evidence and finding decision.',
-      })
-    } catch (error) {
-      toast.error('Could not prepare the guided demo', { description: `${(error as Error).message} Any created demo project was kept so you can retry safely.` })
-      void refresh()
-    } finally { setDemoLoading(false) }
   }
 
   function startInteractiveDemo() {
@@ -253,18 +241,15 @@ export default function Dashboard() {
               <p className="flex items-center gap-3"><MessageSquareText className="size-4 text-[#6858a8]" aria-hidden="true" />The collaborator works from context you choose.</p>
             </div>
             <div className="mt-7 flex flex-wrap items-center gap-3">
-              <Button type="button" data-demo-target="home-demo-mode" onClick={startInteractiveDemo} className="rounded-xl bg-[#6858a8] px-5 text-white hover:bg-[#594a93] active:-translate-y-px">
-                <PlayCircle className="mr-2 size-4" />Try interactive demo
+              <Button type="button" onClick={() => { setInteractiveDemoActive(false); window.localStorage.removeItem(INTERACTIVE_DEMO_SESSION_KEY); setLiveGuideActive(true) }} className="rounded-xl bg-[#6858a8] text-white"><FlaskConical className="mr-2 size-4" />Try guided research — live tools</Button>
+              <Button type="button" data-demo-target="home-demo-mode" onClick={startInteractiveDemo} variant="outline" className="rounded-xl">
+                <PlayCircle className="mr-2 size-4" />Watch offline example
               </Button>
-              <Button type="button" variant="outline" onClick={() => void openGuidedDemo()} disabled={demoLoading || loading} className="rounded-xl border-[#c9c5dc] bg-white text-[#55468c] hover:bg-[#f4f1fb]">
-              {demoLoading ? <Loader2 className="mr-2 size-4 animate-spin motion-reduce:animate-none" /> : <FlaskConical className="mr-2 size-4" />}
-              {projects.some(isGuidedDemo) ? 'Resume guided demo' : 'Open prefilled guided demo'}
-              </Button>
-              {projects.some(isGuidedDemo) ? <button type="button" disabled={demoLoading || loading} onClick={() => void openGuidedDemo(true)} className="text-xs font-medium text-[#6858a8] underline underline-offset-4 disabled:opacity-50">Create another saved demo</button> : null}
+              {projects.find(isLiveGuidedProject) ? <Button variant="outline" onClick={() => void enterProject(projects.find(isLiveGuidedProject)!.id)}>Resume live research</Button> : null}
             </div>
-            <p className="mt-2 max-w-md text-xs leading-5 text-[#6c6e78]">The interactive demo simulates the complete journey without live AI or source calls. The saved demo uses a separate workspace.</p>
+            <p className="mt-2 max-w-md text-xs leading-5 text-[#6c6e78]">Guided research uses a real saved project and your configured AI. Choose a topic with editable starter writing and readable official documentation. The offline example is a separate simulation.</p>
           </div>
-          <ResearchKickoff onOpenWorkspace={openWorkspace} interactiveDemo={interactiveDemoActive ? {
+          <ResearchKickoff key={liveGuideActive ? "live-guide" : "normal"} guidedResearch={liveGuideActive} onOpenWorkspace={openWorkspace} interactiveDemo={interactiveDemoActive ? {
             topic: demoTopic, goal: demoGoal, showGoal: demoShowGoal,
             onTopicChange: setDemoTopic, onGoalChange: setDemoGoal,
             onTopicReady: fillDemoTopic, onGoalOpen: openDemoGoal, onGoalReady: fillDemoGoal,
@@ -295,7 +280,7 @@ export default function Dashboard() {
               <article key={project.id} className={`group relative ${index > 0 ? 'border-t border-[#dfe1e6]' : ''}`}>
                 <button onClick={() => void enterProject(project.id)} disabled={openingId === project.id} className="flex w-full items-center gap-4 px-5 py-5 pr-14 text-left outline-none transition-colors hover:bg-white focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#7264a8] disabled:cursor-wait">
                   <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#ebe8f4] text-[#6858a8]"><BookOpen className="size-4" aria-hidden="true" /></span>
-                  <span className="min-w-0 flex-1"><span className="block truncate font-medium">{project.title}</span><span className="mt-1 block truncate text-sm text-[#696b75]">{project.description || 'Working document'} <span className="text-[#989aa3]">• {updatedLabel(project.updatedAt)}</span></span></span>
+                  <span className="min-w-0 flex-1"><span className="block truncate font-medium">{project.title}</span><span className="mt-1 block truncate text-sm text-[#696b75]">{project.description?.replace(LIVE_GUIDE_MARKER, '').replace(/\[demo-topic:[^\]]+\]/, '').trim() || 'Working document'} <span className="text-[#989aa3]">• {updatedLabel(project.updatedAt)}</span></span></span>
                   {openingId === project.id ? <Loader2 className="size-4 shrink-0 animate-spin text-[#6858a8] motion-reduce:animate-none" /> : <ArrowRight className="size-4 shrink-0 text-[#777985] transition-transform group-hover:translate-x-1 motion-reduce:transition-none" aria-hidden="true" />}
                 </button>
                 <button onClick={() => setDeleteId(project.id)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-[#777985] opacity-100 outline-none transition hover:bg-[#f8e9ed] hover:text-[#9d314d] focus:opacity-100 focus-visible:ring-2 focus-visible:ring-[#7264a8] sm:opacity-0 sm:group-hover:opacity-100" aria-label={`Move ${project.title} to recovery`}><Trash2 className="size-4" /></button>
@@ -308,6 +293,7 @@ export default function Dashboard() {
       <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialogContent className="rounded-2xl border-[#d9dbe2] bg-[#f8f9fa]"><AlertDialogHeader><AlertDialogTitle>Move this project to recovery?</AlertDialogTitle><AlertDialogDescription>It will be hidden now and remain recoverable for 30 days.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep project</AlertDialogCancel><AlertDialogAction onClick={() => void deleteProject()} className="bg-[#a13b52] text-white hover:bg-[#8c3046]">Move to recovery</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
+      {liveGuideActive ? <LiveResearchGuide home /> : null}
       {interactiveDemoActive ? <InteractiveDemoTour key={INTERACTIVE_DEMO_PROJECT_ID} projectId={INTERACTIVE_DEMO_PROJECT_ID} onCommand={runHomeDemoCommand} onRestore={restoreHomeDemo} onExit={exitInteractiveDemo} /> : null}
     </main>
   )

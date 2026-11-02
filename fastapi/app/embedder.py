@@ -112,7 +112,7 @@ class GeminiEmbedder:
     def _embed_with_task(self, text: str, task_type: str) -> list[float]:
         import time
 
-        url = f"{self.ENDPOINT}/{self.model}:embedContent?key={self.api_key}"
+        url = f"{self.ENDPOINT}/{self.model}:embedContent"
         body = {
             # The API expects a Content object, not a raw string.
             "content": {"parts": [{"text": text}]},
@@ -120,13 +120,16 @@ class GeminiEmbedder:
         }
         # Retry 429s with backoff — free-tier RPM limits are easy to hit
         # during batch ingest; a transient 429 shouldn't fail the request.
-        for attempt in range(5):
-            resp = httpx.post(url, json=body, timeout=self.timeout)
-            if resp.status_code == 429 and attempt < 4:
-                time.sleep(10 * (attempt + 1))
+        for attempt in range(3):
+            resp = httpx.post(url, json=body, headers={"x-goog-api-key": self.api_key}, timeout=self.timeout)
+            if resp.status_code == 429 and attempt < 2:
+                time.sleep(0.5 * (2 ** attempt))
                 continue
             resp.raise_for_status()
-            return list(resp.json()["embedding"]["values"])
+            values = list(resp.json()["embedding"]["values"])
+            if len(values) != self.dim or not all(math.isfinite(v) for v in values):
+                raise ValueError("Embedding dimensions or values do not match the configured vector space")
+            return values
         raise RuntimeError("unreachable")  # loop always returns or raises
 
     def embed(self, text: str) -> list[float]:

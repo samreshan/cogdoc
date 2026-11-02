@@ -130,3 +130,15 @@ describe('research kickoff', () => {
     expect(projectTitleFromTopic('  Short   topic  ')).toBe('Short topic')
   })
 })
+
+it('starts live guided research through the real workspace and discovery clients', async () => {
+  const request = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ ready: true }) } as Response)
+  const user = userEvent.setup()
+  const onOpenWorkspace = vi.fn()
+  render(<ResearchKickoff guidedResearch onOpenWorkspace={onOpenWorkspace} />)
+  expect(screen.getByLabelText('What are you working on?')).toHaveValue('How can a simple Java application run on Kubernetes?')
+  await user.click(screen.getByRole('button', { name: 'Start writing' }))
+  await waitFor(() => expect(onOpenWorkspace).toHaveBeenCalledWith(workspace))
+  expect(mocks.createWorkspace).toHaveBeenCalledWith(expect.objectContaining({ description: expect.stringContaining('[COGDOC_LIVE_GUIDE_V1]') }))
+  expect(mocks.automaticallyDiscoverSources).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'project-1', query: 'How can a simple Java application run on Kubernetes?' }))
+})

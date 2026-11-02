@@ -25,7 +25,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "gate": "bash scripts/gate.sh"
+    "gate": "bash scripts/gate.sh",
+    "rag:setup": "python3 -m venv .venv-rag && .venv-rag/bin/pip install -r fastapi/requirements.txt",
+    "rag:dev": "node scripts/start-rag-local.mjs",
+    "demo:dev": "next dev -p 3001"
   },
   "dependencies": {
     "@citation-js/core": "^0.8.2",

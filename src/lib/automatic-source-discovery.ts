@@ -55,7 +55,8 @@ export async function automaticallyDiscoverSources(input: {
   const contextKey = sourceDiscoveryContextKey(input.projectId, query, input.questionId)
   if (query.length < 10) return { status: 'skipped', saved: 0, contextKey, message: 'The confirmed topic is too short for a useful automatic search.' }
   const cacheKey = `cogdoc:auto-source-discovery:${contextKey}`
-  if (!input.force && input.storage?.getItem(cacheKey)) return { status: 'skipped', saved: 0, contextKey, message: 'CogDoc already searched this unchanged research context.' }
+  const cached = Number(input.storage?.getItem(cacheKey))
+  if (!input.force && cached > Date.now() - 5 * 60_000) return { status: 'skipped', saved: 0, contextKey, message: 'Cogdoc already searched this unchanged research context.' }
   const existing = activeRequests.get(contextKey)
   if (existing && !input.force) return existing
 
@@ -69,7 +70,7 @@ export async function automaticallyDiscoverSources(input: {
       if (response.error) return { status: 'unavailable', saved: 0, contextKey, message: response.detail ? `${response.error}: ${response.detail}` : response.error }
       const unique = response.sources.slice(0, 3)
       if (!unique.length) {
-        input.storage?.setItem(cacheKey, 'empty')
+        // Empty searches remain retryable; never permanently cache an outage.
         return { status: 'empty', saved: 0, contextKey, message: response.message ?? 'No useful scholarly matches were found. Existing sources were kept.' }
       }
       const saves = await Promise.allSettled(unique.map((source) => input.questionId
@@ -91,7 +92,7 @@ export async function automaticallyDiscoverSources(input: {
       const saved = saves.filter((result) => result.status === 'fulfilled').length
       const providersPartial = Object.values(response.providerStatus ?? {}).some((status) => status === 'unavailable')
       const partial = saved < unique.length || providersPartial
-      if (saved) input.storage?.setItem(cacheKey, partial ? 'partial' : 'saved')
+      if (saved) input.storage?.setItem(cacheKey, String(Date.now()))
       return {
         status: saved ? (partial ? 'partial' : 'saved') : 'unavailable', saved, contextKey,
         message: saved

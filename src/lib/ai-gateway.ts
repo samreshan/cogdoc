@@ -34,6 +34,7 @@ export async function retrieveVectorChunks(
   topK = 5,
 ): Promise<RetrievedChunk[]> {
   const res = await fetch(`${fastApiUrl()}/api/rag/retrieve`, {
+    signal: AbortSignal.timeout(30000),
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ claim, project_id: projectId, top_k: topK }),
@@ -120,6 +121,7 @@ export async function ingestToVectorStore(
   chunks: IngestChunk[],
 ): Promise<VectorIngestResult> {
   const res = await fetch(`${fastApiUrl()}/api/rag/ingest`, {
+    signal: AbortSignal.timeout(60000),
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const mocks = vi.hoisted(() => ({ load: vi.fn(), send: vi.fn() }))
@@ -51,6 +51,33 @@ describe('DocumentResearchDock', () => {
     await waitFor(() => expect(mocks.send).toHaveBeenCalled())
     expect(mocks.send.mock.calls[0][1].context.activeQuestion).toBeNull()
     expect(await screen.findByText('A direct explanation.')).toBeInTheDocument()
+  })
+
+  it('does not duplicate turns when polling sees a message before send completes', async () => {
+    const response = await mocks.send()
+    mocks.send.mockClear()
+    let finishSend!: (value: typeof response) => void
+    mocks.send.mockImplementation(() => new Promise((resolve) => { finishSend = resolve }))
+    let poll!: () => void
+    const originalInterval = window.setInterval.bind(window)
+    const interval = vi.spyOn(window, 'setInterval').mockImplementation(((callback: () => void, delay?: number) => { if (delay === 8_000) { poll = callback; return 123 } return originalInterval(callback, delay) }) as typeof window.setInterval)
+    try {
+      const user = userEvent.setup()
+      render(<DocumentResearchDock projectId="project-1" onRequestPreview={vi.fn()} onApplyProposal={vi.fn()} onOpenSource={vi.fn()} onFocusDocument={vi.fn()} />)
+      await screen.findByText('Work through the next part')
+      await user.type(screen.getByLabelText('Message the research collaborator'), 'Explain this')
+      await user.click(screen.getByRole('button', { name: 'Send message' }))
+      mocks.load.mockResolvedValue({ turns: [response.researcherTurn, response.assistantTurn], assistant: response.assistant })
+      await act(async () => { poll() })
+      await screen.findByText('A direct explanation.')
+      await act(async () => { finishSend(response) })
+      expect(screen.getAllByText('A direct explanation.')).toHaveLength(1)
+      expect(screen.getAllByText('Explain this')).toHaveLength(1)
+      // An older/incomplete snapshot must not erase successfully sent turns.
+      mocks.load.mockResolvedValue({ turns: [], assistant: response.assistant })
+      await act(async () => { poll() })
+      expect(screen.getAllByText('A direct explanation.')).toHaveLength(1)
+    } finally { interval.mockRestore() }
   })
 
   it('keeps the document-return action available on every dock surface', async () => {

@@ -1,5 +1,7 @@
 'use client'
 
+import { completeGuideAction, downloadGuideArtifact } from '@/lib/live-research-guide'
+
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Download, FileText, RefreshCw, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -72,6 +74,7 @@ export function ArticleWorkspace({ projectId }: { projectId: string }) {
       setNotice(body.warning || (input.path === 'generated_draft' ? 'Draft created. Review its source mappings and uncertainty.' : 'Manual outline created.'))
       await refresh()
       setSelectedId(body.article.id)
+      completeGuideAction(projectId, 'article')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not create the article.')
     } finally {
@@ -98,9 +101,10 @@ export function ArticleWorkspace({ projectId }: { projectId: string }) {
     }
   }
 
-  function exportArticle() {
+  async function exportArticle() {
     if (!selectedArticle) return
-    window.open('/api/workspaces/' + projectId + '/articles/' + selectedArticle.id + '/export', '_blank', 'noopener,noreferrer')
+    try { await downloadGuideArtifact(projectId, '/api/workspaces/' + projectId + '/articles/' + selectedArticle.id + '/export', 'research-article.md') }
+    catch (caught) { setError(caught instanceof Error ? caught.message : 'Export failed. Retry after saving.') }
   }
 
   return <section className="space-y-4" aria-label="Article workspace">

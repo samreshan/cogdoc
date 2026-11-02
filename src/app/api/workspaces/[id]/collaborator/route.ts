@@ -104,9 +104,9 @@ function toTurn(exchange: {
 
 function fallbackResponse(intent: CollaboratorIntent, hasSelection: boolean): DocumentCollaboratorAIResponse {
   const content: Record<CollaboratorIntent, { answer: string; nextStep: string }> = {
-    ask: { answer: 'The configured collaborator is unavailable. Your request is saved, but CogDoc cannot answer it reliably without the provider.', nextStep: 'Retry, or continue writing and attach a passage for a later check.' },
-    explain: { answer: 'The configured collaborator is unavailable, so CogDoc cannot provide a trustworthy explanation right now. Your question and selected context are saved.', nextStep: 'Retry, or write the part that is unclear in your own words.' },
-    find_evidence: { answer: 'The configured collaborator is unavailable. CogDoc has not searched for or inspected any additional evidence.', nextStep: 'Open Sources to search by the active question or import material you already have.' },
+    ask: { answer: 'The configured collaborator is unavailable. Your request is saved, but Cogdoc cannot answer it reliably without the provider.', nextStep: 'Retry, or continue writing and attach a passage for a later check.' },
+    explain: { answer: 'The configured collaborator is unavailable, so Cogdoc cannot provide a trustworthy explanation right now. Your question and selected context are saved.', nextStep: 'Retry, or write the part that is unclear in your own words.' },
+    find_evidence: { answer: 'The configured collaborator is unavailable. Cogdoc has not searched for or inspected any additional evidence.', nextStep: 'Open Sources to search by the active question or import material you already have.' },
     challenge: { answer: 'The configured collaborator is unavailable, so no new critique was generated. Your request remains in the conversation.', nextStep: 'Record one alternative explanation or limitation, then retry.' },
     plan: { answer: 'The configured collaborator is unavailable, so no question plan was generated.', nextStep: 'Open Plan to add an editable question manually.' },
     revise_selection: { answer: hasSelection ? 'The configured collaborator is unavailable. The selected passage was not changed and no revision was proposed.' : 'Select a passage before requesting a targeted revision.', nextStep: 'Keep editing in the document or retry when the provider is available.' },

@@ -115,7 +115,7 @@ const EditorTiptap = forwardRef<DocumentEditorHandle, EditorTiptapProps>(functio
       attributes: {
         class: 'tiptap-editor outline-none',
         'data-placeholder':
-          'Begin your draft. Select any passage when you want to explain it, find evidence, or ask CogDoc for help.',
+          'Begin your draft. Select any passage when you want to explain it, find evidence, or ask Cogdoc for help.',
       },
     },
   })

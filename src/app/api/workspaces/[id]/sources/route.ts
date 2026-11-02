@@ -1,3 +1,4 @@
+import { indexSourceChunks } from '@/lib/source-indexing'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireUserId } from '@/lib/auth-supabase'
@@ -22,7 +23,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { project } = await ownedWorkspace(req, id)
   if (!project) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
   const sources = await db.workspaceSource.findMany({ where: { projectId: id }, include: { source: true }, orderBy: [{ lastOpenedAt: 'desc' }, { updatedAt: 'desc' }] })
-  return NextResponse.json({ sources })
+  const readable = await db.pdf.findMany({ where: { projectId: id, chunks: { some: {} } }, select: { librarySourceId: true } })
+  const localIds = new Set(readable.map((pdf) => pdf.librarySourceId))
+  return NextResponse.json({ sources: sources.map((row) => localIds.has(row.librarySourceId) ? { ...row, source: { ...row.source, parseStatus: 'ready' } } : row) })
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -94,16 +97,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     } })
   }
   const workspaceSource = await db.workspaceSource.upsert({ where: { projectId_librarySourceId: { projectId: id, librarySourceId: source.id } }, update: { status: 'saved' }, create: { projectId: id, librarySourceId: source.id }, include: { source: true } })
+  let indexingWarning: string | undefined
   if (rawText && !existing) {
     const pdf = await db.pdf.create({ data: { projectId: id, userId, filename: filename ?? title, rawText, sizeBytes: bytes?.byteLength ?? 0, parseStatus: 'ready', librarySourceId: source.id } })
     const chunks = chunkText(rawText)
     if (chunks.length) await db.pdfChunk.createMany({ data: chunks.map((chunk) => ({ pdfId: pdf.id, chunkIndex: chunk.chunkIndex, content: chunk.content, charCount: chunk.charCount, pageApprox: chunk.pageApprox })) })
+    try { await indexSourceChunks(id, pdf.id) } catch { indexingWarning = 'Source text is saved; semantic indexing failed. Retry indexing in Sources.' }
   }
   await db.$transaction((tx) => appendAuditEvent(tx, { projectId: id, userId, type: 'workspace_source_attached', actor: 'student', payload: { summary: `${existing ? 'Reused' : 'Added'} source: ${source.title}`, workspaceSourceId: workspaceSource.id, librarySourceId: source.id, reused: Boolean(existing), privateFile: Boolean(bytes) } }))
   void enqueueClericalResearchJobs(id, 'source_import', source.id).catch((error) => console.warn('Research jobs could not be enqueued:', (error as Error).message))
   void enqueueBackgroundEnginePrompt({ projectId: id, trigger: 'source_added', entityId: workspaceSource.id })
     .catch((error) => console.warn('Background engine prompt could not be enqueued:', (error as Error).message))
-  return NextResponse.json({ workspaceSource, alreadySaved: Boolean(existing) }, { status: existing ? 200 : 201 })
+  return NextResponse.json({ workspaceSource, alreadySaved: Boolean(existing), indexingWarning }, { status: existing ? 200 : 201 })
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

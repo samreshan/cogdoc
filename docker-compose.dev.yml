@@ -46,7 +46,7 @@ services:
       SUPABASE_DB_URL: "postgresql://cogdoc:cogdoc_dev@postgres:5432/cogdoc"
       # ADR-0008: create_app_from_env picks the embedder + store from these.
       # Unset → hermetic HashingEmbedder + in-memory store (offline dev).
-      EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-hashing}"
+      EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-gemini}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-${AI_API_KEY:-}}"
     depends_on:
       vector-init:
